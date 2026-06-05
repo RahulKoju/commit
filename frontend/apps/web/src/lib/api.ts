@@ -1,0 +1,61 @@
+import axios, { type AxiosError, type AxiosRequestConfig } from "axios"
+import { z } from "zod"
+
+type RequestOptions<T> = {
+  method?: "GET" | "POST" | "PATCH" | "DELETE"
+  body?: unknown
+  headers?: Record<string, string>
+  schema?: z.ZodType<T>
+}
+
+const api = axios.create({
+  baseURL: import.meta.env.VITE_API_URL,
+  withCredentials: true,
+})
+
+export async function apiFetch<T>(
+  endpoint: string,
+  options: RequestOptions<T> = {}
+): Promise<T> {
+  const config: AxiosRequestConfig = {
+    url: endpoint,
+    method: options.method ?? "GET",
+    headers: options.headers,
+    data: options.body,
+  }
+
+  if (import.meta.env.DEV) {
+    console.info("[api]", config.method, endpoint)
+  }
+
+  try {
+    const response = await api.request<unknown>(config)
+    if (options.schema) {
+      return options.schema.parse(response.data)
+    }
+    return response.data as T
+  } catch (error) {
+    const axiosError = error as AxiosError<unknown>
+    if (axiosError.response?.status === 401) {
+      window.location.assign("/login")
+    }
+    throw parseApiError(axiosError)
+  }
+}
+
+function parseApiError(error: AxiosError<unknown>): Error {
+  const data = error.response?.data
+  if (isErrorPayload(data)) {
+    return new Error(data.error)
+  }
+  return new Error(error.message || "API request failed")
+}
+
+function isErrorPayload(value: unknown): value is { error: string } {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "error" in value &&
+    typeof value.error === "string"
+  )
+}
