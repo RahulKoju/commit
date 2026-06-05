@@ -14,6 +14,7 @@ type Dependencies struct {
 	AdminService services.AdminService
 	TaskService  services.TaskService
 	FocusService services.FocusService
+	LearnService services.LearnService
 }
 
 func Register(router *gin.Engine, deps Dependencies) {
@@ -22,6 +23,7 @@ func Register(router *gin.Engine, deps Dependencies) {
 	adminHandler := handlers.NewAdminHandler(deps.AdminService)
 	taskHandler := handlers.NewTaskHandler(deps.TaskService)
 	focusHandler := handlers.NewFocusHandler(deps.FocusService)
+	learnHandler := handlers.NewLearnHandler(deps.LearnService)
 
 	router.GET("/healthz", healthHandler.Health)
 
@@ -39,6 +41,16 @@ func Register(router *gin.Engine, deps Dependencies) {
 	protected.DELETE("/tasks/:id", taskHandler.Delete)
 	protected.GET("/focus/sessions", focusHandler.List)
 	protected.POST("/focus/sessions", focusHandler.Create)
+	protected.GET("/learn/entries", learnHandler.ListEntries)
+	protected.POST("/learn/entries", learnHandler.CreateEntry)
+	protected.PATCH("/learn/entries/:id", learnHandler.UpdateEntry)
+	protected.DELETE("/learn/entries/:id", learnHandler.DeleteEntry)
+	protected.GET("/learn/topics", learnHandler.ListTopics)
+	protected.POST("/learn/topics", learnHandler.CreateTopic)
+	protected.PATCH("/learn/topics/:id", learnHandler.UpdateTopic)
+	protected.DELETE("/learn/topics/:id", learnHandler.DeleteTopic)
+	protected.GET("/learn/weakspots", learnHandler.WeakSpots)
+	protected.GET("/learn/summary", learnHandler.Summary)
 
 	admin := protected.Group("/admin")
 	admin.Use(middleware.RequireRole(models.RoleAdmin))
