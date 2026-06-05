@@ -45,6 +45,7 @@ func main() {
 	noteModel := models.NewNoteModel(pool)
 	habitModel := models.NewHabitModel(pool)
 	reviewModel := models.NewReviewModel(pool)
+	dashboardModel := models.NewDashboardModel(pool, learnModel)
 	adminService := services.NewAdminService(userModel)
 	taskService := services.NewTaskService(taskModel)
 	focusService := services.NewFocusService(focusModel)
@@ -52,19 +53,21 @@ func main() {
 	noteService := services.NewNoteService(noteModel)
 	habitService := services.NewHabitService(habitModel)
 	reviewService := services.NewReviewService(reviewModel)
+	dashboardService := services.NewDashboardService(dashboardModel)
 	authService := services.NewAuthService(userModel, habitService, cfg.JWTSecret)
 
 	router := gin.New()
 	router.Use(middleware.Logger(), gin.Recovery(), middleware.CORS())
 	routes.Register(router, routes.Dependencies{
-		AuthService:   authService,
-		AdminService:  adminService,
-		TaskService:   taskService,
-		FocusService:  focusService,
-		LearnService:  learnService,
-		NoteService:   noteService,
-		HabitService:  habitService,
-		ReviewService: reviewService,
+		AuthService:      authService,
+		AdminService:     adminService,
+		TaskService:      taskService,
+		FocusService:     focusService,
+		LearnService:     learnService,
+		NoteService:      noteService,
+		HabitService:     habitService,
+		ReviewService:    reviewService,
+		DashboardService: dashboardService,
 	})
 
 	if err := router.Run(":" + cfg.Port); err != nil {

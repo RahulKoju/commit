@@ -10,14 +10,15 @@ import (
 )
 
 type Dependencies struct {
-	AuthService   services.AuthService
-	AdminService  services.AdminService
-	TaskService   services.TaskService
-	FocusService  services.FocusService
-	LearnService  services.LearnService
-	NoteService   services.NoteService
-	HabitService  services.HabitService
-	ReviewService services.ReviewService
+	AuthService      services.AuthService
+	AdminService     services.AdminService
+	TaskService      services.TaskService
+	FocusService     services.FocusService
+	LearnService     services.LearnService
+	NoteService      services.NoteService
+	HabitService     services.HabitService
+	ReviewService    services.ReviewService
+	DashboardService services.DashboardService
 }
 
 func Register(router *gin.Engine, deps Dependencies) {
@@ -30,6 +31,7 @@ func Register(router *gin.Engine, deps Dependencies) {
 	noteHandler := handlers.NewNoteHandler(deps.NoteService)
 	habitHandler := handlers.NewHabitHandler(deps.HabitService)
 	reviewHandler := handlers.NewReviewHandler(deps.ReviewService)
+	dashboardHandler := handlers.NewDashboardHandler(deps.DashboardService)
 
 	router.GET("/healthz", healthHandler.Health)
 
@@ -41,6 +43,7 @@ func Register(router *gin.Engine, deps Dependencies) {
 	protected := api.Group("")
 	protected.Use(middleware.RequireAuth(deps.AuthService))
 	protected.GET("/auth/me", authHandler.Me)
+	protected.GET("/dashboard/summary", dashboardHandler.Summary)
 	protected.GET("/tasks", taskHandler.List)
 	protected.POST("/tasks", taskHandler.Create)
 	protected.PATCH("/tasks/:id", taskHandler.Update)
