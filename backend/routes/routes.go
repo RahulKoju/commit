@@ -16,6 +16,7 @@ type Dependencies struct {
 	FocusService services.FocusService
 	LearnService services.LearnService
 	NoteService  services.NoteService
+	HabitService services.HabitService
 }
 
 func Register(router *gin.Engine, deps Dependencies) {
@@ -26,6 +27,7 @@ func Register(router *gin.Engine, deps Dependencies) {
 	focusHandler := handlers.NewFocusHandler(deps.FocusService)
 	learnHandler := handlers.NewLearnHandler(deps.LearnService)
 	noteHandler := handlers.NewNoteHandler(deps.NoteService)
+	habitHandler := handlers.NewHabitHandler(deps.HabitService)
 
 	router.GET("/healthz", healthHandler.Health)
 
@@ -57,6 +59,14 @@ func Register(router *gin.Engine, deps Dependencies) {
 	protected.POST("/notes", noteHandler.Create)
 	protected.PATCH("/notes/:id", noteHandler.Update)
 	protected.DELETE("/notes/:id", noteHandler.Delete)
+	protected.GET("/habit-categories", habitHandler.ListCategories)
+	protected.POST("/habit-categories", habitHandler.CreateCategory)
+	protected.GET("/habits", habitHandler.ListHabits)
+	protected.POST("/habits", habitHandler.CreateHabit)
+	protected.PATCH("/habits/:id", habitHandler.UpdateHabit)
+	protected.DELETE("/habits/:id", habitHandler.DeleteHabit)
+	protected.POST("/habits/:id/log", habitHandler.LogHabit)
+	protected.GET("/habits/:id/analytics", habitHandler.Analytics)
 
 	admin := protected.Group("/admin")
 	admin.Use(middleware.RequireRole(models.RoleAdmin))

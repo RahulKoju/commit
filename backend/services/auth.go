@@ -15,6 +15,7 @@ import (
 
 type AuthService struct {
 	users     models.UserModel
+	habits    HabitService
 	jwtSecret []byte
 }
 
@@ -42,8 +43,8 @@ type AuthResult struct {
 
 var ErrInvalidCredentials = errors.New("invalid credentials")
 
-func NewAuthService(users models.UserModel, jwtSecret string) AuthService {
-	return AuthService{users: users, jwtSecret: []byte(jwtSecret)}
+func NewAuthService(users models.UserModel, habits HabitService, jwtSecret string) AuthService {
+	return AuthService{users: users, habits: habits, jwtSecret: []byte(jwtSecret)}
 }
 
 func (service AuthService) Register(ctx context.Context, input RegisterInput) (AuthResult, error) {
@@ -65,6 +66,10 @@ func (service AuthService) Register(ctx context.Context, input RegisterInput) (A
 		Role:         models.RoleUser,
 	})
 	if err != nil {
+		return AuthResult{}, err
+	}
+
+	if err := service.habits.SeedDefaults(ctx, user.ID); err != nil {
 		return AuthResult{}, err
 	}
 
