@@ -13,6 +13,7 @@ type RichTextEditorProps = {
   name: string
   placeholder: string
   maxLength: number
+  initialValue?: string
   resetToken?: string
 }
 
@@ -52,6 +53,7 @@ export function RichTextEditor({
   name,
   placeholder,
   maxLength,
+  initialValue = "",
   resetToken,
 }: RichTextEditorProps) {
   const lastResetTokenRef = useRef<string | undefined>(undefined)
@@ -68,7 +70,7 @@ export function RichTextEditor({
         }),
         Link.configure({ openOnClick: false, defaultProtocol: "https" }),
       ],
-      content: "",
+      content: initialValue,
       editorProps: {
         attributes: {
           class:
@@ -99,8 +101,8 @@ export function RichTextEditor({
   useEffect(() => {
     if (!editor || editor.isDestroyed || !resetToken || lastResetTokenRef.current === resetToken) return
     lastResetTokenRef.current = resetToken
-    editor.chain().clearContent().run()
-  }, [editor, resetToken])
+    editor.commands.setContent(initialValue)
+  }, [editor, initialValue, resetToken])
 
   return (
     <div className="space-y-2">

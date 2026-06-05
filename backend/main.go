@@ -42,11 +42,13 @@ func main() {
 	taskModel := models.NewTaskModel(pool)
 	focusModel := models.NewFocusModel(pool)
 	learnModel := models.NewLearnModel(pool)
+	noteModel := models.NewNoteModel(pool)
 	authService := services.NewAuthService(userModel, cfg.JWTSecret)
 	adminService := services.NewAdminService(userModel)
 	taskService := services.NewTaskService(taskModel)
 	focusService := services.NewFocusService(focusModel)
 	learnService := services.NewLearnService(learnModel)
+	noteService := services.NewNoteService(noteModel)
 
 	router := gin.New()
 	router.Use(middleware.Logger(), gin.Recovery(), middleware.CORS())
@@ -56,6 +58,7 @@ func main() {
 		TaskService:  taskService,
 		FocusService: focusService,
 		LearnService: learnService,
+		NoteService:  noteService,
 	})
 
 	if err := router.Run(":" + cfg.Port); err != nil {

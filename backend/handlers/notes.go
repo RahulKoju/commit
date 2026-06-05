@@ -1,0 +1,129 @@
+package handlers
+
+import (
+	"errors"
+	"net/http"
+
+	"commit/backend/middleware"
+	"commit/backend/models"
+	"commit/backend/services"
+
+	"github.com/gin-gonic/gin"
+)
+
+type NoteHandler struct {
+	notes services.NoteService
+}
+
+type noteRequest struct {
+	Title    string   `json:"title" binding:"required"`
+	Body     string   `json:"body"`
+	TopicIDs []string `json:"topic_ids"`
+}
+
+type updateNoteRequest struct {
+	Title    *string   `json:"title"`
+	Body     *string   `json:"body"`
+	TopicIDs *[]string `json:"topic_ids"`
+}
+
+func NewNoteHandler(notes services.NoteService) NoteHandler {
+	return NoteHandler{notes: notes}
+}
+
+func (handler NoteHandler) List(c *gin.Context) {
+	userID, ok := middleware.CurrentUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
+		return
+	}
+
+	notes, err := handler.notes.List(c.Request.Context(), services.ListNotesInput{
+		UserID: userID,
+		Search: c.Query("search"),
+	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list notes"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"notes": notes})
+}
+
+func (handler NoteHandler) Create(c *gin.Context) {
+	userID, ok := middleware.CurrentUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
+		return
+	}
+
+	var request noteRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid note request"})
+		return
+	}
+
+	note, err := handler.notes.Create(c.Request.Context(), services.CreateNoteInput{
+		UserID:   userID,
+		Title:    request.Title,
+		Body:     request.Body,
+		TopicIDs: request.TopicIDs,
+	})
+	if err != nil {
+		writeNoteError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{"note": note})
+}
+
+func (handler NoteHandler) Update(c *gin.Context) {
+	userID, ok := middleware.CurrentUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
+		return
+	}
+
+	var request updateNoteRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid note request"})
+		return
+	}
+
+	note, err := handler.notes.Update(c.Request.Context(), services.UpdateNoteInput{
+		UserID:   userID,
+		ID:       c.Param("id"),
+		Title:    request.Title,
+		Body:     request.Body,
+		TopicIDs: request.TopicIDs,
+	})
+	if err != nil {
+		writeNoteError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"note": note})
+}
+
+func (handler NoteHandler) Delete(c *gin.Context) {
+	userID, ok := middleware.CurrentUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
+		return
+	}
+
+	if err := handler.notes.Delete(c.Request.Context(), userID, c.Param("id")); err != nil {
+		writeNoteError(c, err)
+		return
+	}
+
+	c.Status(http.StatusNoContent)
+}
+
+func writeNoteError(c *gin.Context, err error) {
+	status := http.StatusBadRequest
+	if errors.Is(err, models.ErrNotFound) {
+		status = http.StatusNotFound
+	}
+	c.JSON(status, gin.H{"error": err.Error()})
+}
