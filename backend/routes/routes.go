@@ -10,13 +10,14 @@ import (
 )
 
 type Dependencies struct {
-	AuthService  services.AuthService
-	AdminService services.AdminService
-	TaskService  services.TaskService
-	FocusService services.FocusService
-	LearnService services.LearnService
-	NoteService  services.NoteService
-	HabitService services.HabitService
+	AuthService   services.AuthService
+	AdminService  services.AdminService
+	TaskService   services.TaskService
+	FocusService  services.FocusService
+	LearnService  services.LearnService
+	NoteService   services.NoteService
+	HabitService  services.HabitService
+	ReviewService services.ReviewService
 }
 
 func Register(router *gin.Engine, deps Dependencies) {
@@ -28,6 +29,7 @@ func Register(router *gin.Engine, deps Dependencies) {
 	learnHandler := handlers.NewLearnHandler(deps.LearnService)
 	noteHandler := handlers.NewNoteHandler(deps.NoteService)
 	habitHandler := handlers.NewHabitHandler(deps.HabitService)
+	reviewHandler := handlers.NewReviewHandler(deps.ReviewService)
 
 	router.GET("/healthz", healthHandler.Health)
 
@@ -67,6 +69,9 @@ func Register(router *gin.Engine, deps Dependencies) {
 	protected.DELETE("/habits/:id", habitHandler.DeleteHabit)
 	protected.POST("/habits/:id/log", habitHandler.LogHabit)
 	protected.GET("/habits/:id/analytics", habitHandler.Analytics)
+	protected.GET("/reviews", reviewHandler.List)
+	protected.POST("/reviews", reviewHandler.Create)
+	protected.GET("/reviews/:id", reviewHandler.Get)
 
 	admin := protected.Group("/admin")
 	admin.Use(middleware.RequireRole(models.RoleAdmin))
