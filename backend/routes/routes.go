@@ -12,12 +12,14 @@ import (
 type Dependencies struct {
 	AuthService  services.AuthService
 	AdminService services.AdminService
+	TaskService  services.TaskService
 }
 
 func Register(router *gin.Engine, deps Dependencies) {
 	healthHandler := handlers.NewHealthHandler()
 	authHandler := handlers.NewAuthHandler(deps.AuthService)
 	adminHandler := handlers.NewAdminHandler(deps.AdminService)
+	taskHandler := handlers.NewTaskHandler(deps.TaskService)
 
 	router.GET("/healthz", healthHandler.Health)
 
@@ -29,6 +31,10 @@ func Register(router *gin.Engine, deps Dependencies) {
 	protected := api.Group("")
 	protected.Use(middleware.RequireAuth(deps.AuthService))
 	protected.GET("/auth/me", authHandler.Me)
+	protected.GET("/tasks", taskHandler.List)
+	protected.POST("/tasks", taskHandler.Create)
+	protected.PATCH("/tasks/:id", taskHandler.Update)
+	protected.DELETE("/tasks/:id", taskHandler.Delete)
 
 	admin := protected.Group("/admin")
 	admin.Use(middleware.RequireRole(models.RoleAdmin))

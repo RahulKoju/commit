@@ -39,14 +39,17 @@ func main() {
 	}
 
 	userModel := models.NewUserModel(pool)
+	taskModel := models.NewTaskModel(pool)
 	authService := services.NewAuthService(userModel, cfg.JWTSecret)
 	adminService := services.NewAdminService(userModel)
+	taskService := services.NewTaskService(taskModel)
 
 	router := gin.New()
 	router.Use(middleware.Logger(), gin.Recovery(), middleware.CORS())
 	routes.Register(router, routes.Dependencies{
 		AuthService:  authService,
 		AdminService: adminService,
+		TaskService:  taskService,
 	})
 
 	if err := router.Run(":" + cfg.Port); err != nil {
