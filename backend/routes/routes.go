@@ -13,6 +13,7 @@ type Dependencies struct {
 	AuthService  services.AuthService
 	AdminService services.AdminService
 	TaskService  services.TaskService
+	FocusService services.FocusService
 }
 
 func Register(router *gin.Engine, deps Dependencies) {
@@ -20,6 +21,7 @@ func Register(router *gin.Engine, deps Dependencies) {
 	authHandler := handlers.NewAuthHandler(deps.AuthService)
 	adminHandler := handlers.NewAdminHandler(deps.AdminService)
 	taskHandler := handlers.NewTaskHandler(deps.TaskService)
+	focusHandler := handlers.NewFocusHandler(deps.FocusService)
 
 	router.GET("/healthz", healthHandler.Health)
 
@@ -35,6 +37,8 @@ func Register(router *gin.Engine, deps Dependencies) {
 	protected.POST("/tasks", taskHandler.Create)
 	protected.PATCH("/tasks/:id", taskHandler.Update)
 	protected.DELETE("/tasks/:id", taskHandler.Delete)
+	protected.GET("/focus/sessions", focusHandler.List)
+	protected.POST("/focus/sessions", focusHandler.Create)
 
 	admin := protected.Group("/admin")
 	admin.Use(middleware.RequireRole(models.RoleAdmin))
