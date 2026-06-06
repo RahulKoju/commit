@@ -197,6 +197,10 @@ func createHabitParams(input CreateHabitInput) (models.CreateHabitParams, error)
 		value := strings.TrimSpace(*input.TargetUnit)
 		unit = &value
 	}
+	frequencyDays := input.FrequencyDays
+	if frequencyDays == nil {
+		frequencyDays = []int{}
+	}
 
 	return models.CreateHabitParams{
 		UserID:        input.UserID,
@@ -207,7 +211,7 @@ func createHabitParams(input CreateHabitInput) (models.CreateHabitParams, error)
 		TargetValue:   input.TargetValue,
 		TargetUnit:    unit,
 		FrequencyType: frequencyType,
-		FrequencyDays: input.FrequencyDays,
+		FrequencyDays: frequencyDays,
 		WeeklyGoal:    weeklyGoal,
 		SortOrder:     input.SortOrder,
 	}, nil
