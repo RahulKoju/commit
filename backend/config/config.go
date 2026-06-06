@@ -4,29 +4,59 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 )
 
 type Config struct {
-	DBHost     string
-	DBPort     string
-	DBUser     string
-	DBPassword string
-	DBName     string
-	JWTSecret  string
-	Port       string
-	AppEnv     string
+	DBHost              string
+	DBPort              string
+	DBUser              string
+	DBPassword          string
+	DBName              string
+	JWTSecret           string
+	Port                string
+	AppEnv              string
+	AllowedOrigins      []string
+	FocusDailyMinimumMinute int
+	JWTExpiryHours          int
+	JWTExpiryMinutes        int
+	DBMaxConns              int
+	DBMinConns              int
+	DBMaxConnLifetimeMinutes int
+	DBMaxConnIdleMinutes     int
 }
 
 func Load() (Config, error) {
+	allowedOrigins := strings.Split(os.Getenv("ALLOWED_ORIGINS"), ",")
+	for i := range allowedOrigins {
+		allowedOrigins[i] = strings.TrimSpace(allowedOrigins[i])
+	}
+
+	focusDailyMinimum := envInt("FOCUS_DAILY_MINIMUM_MINUTES", 120)
+	jwtExpiryHours := envInt("JWT_EXPIRY_HOURS", 168)
+	jwtExpiryMinutes := envInt("JWT_EXPIRY_MINUTES", 15)
+	dbMaxConns := envInt("DB_MAX_CONNS", 10)
+	dbMinConns := envInt("DB_MIN_CONNS", 1)
+	dbMaxConnLifetime := envInt("DB_MAX_CONN_LIFETIME_MINUTES", 60)
+	dbMaxConnIdle := envInt("DB_MAX_CONN_IDLE_MINUTES", 30)
+
 	cfg := Config{
-		DBHost:     os.Getenv("DB_HOST"),
-		DBPort:     os.Getenv("DB_PORT"),
-		DBUser:     os.Getenv("DB_USER"),
-		DBPassword: os.Getenv("DB_PASSWORD"),
-		DBName:     os.Getenv("DB_NAME"),
-		JWTSecret:  os.Getenv("JWT_SECRET"),
-		Port:       os.Getenv("PORT"),
-		AppEnv:     os.Getenv("APP_ENV"),
+		DBHost:                  os.Getenv("DB_HOST"),
+		DBPort:                  os.Getenv("DB_PORT"),
+		DBUser:                  os.Getenv("DB_USER"),
+		DBPassword:              os.Getenv("DB_PASSWORD"),
+		DBName:                  os.Getenv("DB_NAME"),
+		JWTSecret:               os.Getenv("JWT_SECRET"),
+		Port:                    os.Getenv("PORT"),
+		AppEnv:                  os.Getenv("APP_ENV"),
+		AllowedOrigins:          allowedOrigins,
+		FocusDailyMinimumMinute: focusDailyMinimum,
+		JWTExpiryHours:          jwtExpiryHours,
+		JWTExpiryMinutes:        jwtExpiryMinutes,
+		DBMaxConns:              dbMaxConns,
+		DBMinConns:              dbMinConns,
+		DBMaxConnLifetimeMinutes: dbMaxConnLifetime,
+		DBMaxConnIdleMinutes:     dbMaxConnIdle,
 	}
 
 	missing := missingEnv(cfg)
@@ -56,16 +86,29 @@ func (cfg Config) DatabaseURL() string {
 	)
 }
 
+func envInt(key string, defaultVal int) int {
+	val := os.Getenv(key)
+	if val == "" {
+		return defaultVal
+	}
+	n, err := strconv.Atoi(val)
+	if err != nil {
+		return defaultVal
+	}
+	return n
+}
+
 func missingEnv(cfg Config) []string {
 	values := map[string]string{
 		"DB_HOST":     cfg.DBHost,
 		"DB_PORT":     cfg.DBPort,
 		"DB_USER":     cfg.DBUser,
 		"DB_PASSWORD": cfg.DBPassword,
-		"DB_NAME":     cfg.DBName,
-		"JWT_SECRET":  cfg.JWTSecret,
-		"PORT":        cfg.Port,
-		"APP_ENV":     cfg.AppEnv,
+		"DB_NAME":         cfg.DBName,
+		"JWT_SECRET":      cfg.JWTSecret,
+		"PORT":            cfg.Port,
+		"APP_ENV":         cfg.AppEnv,
+		"ALLOWED_ORIGINS": strings.Join(cfg.AllowedOrigins, ","),
 	}
 
 	missing := make([]string, 0)

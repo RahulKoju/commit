@@ -18,6 +18,8 @@ type ListTasksInput struct {
 	TopicID  string
 	Priority string
 	Status   string
+	Limit    int
+	Offset   int
 }
 
 type CreateTaskInput struct {
@@ -45,6 +47,16 @@ func NewTaskService(tasks models.TaskModel) TaskService {
 	return TaskService{tasks: tasks}
 }
 
+func (service TaskService) Count(ctx context.Context, input ListTasksInput) (int, error) {
+	return service.tasks.CountTasks(ctx, models.ListTasksParams{
+		UserID:   input.UserID,
+		View:     models.TaskView(input.View),
+		TopicID:  strings.TrimSpace(input.TopicID),
+		Priority: strings.TrimSpace(input.Priority),
+		Status:   strings.TrimSpace(input.Status),
+	})
+}
+
 func (service TaskService) List(ctx context.Context, input ListTasksInput) ([]models.Task, error) {
 	view, err := parseTaskView(input.View)
 	if err != nil {
@@ -67,6 +79,8 @@ func (service TaskService) List(ctx context.Context, input ListTasksInput) ([]mo
 		TopicID:  strings.TrimSpace(input.TopicID),
 		Priority: strings.TrimSpace(input.Priority),
 		Status:   strings.TrimSpace(input.Status),
+		Limit:    input.Limit,
+		Offset:   input.Offset,
 	})
 }
 
@@ -83,12 +97,13 @@ func (service TaskService) Create(ctx context.Context, input CreateTaskInput) (m
 	if title == "" {
 		return models.Task{}, fmt.Errorf("title is required")
 	}
+	description := sanitizer.Sanitize(input.Description)
 
 	return service.tasks.Create(ctx, models.CreateTaskParams{
 		UserID:        input.UserID,
 		TopicID:       strings.TrimSpace(input.TopicID),
 		Title:         title,
-		Description:   input.Description,
+		Description:   description,
 		Priority:      priority,
 		ScheduledDate: strings.TrimSpace(input.ScheduledDate),
 		Status:        status,
@@ -119,7 +134,7 @@ func (service TaskService) Update(ctx context.Context, input UpdateTaskInput) (m
 		params.Title = strings.TrimSpace(*input.Title)
 	}
 	if input.Description != nil {
-		params.Description = *input.Description
+		params.Description = sanitizer.Sanitize(*input.Description)
 	}
 	if input.Priority != nil {
 		priority, err := parseTaskPriority(*input.Priority)

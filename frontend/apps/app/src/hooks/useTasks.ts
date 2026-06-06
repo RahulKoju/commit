@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 
 import { apiFetch } from "@/lib/api"
+import { appendPagination, type PaginationParams } from "@/types/common.types"
 import {
   taskResponseSchema,
   tasksResponseSchema,
@@ -13,14 +14,14 @@ import {
 
 export const taskQueryKeys = {
   all: ["tasks"] as const,
-  list: (filters: TaskFilters) => ["tasks", filters] as const,
+  list: (filters: TaskFilters, pagination?: PaginationParams) => ["tasks", filters, pagination] as const,
 }
 
-export function useTasks(filters: TaskFilters) {
+export function useTasks(filters: TaskFilters, pagination?: PaginationParams) {
   return useQuery({
-    queryKey: taskQueryKeys.list(filters),
+    queryKey: taskQueryKeys.list(filters, pagination),
     queryFn: () =>
-      apiFetch<TasksResponse>(`/api/v1/tasks${taskQueryString(filters)}`, {
+      apiFetch<TasksResponse>(`/api/v1/tasks${taskQueryString(filters, pagination)}`, {
         schema: tasksResponseSchema,
       }),
   })
@@ -61,13 +62,13 @@ export function useDeleteTask() {
   })
 }
 
-function taskQueryString(filters: TaskFilters): string {
+function taskQueryString(filters: TaskFilters, pagination?: PaginationParams): string {
   const params = new URLSearchParams()
   params.set("view", filters.view)
   if (filters.topicId) params.set("topic_id", filters.topicId)
   if (filters.priority) params.set("priority", filters.priority)
   if (filters.status) params.set("status", filters.status)
-  return `?${params.toString()}`
+  return `?${appendPagination(params, pagination).toString()}`
 }
 
 function normalizeCreateTaskInput(input: CreateTaskInput): CreateTaskInput {

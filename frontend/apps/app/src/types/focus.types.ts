@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { paginatedResponseSchema } from "./common.types"
 
 export const focusSessionSchema = z.object({
   id: z.string().uuid(),
@@ -11,9 +12,7 @@ export const focusSessionSchema = z.object({
   created_at: z.string(),
 })
 
-export const focusSessionsResponseSchema = z.object({
-  sessions: z.array(focusSessionSchema),
-})
+export const focusSessionsResponseSchema = paginatedResponseSchema(focusSessionSchema)
 
 export const focusSessionResponseSchema = z.object({
   session: focusSessionSchema,

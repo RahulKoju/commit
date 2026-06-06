@@ -1,3 +1,4 @@
+import DOMPurify from "dompurify"
 import { Edit3, Eye, Plus, Trash2 } from "lucide-react"
 import { useMemo, useState, type FormEvent } from "react"
 import { Button } from "@workspace/ui/components/button"
@@ -15,7 +16,7 @@ export function NotesPage() {
   const [preview, setPreview] = useState(false)
   const notesQuery = useNotes(search)
   const topicsQuery = useLearningTopics()
-  const notes = notesQuery.data?.notes ?? []
+  const notes = notesQuery.data?.data ?? []
   const selectedNote = useMemo(
     () => notes.find((note) => note.id === selectedNoteId) ?? notes[0] ?? null,
     [notes, selectedNoteId]
@@ -229,7 +230,7 @@ function NotePreview({ note, onEdit }: { note: Note; onEdit: () => void }) {
       </div>
       <div
         className="prose prose-sm max-w-none rounded-lg border bg-muted/30 p-4"
-        dangerouslySetInnerHTML={{ __html: note.body }}
+        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(note.body) }}
       />
     </article>
   )

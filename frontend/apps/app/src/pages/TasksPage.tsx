@@ -1,3 +1,4 @@
+import DOMPurify from "dompurify"
 import { Plus, Trash2 } from "lucide-react"
 import { useMemo, useState, type FormEvent } from "react"
 import { Button } from "@workspace/ui/components/button"
@@ -107,7 +108,7 @@ export function TasksPage() {
       {tasksQuery.isError ? (
         <p className="text-sm text-destructive">Unable to load tasks.</p>
       ) : null}
-      {tasksQuery.data ? <TaskList tasks={tasksQuery.data.tasks} /> : null}
+      {tasksQuery.data ? <TaskList tasks={tasksQuery.data.data} /> : null}
     </section>
   )
 }
@@ -282,7 +283,7 @@ function TaskCard({ task }: { task: Task }) {
       {task.description ? (
         <div
           className="prose prose-sm mt-3 max-w-none text-sm text-muted-foreground"
-          dangerouslySetInnerHTML={{ __html: task.description }}
+          dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(task.description) }}
         />
       ) : null}
     </article>

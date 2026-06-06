@@ -6,7 +6,11 @@ import (
 	"strings"
 
 	"commit/backend/models"
+
+	"github.com/microcosm-cc/bluemonday"
 )
+
+var sanitizer = bluemonday.UGCPolicy()
 
 type NoteService struct {
 	notes models.NoteModel
@@ -15,6 +19,8 @@ type NoteService struct {
 type ListNotesInput struct {
 	UserID string
 	Search string
+	Limit  int
+	Offset int
 }
 
 type CreateNoteInput struct {
@@ -36,10 +42,19 @@ func NewNoteService(notes models.NoteModel) NoteService {
 	return NoteService{notes: notes}
 }
 
+func (service NoteService) Count(ctx context.Context, input ListNotesInput) (int, error) {
+	return service.notes.CountNotes(ctx, models.ListNotesParams{
+		UserID: input.UserID,
+		Search: strings.TrimSpace(input.Search),
+	})
+}
+
 func (service NoteService) List(ctx context.Context, input ListNotesInput) ([]models.Note, error) {
 	return service.notes.List(ctx, models.ListNotesParams{
 		UserID: input.UserID,
 		Search: strings.TrimSpace(input.Search),
+		Limit:  input.Limit,
+		Offset: input.Offset,
 	})
 }
 
@@ -48,11 +63,12 @@ func (service NoteService) Create(ctx context.Context, input CreateNoteInput) (m
 	if title == "" {
 		return models.Note{}, fmt.Errorf("title is required")
 	}
+	body := sanitizer.Sanitize(input.Body)
 
 	return service.notes.Create(ctx, models.CreateNoteParams{
 		UserID:   input.UserID,
 		Title:    title,
-		Body:     input.Body,
+		Body:     body,
 		TopicIDs: normalizeTopicIDs(input.TopicIDs),
 	})
 }
@@ -74,7 +90,7 @@ func (service NoteService) Update(ctx context.Context, input UpdateNoteInput) (m
 		params.Title = strings.TrimSpace(*input.Title)
 	}
 	if input.Body != nil {
-		params.Body = *input.Body
+		params.Body = sanitizer.Sanitize(*input.Body)
 	}
 	if input.TopicIDs != nil {
 		params.TopicIDs = normalizeTopicIDs(*input.TopicIDs)

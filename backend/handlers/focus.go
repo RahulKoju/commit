@@ -12,7 +12,8 @@ import (
 )
 
 type FocusHandler struct {
-	focus services.FocusService
+	focus                   services.FocusService
+	focusDailyMinimumMinute int
 }
 
 type createFocusSessionRequest struct {
@@ -22,8 +23,8 @@ type createFocusSessionRequest struct {
 	DurationMinutes int    `json:"duration_minutes" binding:"required"`
 }
 
-func NewFocusHandler(focus services.FocusService) FocusHandler {
-	return FocusHandler{focus: focus}
+func NewFocusHandler(focus services.FocusService, focusDailyMinimumMinute int) FocusHandler {
+	return FocusHandler{focus: focus, focusDailyMinimumMinute: focusDailyMinimumMinute}
 }
 
 func (handler FocusHandler) List(c *gin.Context) {
@@ -33,18 +34,34 @@ func (handler FocusHandler) List(c *gin.Context) {
 		return
 	}
 
-	sessions, err := handler.focus.List(c.Request.Context(), services.ListFocusSessionsInput{
+	limit, offset := parsePagination(c)
+	input := services.ListFocusSessionsInput{
 		UserID:   userID,
 		DateFrom: c.Query("date_from"),
 		DateTo:   c.Query("date_to"),
 		TopicID:  c.Query("topic_id"),
-	})
+		Limit:    limit,
+		Offset:   offset,
+	}
+
+	sessions, err := handler.focus.List(c.Request.Context(), input)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"sessions": sessions})
+	total, err := handler.focus.Count(c.Request.Context(), input)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count sessions"})
+		return
+	}
+
+	c.JSON(http.StatusOK, models.PaginatedResult[models.FocusSession]{
+		Data:   sessions,
+		Total:  total,
+		Limit:  limit,
+		Offset: offset,
+	})
 }
 
 func (handler FocusHandler) Create(c *gin.Context) {
@@ -61,11 +78,12 @@ func (handler FocusHandler) Create(c *gin.Context) {
 	}
 
 	session, err := handler.focus.Create(c.Request.Context(), services.CreateFocusSessionInput{
-		UserID:          userID,
-		TaskID:          request.TaskID,
-		TopicID:         request.TopicID,
-		StartTime:       request.StartTime,
-		DurationMinutes: request.DurationMinutes,
+		UserID:                  userID,
+		TaskID:                  request.TaskID,
+		TopicID:                 request.TopicID,
+		StartTime:               request.StartTime,
+		DurationMinutes:         request.DurationMinutes,
+		FocusDailyMinimumMinute: handler.focusDailyMinimumMinute,
 	})
 	if err != nil {
 		status := http.StatusBadRequest

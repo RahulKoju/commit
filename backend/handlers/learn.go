@@ -4,7 +4,6 @@ import (
 	"errors"
 	"net/http"
 
-	"commit/backend/middleware"
 	"commit/backend/models"
 	"commit/backend/services"
 
@@ -116,13 +115,25 @@ func (handler LearnHandler) ListEntries(c *gin.Context) {
 		return
 	}
 
-	entries, err := handler.learn.ListEntries(c.Request.Context(), userID)
+	limit, offset := parsePagination(c)
+	entries, err := handler.learn.ListEntries(c.Request.Context(), userID, limit, offset)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list learning entries"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"entries": entries})
+	total, err := handler.learn.CountEntries(c.Request.Context(), userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count learning entries"})
+		return
+	}
+
+	c.JSON(http.StatusOK, models.PaginatedResult[models.LearnEntry]{
+		Data:   entries,
+		Total:  total,
+		Limit:  limit,
+		Offset: offset,
+	})
 }
 
 func (handler LearnHandler) CreateEntry(c *gin.Context) {
@@ -224,15 +235,6 @@ func (handler LearnHandler) Summary(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, summary)
-}
-
-func currentUserID(c *gin.Context) (string, bool) {
-	userID, ok := middleware.CurrentUserID(c)
-	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
-		return "", false
-	}
-	return userID, true
 }
 
 func writeLearnError(c *gin.Context, err error) {

@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { paginatedResponseSchema } from "./common.types"
 
 export const noteTopicSchema = z.object({
   id: z.string().uuid(),
@@ -15,9 +16,7 @@ export const noteSchema = z.object({
   updated_at: z.string(),
 })
 
-export const notesResponseSchema = z.object({
-  notes: z.array(noteSchema),
-})
+export const notesResponseSchema = paginatedResponseSchema(noteSchema)
 
 export const noteResponseSchema = z.object({
   note: noteSchema,

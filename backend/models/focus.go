@@ -10,8 +10,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-const focusedStudyMinimumMinutes = 120
-
 type FocusSession struct {
 	ID              string    `json:"id"`
 	UserID          string    `json:"user_id"`
@@ -28,14 +26,17 @@ type ListFocusSessionsParams struct {
 	DateFrom string
 	DateTo   string
 	TopicID  string
+	Limit    int
+	Offset   int
 }
 
 type CreateFocusSessionParams struct {
-	UserID          string
-	TaskID          string
-	TopicID         string
-	StartTime       time.Time
-	DurationMinutes int
+	UserID                  string
+	TaskID                  string
+	TopicID                 string
+	StartTime               time.Time
+	DurationMinutes         int
+	FocusDailyMinimumMinute int
 }
 
 type FocusModel struct {
@@ -56,7 +57,8 @@ func (model FocusModel) List(ctx context.Context, params ListFocusSessionsParams
 		  AND ($3 = '' OR fs.start_time < ($3::date + INTERVAL '1 day'))
 		  AND ($4 = '' OR fs.topic_id = $4::uuid)
 		ORDER BY fs.start_time DESC
-	`, params.UserID, params.DateFrom, params.DateTo, params.TopicID)
+		LIMIT $5 OFFSET $6
+	`, params.UserID, params.DateFrom, params.DateTo, params.TopicID, params.Limit, params.Offset)
 	if err != nil {
 		return nil, err
 	}
@@ -72,6 +74,23 @@ func (model FocusModel) List(ctx context.Context, params ListFocusSessionsParams
 	}
 
 	return sessions, rows.Err()
+}
+
+func (model FocusModel) CountFocusSessions(ctx context.Context, params ListFocusSessionsParams) (int, error) {
+	var count int
+	err := model.pool.QueryRow(ctx, `
+		SELECT COUNT(*)
+		FROM focus_sessions fs
+		INNER JOIN tasks t ON t.id = fs.task_id AND t.user_id = fs.user_id
+		WHERE fs.user_id = $1
+		  AND ($2 = '' OR fs.start_time >= $2::date)
+		  AND ($3 = '' OR fs.start_time < ($3::date + INTERVAL '1 day'))
+		  AND ($4 = '' OR fs.topic_id = $4::uuid)
+	`, params.UserID, params.DateFrom, params.DateTo, params.TopicID).Scan(&count)
+	if err != nil {
+		return 0, err
+	}
+	return count, nil
 }
 
 func (model FocusModel) Create(ctx context.Context, params CreateFocusSessionParams) (FocusSession, error) {
@@ -97,7 +116,7 @@ func (model FocusModel) Create(ctx context.Context, params CreateFocusSessionPar
 		return FocusSession{}, err
 	}
 
-	if err := model.autoCheckFocusedStudy(ctx, tx, params.UserID, session.StartTime); err != nil {
+	if err := model.autoCheckFocusedStudy(ctx, tx, params.UserID, session.StartTime, params.FocusDailyMinimumMinute); err != nil {
 		return FocusSession{}, err
 	}
 
@@ -112,7 +131,7 @@ type focusScanner interface {
 	Scan(dest ...interface{}) error
 }
 
-func (model FocusModel) autoCheckFocusedStudy(ctx context.Context, tx pgx.Tx, userID string, day time.Time) error {
+func (model FocusModel) autoCheckFocusedStudy(ctx context.Context, tx pgx.Tx, userID string, day time.Time, minimumMinutes int) error {
 	var totalMinutes int
 	err := tx.QueryRow(ctx, `
 		SELECT COALESCE(SUM(duration_minutes), 0)
@@ -122,7 +141,7 @@ func (model FocusModel) autoCheckFocusedStudy(ctx context.Context, tx pgx.Tx, us
 	if err != nil {
 		return err
 	}
-	if totalMinutes < focusedStudyMinimumMinutes {
+	if totalMinutes < minimumMinutes {
 		return nil
 	}
 

@@ -3,13 +3,17 @@ package handlers
 import (
 	"errors"
 	"net/http"
-	"time"
 
 	"commit/backend/middleware"
 	"commit/backend/models"
 	"commit/backend/services"
 
 	"github.com/gin-gonic/gin"
+)
+
+const (
+	accessCookieName  = "commit_token"
+	refreshCookieName = "commit_refresh_token"
 )
 
 type AuthHandler struct {
@@ -52,7 +56,7 @@ func (handler AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
-	setAuthCookie(c, result.Token)
+	setAuthCookies(c, result.Token, result.RefreshToken)
 	c.JSON(http.StatusCreated, authResponse{User: result.User})
 }
 
@@ -78,12 +82,33 @@ func (handler AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	setAuthCookie(c, result.Token)
+	setAuthCookies(c, result.Token, result.RefreshToken)
 	c.JSON(http.StatusOK, authResponse{User: result.User})
 }
 
+func (handler AuthHandler) Refresh(c *gin.Context) {
+	refreshCookie, err := c.Cookie(refreshCookieName)
+	if err != nil || refreshCookie == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "refresh token required"})
+		return
+	}
+
+	newToken, newRefreshToken, err := handler.auth.RefreshAccessToken(c.Request.Context(), refreshCookie)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid or expired refresh token"})
+		return
+	}
+
+	setAuthCookies(c, newToken, newRefreshToken)
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
 func (handler AuthHandler) Logout(c *gin.Context) {
-	clearAuthCookie(c)
+	userID, ok := middleware.CurrentUserID(c)
+	if ok {
+		handler.auth.RevokeRefreshTokens(c.Request.Context(), userID)
+	}
+	clearAuthCookies(c)
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
@@ -107,21 +132,30 @@ func (handler AuthHandler) Me(c *gin.Context) {
 	c.JSON(http.StatusOK, authResponse{User: user})
 }
 
-func setAuthCookie(c *gin.Context, token string) {
+func setAuthCookies(c *gin.Context, accessToken string, refreshToken string) {
 	http.SetCookie(c.Writer, &http.Cookie{
-		Name:     middleware.AuthCookie,
-		Value:    token,
+		Name:     accessCookieName,
+		Value:    accessToken,
 		Path:     "/",
-		MaxAge:   int((7 * 24 * time.Hour).Seconds()),
+		MaxAge:   900, // 15 minutes
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		Secure:   c.Request.TLS != nil,
+	})
+	http.SetCookie(c.Writer, &http.Cookie{
+		Name:     refreshCookieName,
+		Value:    refreshToken,
+		Path:     "/api/v1/auth/refresh",
+		MaxAge:   7 * 24 * 3600, // 7 days
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 		Secure:   c.Request.TLS != nil,
 	})
 }
 
-func clearAuthCookie(c *gin.Context) {
+func clearAuthCookies(c *gin.Context) {
 	http.SetCookie(c.Writer, &http.Cookie{
-		Name:     middleware.AuthCookie,
+		Name:     accessCookieName,
 		Value:    "",
 		Path:     "/",
 		MaxAge:   -1,
@@ -129,4 +163,15 @@ func clearAuthCookie(c *gin.Context) {
 		SameSite: http.SameSiteLaxMode,
 		Secure:   c.Request.TLS != nil,
 	})
+	http.SetCookie(c.Writer, &http.Cookie{
+		Name:     refreshCookieName,
+		Value:    "",
+		Path:     "/api/v1/auth/refresh",
+		MaxAge:   -1,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		Secure:   c.Request.TLS != nil,
+	})
 }
+
+

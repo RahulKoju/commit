@@ -44,19 +44,35 @@ func (handler TaskHandler) List(c *gin.Context) {
 		return
 	}
 
-	tasks, err := handler.tasks.List(c.Request.Context(), services.ListTasksInput{
+	limit, offset := parsePagination(c)
+	input := services.ListTasksInput{
 		UserID:   userID,
 		View:     c.DefaultQuery("view", string(models.TaskViewToday)),
 		TopicID:  c.Query("topic_id"),
 		Priority: c.Query("priority"),
 		Status:   c.Query("status"),
-	})
+		Limit:    limit,
+		Offset:   offset,
+	}
+
+	tasks, err := handler.tasks.List(c.Request.Context(), input)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"tasks": tasks})
+	total, err := handler.tasks.Count(c.Request.Context(), input)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count tasks"})
+		return
+	}
+
+	c.JSON(http.StatusOK, models.PaginatedResult[models.Task]{
+		Data:   tasks,
+		Total:  total,
+		Limit:  limit,
+		Offset: offset,
+	})
 }
 
 func (handler TaskHandler) Create(c *gin.Context) {

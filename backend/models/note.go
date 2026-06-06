@@ -27,6 +27,8 @@ type Note struct {
 type ListNotesParams struct {
 	UserID string
 	Search string
+	Limit  int
+	Offset int
 }
 
 type CreateNoteParams struct {
@@ -59,7 +61,8 @@ func (model NoteModel) List(ctx context.Context, params ListNotesParams) ([]Note
 		WHERE user_id = $1
 		  AND ($2 = '' OR search_vector @@ websearch_to_tsquery('english', $2))
 		ORDER BY updated_at DESC
-	`, params.UserID, params.Search)
+		LIMIT $3 OFFSET $4
+	`, params.UserID, params.Search, params.Limit, params.Offset)
 	if err != nil {
 		return nil, err
 	}
@@ -78,6 +81,20 @@ func (model NoteModel) List(ctx context.Context, params ListNotesParams) ([]Note
 	}
 
 	return model.attachTopics(ctx, notes)
+}
+
+func (model NoteModel) CountNotes(ctx context.Context, params ListNotesParams) (int, error) {
+	var count int
+	err := model.pool.QueryRow(ctx, `
+		SELECT COUNT(*)
+		FROM notes
+		WHERE user_id = $1
+		  AND ($2 = '' OR search_vector @@ websearch_to_tsquery('english', $2))
+	`, params.UserID, params.Search).Scan(&count)
+	if err != nil {
+		return 0, err
+	}
+	return count, nil
 }
 
 func (model NoteModel) GetByID(ctx context.Context, userID string, id string) (Note, error) {

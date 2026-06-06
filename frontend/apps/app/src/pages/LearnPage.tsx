@@ -1,4 +1,4 @@
-import { BookOpen, Flame, Plus } from "lucide-react"
+import { BookOpen, Plus } from "lucide-react"
 import { useMemo, useState, type FormEvent } from "react"
 import { Button } from "@workspace/ui/components/button"
 
@@ -178,7 +178,7 @@ export function LearnPage() {
           <div className="rounded-xl border bg-background p-4">
             <h2 className="font-semibold">Recent entries</h2>
             <div className="mt-3 grid gap-2">
-              {entriesQuery.data?.entries.slice(0, 5).map((entry) => (
+              {entriesQuery.data?.data.slice(0, 5).map((entry) => (
                 <div key={entry.id} className="rounded-lg border p-3 text-sm">
                   <p className="font-medium">{entry.topic_name}</p>
                   <p className="text-muted-foreground">

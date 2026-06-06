@@ -18,18 +18,30 @@ type ListFocusSessionsInput struct {
 	DateFrom string
 	DateTo   string
 	TopicID  string
+	Limit    int
+	Offset   int
 }
 
 type CreateFocusSessionInput struct {
-	UserID          string
-	TaskID          string
-	TopicID         string
-	StartTime       string
-	DurationMinutes int
+	UserID                  string
+	TaskID                  string
+	TopicID                 string
+	StartTime               string
+	DurationMinutes         int
+	FocusDailyMinimumMinute int
 }
 
 func NewFocusService(focus models.FocusModel) FocusService {
 	return FocusService{focus: focus}
+}
+
+func (service FocusService) Count(ctx context.Context, input ListFocusSessionsInput) (int, error) {
+	return service.focus.CountFocusSessions(ctx, models.ListFocusSessionsParams{
+		UserID:   input.UserID,
+		DateFrom: strings.TrimSpace(input.DateFrom),
+		DateTo:   strings.TrimSpace(input.DateTo),
+		TopicID:  strings.TrimSpace(input.TopicID),
+	})
 }
 
 func (service FocusService) List(ctx context.Context, input ListFocusSessionsInput) ([]models.FocusSession, error) {
@@ -45,6 +57,8 @@ func (service FocusService) List(ctx context.Context, input ListFocusSessionsInp
 		DateFrom: strings.TrimSpace(input.DateFrom),
 		DateTo:   strings.TrimSpace(input.DateTo),
 		TopicID:  strings.TrimSpace(input.TopicID),
+		Limit:    input.Limit,
+		Offset:   input.Offset,
 	})
 }
 
@@ -63,11 +77,12 @@ func (service FocusService) Create(ctx context.Context, input CreateFocusSession
 	}
 
 	return service.focus.Create(ctx, models.CreateFocusSessionParams{
-		UserID:          input.UserID,
-		TaskID:          taskID,
-		TopicID:         strings.TrimSpace(input.TopicID),
-		StartTime:       startTime,
-		DurationMinutes: input.DurationMinutes,
+		UserID:                  input.UserID,
+		TaskID:                  taskID,
+		TopicID:                 strings.TrimSpace(input.TopicID),
+		StartTime:               startTime,
+		DurationMinutes:         input.DurationMinutes,
+		FocusDailyMinimumMinute: input.FocusDailyMinimumMinute,
 	})
 }
 

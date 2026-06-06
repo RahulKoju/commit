@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 
 import { apiFetch } from "@/lib/api"
+import { appendPagination, type PaginationParams } from "@/types/common.types"
 import {
   learnEntriesResponseSchema,
   learnEntryResponseSchema,
@@ -21,7 +22,7 @@ import {
 export const learnQueryKeys = {
   all: ["learn"] as const,
   topics: ["learn", "topics"] as const,
-  entries: ["learn", "entries"] as const,
+  entries: (pagination?: PaginationParams) => ["learn", "entries", pagination] as const,
   weakSpots: ["learn", "weakspots"] as const,
   summary: ["learn", "summary"] as const,
 }
@@ -36,14 +37,20 @@ export function useLearningTopics() {
   })
 }
 
-export function useLearnEntries() {
+export function useLearnEntries(pagination?: PaginationParams) {
   return useQuery({
-    queryKey: learnQueryKeys.entries,
+    queryKey: learnQueryKeys.entries(pagination),
     queryFn: () =>
-      apiFetch<LearnEntriesResponse>("/api/v1/learn/entries", {
+      apiFetch<LearnEntriesResponse>(`/api/v1/learn/entries${paginationQuery(pagination)}`, {
         schema: learnEntriesResponseSchema,
       }),
   })
+}
+
+function paginationQuery(pagination?: PaginationParams): string {
+  const params = appendPagination(new URLSearchParams(), pagination)
+  const query = params.toString()
+  return query ? `?${query}` : ""
 }
 
 export function useWeakSpots() {

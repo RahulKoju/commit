@@ -9,7 +9,7 @@ type RequestOptions<T> = {
 }
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL,
+  baseURL: import.meta.env.VITE_API_URL ?? "http://localhost:8080",
   withCredentials: true,
 })
 
@@ -36,7 +36,7 @@ export async function apiFetch<T>(
     return response.data as T
   } catch (error) {
     const axiosError = error as AxiosError<unknown>
-    if (axiosError.response?.status === 401) {
+    if (axiosError.response?.status === 401 && window.location.pathname !== "/login") {
       window.location.assign("/login")
     }
     throw parseApiError(axiosError)

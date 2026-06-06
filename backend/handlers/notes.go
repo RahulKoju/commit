@@ -38,16 +38,32 @@ func (handler NoteHandler) List(c *gin.Context) {
 		return
 	}
 
-	notes, err := handler.notes.List(c.Request.Context(), services.ListNotesInput{
+	limit, offset := parsePagination(c)
+	input := services.ListNotesInput{
 		UserID: userID,
 		Search: c.Query("search"),
-	})
+		Limit:  limit,
+		Offset: offset,
+	}
+
+	notes, err := handler.notes.List(c.Request.Context(), input)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list notes"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"notes": notes})
+	total, err := handler.notes.Count(c.Request.Context(), input)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count notes"})
+		return
+	}
+
+	c.JSON(http.StatusOK, models.PaginatedResult[models.Note]{
+		Data:   notes,
+		Total:  total,
+		Limit:  limit,
+		Offset: offset,
+	})
 }
 
 func (handler NoteHandler) Create(c *gin.Context) {

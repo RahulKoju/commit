@@ -1,6 +1,8 @@
 package routes
 
 import (
+	"time"
+
 	"commit/backend/handlers"
 	"commit/backend/middleware"
 	"commit/backend/models"
@@ -10,15 +12,16 @@ import (
 )
 
 type Dependencies struct {
-	AuthService      services.AuthService
-	AdminService     services.AdminService
-	TaskService      services.TaskService
-	FocusService     services.FocusService
-	LearnService     services.LearnService
-	NoteService      services.NoteService
-	HabitService     services.HabitService
-	ReviewService    services.ReviewService
-	DashboardService services.DashboardService
+	AuthService               services.AuthService
+	AdminService              services.AdminService
+	TaskService               services.TaskService
+	FocusService              services.FocusService
+	LearnService              services.LearnService
+	NoteService               services.NoteService
+	HabitService              services.HabitService
+	ReviewService             services.ReviewService
+	DashboardService          services.DashboardService
+	FocusDailyMinimumMinute   int
 }
 
 func Register(router *gin.Engine, deps Dependencies) {
@@ -26,7 +29,7 @@ func Register(router *gin.Engine, deps Dependencies) {
 	authHandler := handlers.NewAuthHandler(deps.AuthService)
 	adminHandler := handlers.NewAdminHandler(deps.AdminService)
 	taskHandler := handlers.NewTaskHandler(deps.TaskService)
-	focusHandler := handlers.NewFocusHandler(deps.FocusService)
+	focusHandler := handlers.NewFocusHandler(deps.FocusService, deps.FocusDailyMinimumMinute)
 	learnHandler := handlers.NewLearnHandler(deps.LearnService)
 	noteHandler := handlers.NewNoteHandler(deps.NoteService)
 	habitHandler := handlers.NewHabitHandler(deps.HabitService)
@@ -36,8 +39,11 @@ func Register(router *gin.Engine, deps Dependencies) {
 	router.GET("/healthz", healthHandler.Health)
 
 	api := router.Group("/api/v1")
-	api.POST("/auth/register", authHandler.Register)
-	api.POST("/auth/login", authHandler.Login)
+	loginLimiter := middleware.NewRateLimiter(5, 1*time.Minute)
+	registerLimiter := middleware.NewRateLimiter(3, 1*time.Minute)
+	api.POST("/auth/register", registerLimiter.Middleware(), authHandler.Register)
+	api.POST("/auth/login", loginLimiter.Middleware(), authHandler.Login)
+	api.POST("/auth/refresh", authHandler.Refresh)
 	api.POST("/auth/logout", authHandler.Logout)
 
 	protected := api.Group("")

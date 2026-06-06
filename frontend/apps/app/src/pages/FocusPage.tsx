@@ -39,7 +39,7 @@ export function FocusPage() {
     [dateFrom, dateTo, topicId]
   )
   const sessionsQuery = useFocusSessions(filters)
-  const selectedTask = tasksQuery.data?.tasks.find((task) => task.id === selectedTaskId)
+  const selectedTask = tasksQuery.data?.data.find((task) => task.id === selectedTaskId)
   const isRunning = mode === "work" || mode === "short-break" || mode === "long-break"
   const isWorkRunning = mode === "work"
 
@@ -57,7 +57,7 @@ export function FocusPage() {
       .mutateAsync({
         task_id: selectedTaskId,
         topic_id: selectedTask?.topic_id ?? "",
-        start_time: startedAt,
+        start_time: new Date(startedAt).toISOString(),
         duration_minutes: workMinutes,
       })
       .then(() => startBreak(shortBreakMinutes * 60, "short-break"))
@@ -84,7 +84,7 @@ export function FocusPage() {
       setError("Select a task before starting a focus session.")
       return
     }
-    startTimer(workMinutes * 60, new Date().toISOString())
+    startTimer(workMinutes * 60, Date.now())
   }
 
   function onHistorySubmit(event: FormEvent<HTMLFormElement>) {
@@ -122,7 +122,7 @@ export function FocusPage() {
                 disabled={isWorkRunning}
               >
                 <option value="">Select a task</option>
-                {tasksQuery.data?.tasks
+                {tasksQuery.data?.data
                   .filter((task) => task.status !== "done")
                   .map((task) => (
                     <option key={task.id} value={task.id}>
@@ -188,10 +188,10 @@ export function FocusPage() {
           </div>
           <div className="mt-4 grid gap-2">
             {sessionsQuery.isLoading ? <p className="text-sm text-muted-foreground">Loading sessions...</p> : null}
-            {sessionsQuery.data?.sessions.length === 0 ? (
+            {sessionsQuery.data?.data.length === 0 ? (
               <p className="text-sm text-muted-foreground">No focus sessions yet.</p>
             ) : null}
-            {sessionsQuery.data?.sessions.map((session) => (
+            {sessionsQuery.data?.data.map((session) => (
               <div key={session.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3 text-sm">
                 <div>
                   <p className="font-medium">{session.task_title}</p>

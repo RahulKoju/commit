@@ -3,12 +3,13 @@ import type { ComponentType } from "react"
 import { Link } from "react-router-dom"
 import { Button } from "@workspace/ui/components/button"
 
+import { useCurrentUser } from "@/hooks/useAuth"
 import { useDashboardSummary } from "@/hooks/useDashboard"
-import { useAuthStore } from "@/store/useAuthStore"
 import type { DashboardSummary } from "@/types/dashboard.types"
 
 export function DashboardPage() {
-  const user = useAuthStore((state) => state.user)
+  const { data } = useCurrentUser()
+  const user = data?.user ?? null
   const dashboardQuery = useDashboardSummary()
   const summary = dashboardQuery.data?.summary
 

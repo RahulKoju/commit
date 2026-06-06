@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { paginatedResponseSchema } from "./common.types"
 
 export const learningTopicSchema = z.object({
   id: z.string().uuid(),
@@ -49,9 +50,7 @@ export const topicResponseSchema = z.object({
   topic: learningTopicSchema,
 })
 
-export const learnEntriesResponseSchema = z.object({
-  entries: z.array(learnEntrySchema),
-})
+export const learnEntriesResponseSchema = paginatedResponseSchema(learnEntrySchema)
 
 export const learnEntryResponseSchema = z.object({
   entry: learnEntrySchema,

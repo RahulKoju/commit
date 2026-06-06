@@ -32,6 +32,8 @@ type Review struct {
 type ListReviewsParams struct {
 	UserID string
 	Type   string
+	Limit  int
+	Offset int
 }
 
 type CreateReviewParams struct {
@@ -57,7 +59,8 @@ func (model ReviewModel) List(ctx context.Context, params ListReviewsParams) ([]
 		FROM reviews
 		WHERE user_id = $1 AND ($2 = '' OR type = $2)
 		ORDER BY period_start DESC, created_at DESC
-	`, params.UserID, params.Type)
+		LIMIT $3 OFFSET $4
+	`, params.UserID, params.Type, params.Limit, params.Offset)
 	if err != nil {
 		return nil, err
 	}
@@ -73,6 +76,19 @@ func (model ReviewModel) List(ctx context.Context, params ListReviewsParams) ([]
 	}
 
 	return reviews, rows.Err()
+}
+
+func (model ReviewModel) CountReviews(ctx context.Context, params ListReviewsParams) (int, error) {
+	var count int
+	err := model.pool.QueryRow(ctx, `
+		SELECT COUNT(*)
+		FROM reviews
+		WHERE user_id = $1 AND ($2 = '' OR type = $2)
+	`, params.UserID, params.Type).Scan(&count)
+	if err != nil {
+		return 0, err
+	}
+	return count, nil
 }
 
 func (model ReviewModel) GetByID(ctx context.Context, userID string, id string) (Review, error) {

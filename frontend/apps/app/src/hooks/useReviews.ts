@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 
 import { apiFetch } from "@/lib/api"
+import { appendPagination, type PaginationParams } from "@/types/common.types"
 import {
   reviewResponseSchema,
   reviewsResponseSchema,
@@ -12,15 +13,15 @@ import {
 
 export const reviewQueryKeys = {
   all: ["reviews"] as const,
-  list: (type: ReviewType | "") => ["reviews", type] as const,
+  list: (type: ReviewType | "", pagination?: PaginationParams) => ["reviews", type, pagination] as const,
   detail: (id: string) => ["reviews", "detail", id] as const,
 }
 
-export function useReviews(type: ReviewType | "") {
+export function useReviews(type: ReviewType | "", pagination?: PaginationParams) {
   return useQuery({
-    queryKey: reviewQueryKeys.list(type),
+    queryKey: reviewQueryKeys.list(type, pagination),
     queryFn: () =>
-      apiFetch<ReviewsResponse>(`/api/v1/reviews${reviewsQueryString(type)}`, {
+      apiFetch<ReviewsResponse>(`/api/v1/reviews${reviewsQueryString(type, pagination)}`, {
         schema: reviewsResponseSchema,
       }),
   })
@@ -50,11 +51,12 @@ export function useCreateReview() {
   })
 }
 
-function reviewsQueryString(type: ReviewType | ""): string {
-  if (!type) {
+function reviewsQueryString(type: ReviewType | "", pagination?: PaginationParams): string {
+  if (!type && !pagination?.limit && !pagination?.offset) {
     return ""
   }
   const params = new URLSearchParams()
-  params.set("type", type)
-  return `?${params.toString()}`
+  if (type) params.set("type", type)
+  const query = appendPagination(params, pagination).toString()
+  return query ? `?${query}` : ""
 }

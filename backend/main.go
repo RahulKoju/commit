@@ -28,7 +28,12 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
-	pool, err := db.Connect(ctx, cfg.DatabaseURL())
+	pool, err := db.Connect(ctx, cfg.DatabaseURL(), db.PoolConfig{
+		MaxConns:       cfg.DBMaxConns,
+		MinConns:       cfg.DBMinConns,
+		MaxLifetimeMin: cfg.DBMaxConnLifetimeMinutes,
+		MaxIdleMin:     cfg.DBMaxConnIdleMinutes,
+	})
 	if err != nil {
 		log.Fatalf("connect database: %v", err)
 	}
@@ -45,6 +50,7 @@ func main() {
 	noteModel := models.NewNoteModel(pool)
 	habitModel := models.NewHabitModel(pool)
 	reviewModel := models.NewReviewModel(pool)
+	refreshTokenModel := models.NewRefreshTokenModel(pool)
 	dashboardModel := models.NewDashboardModel(pool, learnModel)
 	adminService := services.NewAdminService(userModel)
 	taskService := services.NewTaskService(taskModel)
@@ -54,20 +60,21 @@ func main() {
 	habitService := services.NewHabitService(habitModel)
 	reviewService := services.NewReviewService(reviewModel)
 	dashboardService := services.NewDashboardService(dashboardModel)
-	authService := services.NewAuthService(userModel, habitService, cfg.JWTSecret)
+	authService := services.NewAuthService(userModel, refreshTokenModel, habitService, cfg.JWTSecret, cfg.JWTExpiryHours, cfg.JWTExpiryMinutes)
 
 	router := gin.New()
-	router.Use(middleware.Logger(), gin.Recovery(), middleware.CORS())
+	router.Use(middleware.Logger(), gin.Recovery(), middleware.CORS(cfg.AllowedOrigins))
 	routes.Register(router, routes.Dependencies{
-		AuthService:      authService,
-		AdminService:     adminService,
-		TaskService:      taskService,
-		FocusService:     focusService,
-		LearnService:     learnService,
-		NoteService:      noteService,
-		HabitService:     habitService,
-		ReviewService:    reviewService,
-		DashboardService: dashboardService,
+		AuthService:               authService,
+		AdminService:              adminService,
+		TaskService:               taskService,
+		FocusService:              focusService,
+		LearnService:              learnService,
+		NoteService:               noteService,
+		HabitService:              habitService,
+		ReviewService:             reviewService,
+		DashboardService:          dashboardService,
+		FocusDailyMinimumMinute:   cfg.FocusDailyMinimumMinute,
 	})
 
 	if err := router.Run(":" + cfg.Port); err != nil {

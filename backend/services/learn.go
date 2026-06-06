@@ -78,8 +78,16 @@ func (service LearnService) DeleteTopic(ctx context.Context, userID string, id s
 	return service.learn.DeleteTopic(ctx, userID, id)
 }
 
-func (service LearnService) ListEntries(ctx context.Context, userID string) ([]models.LearnEntry, error) {
-	return service.learn.ListEntries(ctx, userID)
+func (service LearnService) CountEntries(ctx context.Context, userID string) (int, error) {
+	return service.learn.CountLearnEntries(ctx, userID)
+}
+
+func (service LearnService) ListEntries(ctx context.Context, userID string, limit int, offset int) ([]models.LearnEntry, error) {
+	return service.learn.ListEntries(ctx, models.ListLearnEntriesParams{
+		UserID: userID,
+		Limit:  limit,
+		Offset: offset,
+	})
 }
 
 func (service LearnService) CreateEntry(ctx context.Context, input CreateLearnEntryInput) (models.LearnEntry, error) {

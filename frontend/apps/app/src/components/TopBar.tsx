@@ -2,14 +2,15 @@ import { LogOut, Menu } from "lucide-react"
 import { Button } from "@workspace/ui/components/button"
 
 import { apiFetch } from "@/lib/api"
-import { useAuthStore } from "@/store/useAuthStore"
+import { useCurrentUser } from "@/hooks/useAuth"
 
 export function TopBar() {
-  const user = useAuthStore((state) => state.user)
+  const { data } = useCurrentUser()
+  const user = data?.user ?? null
 
   async function logout() {
     await apiFetch<{ ok: boolean }>("/api/v1/auth/logout", { method: "POST" })
-    window.location.assign(`${import.meta.env.VITE_APP_URL}/login`)
+    window.location.assign(`${import.meta.env.VITE_APP_URL ?? "http://localhost:5173"}/login`)
   }
 
   return (

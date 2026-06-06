@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 
 import { apiFetch } from "@/lib/api"
+import { appendPagination, type PaginationParams } from "@/types/common.types"
 import {
   noteResponseSchema,
   notesResponseSchema,
@@ -12,14 +13,14 @@ import {
 
 export const noteQueryKeys = {
   all: ["notes"] as const,
-  list: (search: string) => ["notes", search] as const,
+  list: (search: string, pagination?: PaginationParams) => ["notes", search, pagination] as const,
 }
 
-export function useNotes(search: string) {
+export function useNotes(search: string, pagination?: PaginationParams) {
   return useQuery({
-    queryKey: noteQueryKeys.list(search),
+    queryKey: noteQueryKeys.list(search, pagination),
     queryFn: () =>
-      apiFetch<NotesResponse>(`/api/v1/notes${notesQueryString(search)}`, {
+      apiFetch<NotesResponse>(`/api/v1/notes${notesQueryString(search, pagination)}`, {
         schema: notesResponseSchema,
       }),
   })
@@ -59,9 +60,9 @@ export function useDeleteNote() {
   })
 }
 
-function notesQueryString(search: string): string {
+function notesQueryString(search: string, pagination?: PaginationParams): string {
   const params = new URLSearchParams()
   if (search.trim()) params.set("search", search.trim())
-  const query = params.toString()
+  const query = appendPagination(params, pagination).toString()
   return query ? `?${query}` : ""
 }

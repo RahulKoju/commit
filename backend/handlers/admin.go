@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 
+	"commit/backend/middleware"
 	"commit/backend/models"
 	"commit/backend/services"
 
@@ -29,7 +30,14 @@ func (handler AdminHandler) ListUsers(c *gin.Context) {
 }
 
 func (handler AdminHandler) DeleteUser(c *gin.Context) {
-	if err := handler.admin.DeleteUser(c.Request.Context(), c.Param("id")); err != nil {
+	targetID := c.Param("id")
+	currentUserID, ok := middleware.CurrentUserID(c)
+	if ok && currentUserID == targetID {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "cannot delete your own account"})
+		return
+	}
+
+	if err := handler.admin.DeleteUser(c.Request.Context(), targetID); err != nil {
 		status := http.StatusInternalServerError
 		if errors.Is(err, models.ErrNotFound) {
 			status = http.StatusNotFound

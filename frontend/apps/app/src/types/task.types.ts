@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { paginatedResponseSchema } from "./common.types"
 
 export const taskStatusSchema = z.enum(["todo", "in-progress", "done"])
 export const taskPrioritySchema = z.enum(["low", "medium", "high"])
@@ -18,9 +19,7 @@ export const taskSchema = z.object({
   updated_at: z.string(),
 })
 
-export const tasksResponseSchema = z.object({
-  tasks: z.array(taskSchema),
-})
+export const tasksResponseSchema = paginatedResponseSchema(taskSchema)
 
 export const taskResponseSchema = z.object({
   task: taskSchema,

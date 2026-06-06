@@ -64,6 +64,12 @@ type CreateLearnEntryParams struct {
 	StudiedAt       time.Time
 }
 
+type ListLearnEntriesParams struct {
+	UserID string
+	Limit  int
+	Offset int
+}
+
 type UpdateTopicParams struct {
 	UserID string
 	ID     string
@@ -161,14 +167,15 @@ func (model LearnModel) DeleteTopic(ctx context.Context, userID string, id strin
 	return nil
 }
 
-func (model LearnModel) ListEntries(ctx context.Context, userID string) ([]LearnEntry, error) {
+func (model LearnModel) ListEntries(ctx context.Context, params ListLearnEntriesParams) ([]LearnEntry, error) {
 	rows, err := model.pool.Query(ctx, `
 		SELECT le.id, le.user_id, le.topic_id, t.name, le.duration_minutes, le.confidence, le.note, le.studied_at, le.created_at, le.updated_at
 		FROM learn_entries le
 		INNER JOIN topics t ON t.id = le.topic_id AND t.user_id = le.user_id
 		WHERE le.user_id = $1
 		ORDER BY le.studied_at DESC
-	`, userID)
+		LIMIT $2 OFFSET $3
+	`, params.UserID, params.Limit, params.Offset)
 	if err != nil {
 		return nil, err
 	}
@@ -184,6 +191,20 @@ func (model LearnModel) ListEntries(ctx context.Context, userID string) ([]Learn
 	}
 
 	return entries, rows.Err()
+}
+
+func (model LearnModel) CountLearnEntries(ctx context.Context, userID string) (int, error) {
+	var count int
+	err := model.pool.QueryRow(ctx, `
+		SELECT COUNT(*)
+		FROM learn_entries le
+		INNER JOIN topics t ON t.id = le.topic_id AND t.user_id = le.user_id
+		WHERE le.user_id = $1
+	`, userID).Scan(&count)
+	if err != nil {
+		return 0, err
+	}
+	return count, nil
 }
 
 func (model LearnModel) CreateEntry(ctx context.Context, params CreateLearnEntryParams) (LearnEntry, error) {

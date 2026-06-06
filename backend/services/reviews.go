@@ -16,6 +16,8 @@ type ReviewService struct {
 type ListReviewsInput struct {
 	UserID string
 	Type   string
+	Limit  int
+	Offset int
 }
 
 type CreateReviewInput struct {
@@ -30,13 +32,25 @@ func NewReviewService(reviews models.ReviewModel) ReviewService {
 	return ReviewService{reviews: reviews}
 }
 
+func (service ReviewService) Count(ctx context.Context, input ListReviewsInput) (int, error) {
+	return service.reviews.CountReviews(ctx, models.ListReviewsParams{
+		UserID: input.UserID,
+		Type:   strings.TrimSpace(input.Type),
+	})
+}
+
 func (service ReviewService) List(ctx context.Context, input ListReviewsInput) ([]models.Review, error) {
 	if input.Type != "" {
 		if _, err := parseReviewType(input.Type); err != nil {
 			return nil, err
 		}
 	}
-	return service.reviews.List(ctx, models.ListReviewsParams{UserID: input.UserID, Type: strings.TrimSpace(input.Type)})
+	return service.reviews.List(ctx, models.ListReviewsParams{
+		UserID: input.UserID,
+		Type:   strings.TrimSpace(input.Type),
+		Limit:  input.Limit,
+		Offset: input.Offset,
+	})
 }
 
 func (service ReviewService) GetByID(ctx context.Context, userID string, id string) (models.Review, error) {

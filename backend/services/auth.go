@@ -2,6 +2,9 @@ package services
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"strings"
@@ -14,9 +17,12 @@ import (
 )
 
 type AuthService struct {
-	users     models.UserModel
-	habits    HabitService
-	jwtSecret []byte
+	users            models.UserModel
+	refreshTokens    models.RefreshTokenModel
+	habits           HabitService
+	jwtSecret        []byte
+	jwtExpiryDur     time.Duration
+	jwtExpiryMinutes int
 }
 
 type AuthClaims struct {
@@ -37,14 +43,22 @@ type LoginInput struct {
 }
 
 type AuthResult struct {
-	User  models.User
-	Token string
+	User         models.User
+	Token        string
+	RefreshToken string
 }
 
 var ErrInvalidCredentials = errors.New("invalid credentials")
 
-func NewAuthService(users models.UserModel, habits HabitService, jwtSecret string) AuthService {
-	return AuthService{users: users, habits: habits, jwtSecret: []byte(jwtSecret)}
+func NewAuthService(users models.UserModel, refreshTokens models.RefreshTokenModel, habits HabitService, jwtSecret string, jwtExpiryHours int, jwtExpiryMinutes int) AuthService {
+	return AuthService{
+		users:            users,
+		refreshTokens:    refreshTokens,
+		habits:           habits,
+		jwtSecret:        []byte(jwtSecret),
+		jwtExpiryDur:     time.Duration(jwtExpiryHours) * time.Hour,
+		jwtExpiryMinutes: jwtExpiryMinutes,
+	}
 }
 
 func (service AuthService) Register(ctx context.Context, input RegisterInput) (AuthResult, error) {
@@ -73,12 +87,12 @@ func (service AuthService) Register(ctx context.Context, input RegisterInput) (A
 		return AuthResult{}, err
 	}
 
-	token, err := service.signToken(user)
+	token, refreshToken, err := service.signTokens(ctx, user)
 	if err != nil {
 		return AuthResult{}, err
 	}
 
-	return AuthResult{User: user, Token: token}, nil
+	return AuthResult{User: user, Token: token, RefreshToken: refreshToken}, nil
 }
 
 func (service AuthService) Login(ctx context.Context, input LoginInput) (AuthResult, error) {
@@ -92,12 +106,12 @@ func (service AuthService) Login(ctx context.Context, input LoginInput) (AuthRes
 		return AuthResult{}, ErrInvalidCredentials
 	}
 
-	token, err := service.signToken(user)
+	token, refreshToken, err := service.signTokens(ctx, user)
 	if err != nil {
 		return AuthResult{}, err
 	}
 
-	return AuthResult{User: user, Token: token}, nil
+	return AuthResult{User: user, Token: token, RefreshToken: refreshToken}, nil
 }
 
 func (service AuthService) CurrentUser(ctx context.Context, userID string) (models.User, error) {
@@ -121,17 +135,88 @@ func (service AuthService) ParseToken(tokenText string) (AuthClaims, error) {
 	return claims, nil
 }
 
-func (service AuthService) signToken(user models.User) (string, error) {
+func (service AuthService) RefreshAccessToken(ctx context.Context, refreshTokenText string) (string, string, error) {
+	tokenHash := hashToken(refreshTokenText)
+	stored, err := service.refreshTokens.GetByHash(ctx, tokenHash)
+	if err != nil {
+		return "", "", fmt.Errorf("invalid refresh token")
+	}
+
+	if time.Now().After(stored.ExpiresAt) {
+		service.refreshTokens.Delete(ctx, stored.ID)
+		return "", "", fmt.Errorf("refresh token expired")
+	}
+
+	if err := service.refreshTokens.Delete(ctx, stored.ID); err != nil {
+		return "", "", err
+	}
+
+	user, err := service.users.GetByID(ctx, stored.UserID)
+	if err != nil {
+		return "", "", err
+	}
+
+	newToken, newRefreshRaw, err := service.signTokens(ctx, user)
+	if err != nil {
+		return "", "", err
+	}
+
+	return newToken, newRefreshRaw, nil
+}
+
+func (service AuthService) RevokeRefreshTokens(ctx context.Context, userID string) error {
+	return service.refreshTokens.DeleteByUserID(ctx, userID)
+}
+
+func (service AuthService) signTokens(ctx context.Context, user models.User) (string, string, error) {
+	accessToken, err := service.signAccessToken(user)
+	if err != nil {
+		return "", "", err
+	}
+
+	refreshRaw, err := generateRandomToken()
+	if err != nil {
+		return "", "", err
+	}
+
+	refreshHash := hashToken(refreshRaw)
+	refreshExpiry := time.Now().Add(service.jwtExpiryDur)
+
+	if _, err := service.refreshTokens.Create(ctx, models.CreateRefreshTokenParams{
+		UserID:    user.ID,
+		TokenHash: refreshHash,
+		ExpiresAt: refreshExpiry,
+	}); err != nil {
+		return "", "", err
+	}
+
+	return accessToken, refreshRaw, nil
+}
+
+func (service AuthService) signAccessToken(user models.User) (string, error) {
 	claims := AuthClaims{
 		UserID: user.ID,
 		Role:   user.Role,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Subject:   user.ID,
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(7 * 24 * time.Hour)),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Duration(service.jwtExpiryMinutes) * time.Minute)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 		},
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString(service.jwtSecret)
+}
+
+func generateRandomToken() (string, error) {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b), nil
+}
+
+func hashToken(token string) string {
+	h := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(h[:])
 }

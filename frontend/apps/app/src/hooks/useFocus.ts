@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 
 import { apiFetch } from "@/lib/api"
+import { appendPagination, type PaginationParams } from "@/types/common.types"
 import {
   focusSessionResponseSchema,
   focusSessionsResponseSchema,
@@ -12,14 +13,14 @@ import {
 
 export const focusQueryKeys = {
   all: ["focus"] as const,
-  sessions: (filters: FocusSessionFilters) => ["focus", "sessions", filters] as const,
+  sessions: (filters: FocusSessionFilters, pagination?: PaginationParams) => ["focus", "sessions", filters, pagination] as const,
 }
 
-export function useFocusSessions(filters: FocusSessionFilters) {
+export function useFocusSessions(filters: FocusSessionFilters, pagination?: PaginationParams) {
   return useQuery({
-    queryKey: focusQueryKeys.sessions(filters),
+    queryKey: focusQueryKeys.sessions(filters, pagination),
     queryFn: () =>
-      apiFetch<FocusSessionsResponse>(`/api/v1/focus/sessions${focusQueryString(filters)}`, {
+      apiFetch<FocusSessionsResponse>(`/api/v1/focus/sessions${focusQueryString(filters, pagination)}`, {
         schema: focusSessionsResponseSchema,
       }),
   })
@@ -38,12 +39,12 @@ export function useCreateFocusSession() {
   })
 }
 
-function focusQueryString(filters: FocusSessionFilters): string {
+function focusQueryString(filters: FocusSessionFilters, pagination?: PaginationParams): string {
   const params = new URLSearchParams()
   if (filters.dateFrom) params.set("date_from", filters.dateFrom)
   if (filters.dateTo) params.set("date_to", filters.dateTo)
   if (filters.topicId) params.set("topic_id", filters.topicId)
-  const query = params.toString()
+  const query = appendPagination(params, pagination).toString()
   return query ? `?${query}` : ""
 }
 

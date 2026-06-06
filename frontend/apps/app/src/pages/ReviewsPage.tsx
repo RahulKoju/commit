@@ -10,8 +10,8 @@ export function ReviewsPage() {
   const reviewsQuery = useReviews(typeFilter)
   const [selectedReviewId, setSelectedReviewId] = useState<string | null>(null)
   const selectedReview = useMemo(
-    () => reviewsQuery.data?.reviews.find((review) => review.id === selectedReviewId) ?? reviewsQuery.data?.reviews[0] ?? null,
-    [reviewsQuery.data?.reviews, selectedReviewId]
+    () => reviewsQuery.data?.data.find((review) => review.id === selectedReviewId) ?? reviewsQuery.data?.data[0] ?? null,
+    [reviewsQuery.data?.data, selectedReviewId]
   )
   const prompt = reviewPrompt()
 
@@ -50,10 +50,10 @@ export function ReviewsPage() {
             </div>
             <div className="grid gap-2">
               {reviewsQuery.isLoading ? <p className="text-sm text-muted-foreground">Loading reviews...</p> : null}
-              {reviewsQuery.data?.reviews.length === 0 ? (
+              {reviewsQuery.data?.data.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No reviews yet.</p>
               ) : null}
-              {reviewsQuery.data?.reviews.map((review) => (
+              {reviewsQuery.data?.data.map((review) => (
                 <button
                   key={review.id}
                   type="button"

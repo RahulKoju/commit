@@ -50,6 +50,8 @@ type ListTasksParams struct {
 	TopicID  string
 	Priority string
 	Status   string
+	Limit    int
+	Offset   int
 }
 
 type CreateTaskParams struct {
@@ -99,7 +101,8 @@ func (model TaskModel) List(ctx context.Context, params ListTasksParams) ([]Task
 		  CASE WHEN status = 'done' THEN completed_at END DESC NULLS LAST,
 		  scheduled_date ASC NULLS LAST,
 		  created_at DESC
-	`, params.UserID, params.View, params.TopicID, params.Priority, params.Status)
+		LIMIT $6 OFFSET $7
+	`, params.UserID, params.View, params.TopicID, params.Priority, params.Status, params.Limit, params.Offset)
 	if err != nil {
 		return nil, err
 	}
@@ -115,6 +118,28 @@ func (model TaskModel) List(ctx context.Context, params ListTasksParams) ([]Task
 	}
 
 	return tasks, rows.Err()
+}
+
+func (model TaskModel) CountTasks(ctx context.Context, params ListTasksParams) (int, error) {
+	var count int
+	err := model.pool.QueryRow(ctx, `
+		SELECT COUNT(*)
+		FROM tasks
+		WHERE user_id = $1
+		  AND (
+		    $2 = 'all'
+		    OR ($2 = 'today' AND status <> 'done' AND scheduled_date IS NOT NULL AND scheduled_date <= CURRENT_DATE)
+		    OR ($2 = 'backlog' AND status <> 'done' AND scheduled_date IS NULL)
+		    OR ($2 = 'completed' AND status = 'done')
+		  )
+		  AND ($3 = '' OR topic_id = $3::uuid)
+		  AND ($4 = '' OR priority = $4)
+		  AND ($5 = '' OR status = $5)
+	`, params.UserID, params.View, params.TopicID, params.Priority, params.Status).Scan(&count)
+	if err != nil {
+		return 0, err
+	}
+	return count, nil
 }
 
 func (model TaskModel) GetByID(ctx context.Context, userID string, id string) (Task, error) {

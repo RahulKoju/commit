@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { paginatedResponseSchema } from "./common.types"
 
 export const reviewTypeSchema = z.enum(["weekly", "monthly"])
 
@@ -40,9 +41,7 @@ export const reviewSchema = z.object({
   updated_at: z.string(),
 })
 
-export const reviewsResponseSchema = z.object({
-  reviews: z.array(reviewSchema),
-})
+export const reviewsResponseSchema = paginatedResponseSchema(reviewSchema)
 
 export const reviewResponseSchema = z.object({
   review: reviewSchema,

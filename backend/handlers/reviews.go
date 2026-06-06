@@ -31,16 +31,32 @@ func (handler ReviewHandler) List(c *gin.Context) {
 		return
 	}
 
-	reviews, err := handler.reviews.List(c.Request.Context(), services.ListReviewsInput{
+	limit, offset := parsePagination(c)
+	input := services.ListReviewsInput{
 		UserID: userID,
 		Type:   c.Query("type"),
-	})
+		Limit:  limit,
+		Offset: offset,
+	}
+
+	reviews, err := handler.reviews.List(c.Request.Context(), input)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"reviews": reviews})
+	total, err := handler.reviews.Count(c.Request.Context(), input)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count reviews"})
+		return
+	}
+
+	c.JSON(http.StatusOK, models.PaginatedResult[models.Review]{
+		Data:   reviews,
+		Total:  total,
+		Limit:  limit,
+		Offset: offset,
+	})
 }
 
 func (handler ReviewHandler) Create(c *gin.Context) {
