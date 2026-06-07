@@ -12,7 +12,7 @@ import (
 const (
 	ContextUserID = "userID"
 	ContextRole   = "role"
-	AuthCookie    = "commit_token"
+	AuthCookie    = "access_token"
 )
 
 func RequireAuth(authService services.AuthService) gin.HandlerFunc {

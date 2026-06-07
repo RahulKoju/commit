@@ -34,7 +34,7 @@ func Load() (Config, error) {
 
 	focusDailyMinimum := envInt("FOCUS_DAILY_MINIMUM_MINUTES", 120)
 	jwtExpiryHours := envInt("JWT_EXPIRY_HOURS", 168)
-	jwtExpiryMinutes := envInt("JWT_EXPIRY_MINUTES", 15)
+	jwtExpiryMinutes := envInt("JWT_EXPIRY_MINUTES", 1440)
 	dbMaxConns := envInt("DB_MAX_CONNS", 10)
 	dbMinConns := envInt("DB_MIN_CONNS", 1)
 	dbMaxConnLifetime := envInt("DB_MAX_CONN_LIFETIME_MINUTES", 60)

@@ -13,7 +13,63 @@ const api = axios.create({
   withCredentials: true,
 })
 
+let isRefreshing = false
 let isRedirecting = false
+let failedQueue: Array<{
+  resolve: (value: unknown) => void
+  reject: (reason: unknown) => void
+}> = []
+
+function processQueue(error: unknown) {
+  failedQueue.forEach(({ resolve, reject }) => {
+    if (error) {
+      reject(error)
+    } else {
+      resolve(undefined)
+    }
+  })
+  failedQueue = []
+}
+
+api.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const originalRequest = error.config as AxiosRequestConfig & { _retry?: boolean }
+
+    if (error.response?.status === 401 && !originalRequest._retry && !originalRequest.url?.includes("/auth/refresh")) {
+      if (isRefreshing) {
+        return new Promise((resolve, reject) => {
+          failedQueue.push({ resolve, reject })
+        }).then(() => api(originalRequest))
+      }
+
+      originalRequest._retry = true
+      isRefreshing = true
+
+      try {
+        await api.post("/api/v1/auth/refresh")
+        processQueue(null)
+        return api(originalRequest)
+      } catch {
+        processQueue(error)
+        if (!isRedirecting) {
+          isRedirecting = true
+          const { toast } = await import("sonner")
+          toast.error("Your session has expired. Please log in again.")
+          const webUrl = import.meta.env.VITE_WEB_URL ?? "http://localhost:5173"
+          setTimeout(() => {
+            window.location.assign(`${webUrl}/login`)
+          }, 500)
+        }
+        return Promise.reject(error)
+      } finally {
+        isRefreshing = false
+      }
+    }
+
+    return Promise.reject(error)
+  }
+)
 
 export async function apiFetch<T>(
   endpoint: string,
@@ -37,17 +93,7 @@ export async function apiFetch<T>(
     }
     return response.data as T
   } catch (error) {
-    const axiosError = error as AxiosError<unknown>
-    if (axiosError.response?.status === 401 && !isRedirecting) {
-      isRedirecting = true
-      const { toast } = await import("sonner")
-      toast.error("Your session has expired. Please log in again.")
-      const webUrl = import.meta.env.VITE_WEB_URL ?? "http://localhost:5173"
-      setTimeout(() => {
-        window.location.assign(`${webUrl}/login`)
-      }, 500)
-    }
-    throw parseApiError(axiosError)
+    throw parseApiError(error as AxiosError<unknown>)
   }
 }
 

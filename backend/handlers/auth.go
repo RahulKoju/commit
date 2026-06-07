@@ -12,8 +12,8 @@ import (
 )
 
 const (
-	accessCookieName  = "commit_token"
-	refreshCookieName = "commit_refresh_token"
+	accessCookieName  = "access_token"
+	refreshCookieName = "refresh_token"
 )
 
 type AuthHandler struct {
@@ -137,7 +137,7 @@ func setAuthCookies(c *gin.Context, accessToken string, refreshToken string) {
 		Name:     accessCookieName,
 		Value:    accessToken,
 		Path:     "/",
-		MaxAge:   900, // 15 minutes
+		MaxAge:   86400, // 1 day
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 		Secure:   c.Request.TLS != nil,
