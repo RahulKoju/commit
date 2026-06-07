@@ -15,7 +15,7 @@ export function HomePage() {
       <section className="mx-auto grid min-h-svh max-w-6xl items-center gap-10 px-6 py-16 lg:grid-cols-[1.1fr_0.9fr]">
         <div className="space-y-8">
           <div className="space-y-4">
-            <p className="text-sm font-semibold uppercase tracking-wide text-destructive">
+            <p className="text-sm font-semibold uppercase tracking-wide text-brand">
               Push yourself. Every day.
             </p>
             <h1 className="text-5xl font-semibold tracking-tight md:text-6xl">
@@ -44,7 +44,7 @@ export function HomePage() {
               key={feature.label}
               className="flex items-center gap-3 rounded-lg border bg-card p-4"
             >
-              <feature.icon className="size-5 text-destructive" />
+              <feature.icon className="size-5 text-brand" />
               <span className="font-medium">{feature.label}</span>
             </div>
           ))}

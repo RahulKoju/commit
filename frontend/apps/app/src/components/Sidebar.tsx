@@ -2,13 +2,13 @@ import {
   BarChart3,
   BookOpen,
   CheckSquare,
-  Flame,
   History,
   LayoutDashboard,
   NotebookPen,
   Target,
 } from "lucide-react"
 import { NavLink } from "react-router-dom"
+import { Logo } from "@workspace/ui/components/logo"
 
 const links = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -23,9 +23,8 @@ const links = [
 export function Sidebar() {
   return (
     <aside className="hidden min-h-svh w-64 border-r bg-background lg:block">
-      <div className="flex items-center gap-2 border-b px-5 py-4 text-lg font-semibold">
-        <Flame className="size-5 text-destructive" />
-        Commit
+      <div className="border-b px-5 py-4">
+        <Logo size={32} />
       </div>
       <nav className="space-y-1 p-3">
         {links.map((link) => (
