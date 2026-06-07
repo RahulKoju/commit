@@ -24,7 +24,7 @@ export function Sidebar() {
   return (
     <aside className="hidden min-h-svh w-64 border-r bg-background lg:block">
       <div className="border-b px-5 py-4">
-        <Logo size={32} />
+        <Logo />
       </div>
       <nav className="space-y-1 p-3">
         {links.map((link) => (
