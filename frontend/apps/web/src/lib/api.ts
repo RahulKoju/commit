@@ -36,7 +36,7 @@ export async function apiFetch<T>(
     return response.data as T
   } catch (error) {
     const axiosError = error as AxiosError<unknown>
-    if (axiosError.response?.status === 401) {
+    if (axiosError.response?.status === 401 && window.location.pathname !== "/login") {
       window.location.assign("/login")
     }
     throw parseApiError(axiosError)
@@ -44,11 +44,16 @@ export async function apiFetch<T>(
 }
 
 function parseApiError(error: AxiosError<unknown>): Error {
+  const status = error.response?.status
   const data = error.response?.data
   if (isErrorPayload(data)) {
-    return new Error(data.error)
+    const err = new Error(data.error) as Error & { status?: number }
+    err.status = status
+    return err
   }
-  return new Error(error.message || "API request failed")
+  const err = new Error(error.message || "API request failed") as Error & { status?: number }
+  err.status = status
+  return err
 }
 
 function isErrorPayload(value: unknown): value is { error: string } {

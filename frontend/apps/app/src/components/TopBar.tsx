@@ -10,7 +10,7 @@ export function TopBar() {
 
   async function logout() {
     await apiFetch<{ ok: boolean }>("/api/v1/auth/logout", { method: "POST" })
-    window.location.assign(`${import.meta.env.VITE_APP_URL ?? "http://localhost:5173"}/login`)
+    window.location.assign(`${import.meta.env.VITE_WEB_URL ?? "http://localhost:5173"}/login`)
   }
 
   return (

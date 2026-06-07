@@ -83,6 +83,13 @@ func (service AuthService) Register(ctx context.Context, input RegisterInput) (A
 		return AuthResult{}, err
 	}
 
+	cleanup := true
+	defer func() {
+		if cleanup {
+			service.users.Delete(ctx, user.ID)
+		}
+	}()
+
 	if err := service.habits.SeedDefaults(ctx, user.ID); err != nil {
 		return AuthResult{}, err
 	}
@@ -92,6 +99,7 @@ func (service AuthService) Register(ctx context.Context, input RegisterInput) (A
 		return AuthResult{}, err
 	}
 
+	cleanup = false
 	return AuthResult{User: user, Token: token, RefreshToken: refreshToken}, nil
 }
 

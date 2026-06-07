@@ -206,13 +206,18 @@ func (model HabitModel) GetHabitByID(ctx context.Context, userID string, id stri
 }
 
 func (model HabitModel) CreateHabit(ctx context.Context, params CreateHabitParams) (Habit, error) {
+	frequencyDays := params.FrequencyDays
+	if frequencyDays == nil {
+		frequencyDays = []int{}
+	}
 	row := model.pool.QueryRow(ctx, `
 		INSERT INTO habits (user_id, category_id, name, description, type, target_value, target_unit, frequency_type, frequency_days, weekly_goal, sort_order)
 		SELECT $1, c.id, $3, $4, $5, $6, $7, $8, $9, $10, $11
 		FROM habit_categories c
 		WHERE c.user_id = $1 AND c.id = $2
+		ON CONFLICT (user_id, name) DO UPDATE SET updated_at = now()
 		RETURNING id
-	`, params.UserID, params.CategoryID, params.Name, params.Description, params.Type, params.TargetValue, params.TargetUnit, params.FrequencyType, params.FrequencyDays, params.WeeklyGoal, params.SortOrder)
+	`, params.UserID, params.CategoryID, params.Name, params.Description, params.Type, params.TargetValue, params.TargetUnit, params.FrequencyType, frequencyDays, params.WeeklyGoal, params.SortOrder)
 
 	var id string
 	if err := row.Scan(&id); err != nil {

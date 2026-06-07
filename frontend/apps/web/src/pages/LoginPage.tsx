@@ -6,10 +6,12 @@ import { login } from "@/lib/auth"
 
 export function LoginPage() {
   const [loading, setLoading] = useState(false)
+  const [formError, setFormError] = useState<string | null>(null)
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setLoading(true)
+    setFormError(null)
 
     const formData = new FormData(event.currentTarget)
     const email = String(formData.get("email") ?? "")
@@ -18,9 +20,15 @@ export function LoginPage() {
     try {
       await login(email, password)
       toast.success("Login successful")
-      window.location.assign(`${import.meta.env.VITE_APP_URL ?? "http://localhost:5173"}/dashboard`)
+      window.location.assign(`${import.meta.env.VITE_APP_URL ?? "http://localhost:5174"}/dashboard`)
     } catch (submitError) {
-      toast.error(submitError instanceof Error ? submitError.message : "Unable to login")
+      const message = submitError instanceof Error ? submitError.message : "Unable to login"
+      const status = (submitError as Error & { status?: number }).status
+      if (status && status >= 500) {
+        toast.error(`${status} ${message}`)
+      } else {
+        setFormError(message)
+      }
     } finally {
       setLoading(false)
     }
@@ -61,6 +69,7 @@ export function LoginPage() {
             className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           />
         </div>
+        {formError ? <p className="text-xs text-destructive">{formError}</p> : null}
         <button
           type="submit"
           disabled={loading}

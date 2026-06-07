@@ -139,12 +139,13 @@ export function TaskForm({ onDone }: { onDone: () => void }) {
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setError(null)
-    const formData = new FormData(event.currentTarget)
+    const form = event.currentTarget
+    const formData = new FormData(form)
     const taskInput = taskInputFromFormData(formData)
 
     try {
       await createTask.mutateAsync(taskInput)
-      event.currentTarget.reset()
+      form.reset()
       setResetToken(String(Date.now()))
       onDone()
     } catch (submitError) {

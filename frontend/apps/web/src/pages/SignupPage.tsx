@@ -6,10 +6,18 @@ import { register } from "@/lib/auth"
 
 export function SignupPage() {
   const [loading, setLoading] = useState(false)
+  const [nameError, setNameError] = useState<string | null>(null)
+  const [emailError, setEmailError] = useState<string | null>(null)
+  const [passwordError, setPasswordError] = useState<string | null>(null)
+  const [confirmError, setConfirmError] = useState<string | null>(null)
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setLoading(true)
+    setNameError(null)
+    setEmailError(null)
+    setPasswordError(null)
+    setConfirmError(null)
 
     const formData = new FormData(event.currentTarget)
     const name = String(formData.get("name") ?? "")
@@ -17,8 +25,26 @@ export function SignupPage() {
     const password = String(formData.get("password") ?? "")
     const confirmPassword = String(formData.get("confirmPassword") ?? "")
 
+    if (!name.trim()) {
+      setNameError("Name is required")
+      setLoading(false)
+      return
+    }
+
+    if (!email.trim()) {
+      setEmailError("Email is required")
+      setLoading(false)
+      return
+    }
+
+    if (password.length < 8) {
+      setPasswordError("Must be at least 8 characters")
+      setLoading(false)
+      return
+    }
+
     if (password !== confirmPassword) {
-      toast.error("Passwords do not match")
+      setConfirmError("Passwords do not match")
       setLoading(false)
       return
     }
@@ -26,9 +52,22 @@ export function SignupPage() {
     try {
       await register(name, email, password)
       toast.success("Account created successfully")
-      window.location.assign(`${import.meta.env.VITE_APP_URL ?? "http://localhost:5173"}/dashboard`)
+      window.location.assign(`${import.meta.env.VITE_APP_URL ?? "http://localhost:5174"}/dashboard`)
     } catch (submitError) {
-      toast.error(submitError instanceof Error ? submitError.message : "Unable to create account")
+      const message = submitError instanceof Error ? submitError.message : "Unable to create account"
+      const status = (submitError as Error & { status?: number }).status
+      const lower = message.toLowerCase()
+      if (status && status >= 500) {
+        toast.error(`${status} ${message}`)
+      } else if (lower.includes("email") && (lower.includes("already") || lower.includes("exists") || lower.includes("registered") || lower.includes("duplicate"))) {
+        setEmailError(message)
+      } else if (lower.includes("name")) {
+        setNameError(message)
+      } else if (lower.includes("password")) {
+        setPasswordError(message)
+      } else {
+        setEmailError(message)
+      }
     } finally {
       setLoading(false)
     }
@@ -53,6 +92,7 @@ export function SignupPage() {
             required
             className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           />
+          {nameError ? <p className="text-xs text-destructive">{nameError}</p> : null}
         </div>
         <div className="flex flex-col gap-1.5">
           <label htmlFor="email" className="text-sm font-medium">Email</label>
@@ -64,7 +104,8 @@ export function SignupPage() {
             required
             className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           />
-          <p className="text-xs text-muted-foreground">We&apos;ll use this to contact you. We will not share your email with anyone else.</p>
+          {emailError ? <p className="text-xs text-destructive">{emailError}</p> : null}
+          {!emailError ? <p className="text-xs text-muted-foreground">We&apos;ll use this to contact you. We will not share your email with anyone else.</p> : null}
         </div>
         <div className="flex flex-col gap-1.5">
           <label htmlFor="password" className="text-sm font-medium">Password</label>
@@ -75,7 +116,8 @@ export function SignupPage() {
             required
             className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           />
-          <p className="text-xs text-muted-foreground">Must be at least 8 characters long.</p>
+          {passwordError ? <p className="text-xs text-destructive">{passwordError}</p> : null}
+          {!passwordError ? <p className="text-xs text-muted-foreground">Must be at least 8 characters long.</p> : null}
         </div>
         <div className="flex flex-col gap-1.5">
           <label htmlFor="confirm-password" className="text-sm font-medium">Confirm Password</label>
@@ -86,7 +128,8 @@ export function SignupPage() {
             required
             className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           />
-          <p className="text-xs text-muted-foreground">Please confirm your password.</p>
+          {confirmError ? <p className="text-xs text-destructive">{confirmError}</p> : null}
+          {!confirmError ? <p className="text-xs text-muted-foreground">Please confirm your password.</p> : null}
         </div>
         <button
           type="submit"
