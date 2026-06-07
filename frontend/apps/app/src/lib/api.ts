@@ -13,6 +13,8 @@ const api = axios.create({
   withCredentials: true,
 })
 
+let isRedirecting = false
+
 export async function apiFetch<T>(
   endpoint: string,
   options: RequestOptions<T> = {}
@@ -36,8 +38,14 @@ export async function apiFetch<T>(
     return response.data as T
   } catch (error) {
     const axiosError = error as AxiosError<unknown>
-    if (axiosError.response?.status === 401 && window.location.pathname !== "/login") {
-      window.location.assign("/login")
+    if (axiosError.response?.status === 401 && !isRedirecting) {
+      isRedirecting = true
+      const { toast } = await import("sonner")
+      toast.error("Your session has expired. Please log in again.")
+      const webUrl = import.meta.env.VITE_WEB_URL ?? "http://localhost:5173"
+      setTimeout(() => {
+        window.location.assign(`${webUrl}/login`)
+      }, 500)
     }
     throw parseApiError(axiosError)
   }

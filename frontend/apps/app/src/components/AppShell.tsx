@@ -1,6 +1,6 @@
 import { X } from "lucide-react"
 import { useEffect, useState } from "react"
-import { Navigate, Outlet } from "react-router-dom"
+import { Outlet } from "react-router-dom"
 import { Button } from "@workspace/ui/components/button"
 
 import { Sidebar } from "@/components/Sidebar"
@@ -33,7 +33,11 @@ export function AppShell() {
   }
 
   if (isError) {
-    return <Navigate replace to="/login" />
+    return (
+      <div className="flex min-h-svh items-center justify-center text-sm text-destructive">
+        Unable to connect to the server. Please try again later.
+      </div>
+    )
   }
 
   return (
