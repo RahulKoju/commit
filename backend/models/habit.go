@@ -391,7 +391,11 @@ func (model HabitModel) ExportLogs(ctx context.Context, userID string) ([]HabitE
 
 func (model HabitModel) SeedDefaults(ctx context.Context, userID string) error {
 	categories := map[string]string{}
-	for _, name := range []string{"Exercise", "Learning", "Health"} {
+	defaultCategoryNames := []string{
+		"Exercise", "Learning", "Health",
+		"Communication", "Deep Work", "Digital Health", "Technical",
+	}
+	for _, name := range defaultCategoryNames {
 		category, err := model.CreateCategory(ctx, CreateHabitCategoryParams{UserID: userID, Name: name})
 		if err != nil {
 			return err
@@ -705,18 +709,27 @@ func (habit defaultHabit) withUser(userID string) CreateHabitParams {
 }
 
 func defaultHabits(categories map[string]string) []defaultHabit {
-	steps := 8000.0
+	steps := 6000.0
 	glasses := 8.0
+	dwGoal := 3.0
+	screenTimeGoal := 2.0
 	stepsUnit := "steps/day"
 	glassesUnit := "glasses/day"
+	dwUnit := "sessions/day"
+	screenTimeUnit := "hours (max 3)"
 	return []defaultHabit{
 		{categoryID: categories["Exercise"], name: "Steps walked", habitType: HabitTypeNumeric, targetValue: &steps, targetUnit: &stepsUnit, frequencyType: HabitFrequencyDaily, weeklyGoal: 7, sortOrder: 1},
-		{categoryID: categories["Learning"], name: "Focused study", habitType: HabitTypeBoolean, frequencyType: HabitFrequencyDaily, weeklyGoal: 7, sortOrder: 2},
-		{categoryID: categories["Health"], name: "Water intake", habitType: HabitTypeNumeric, targetValue: &glasses, targetUnit: &glassesUnit, frequencyType: HabitFrequencyDaily, weeklyGoal: 7, sortOrder: 3},
-		{categoryID: categories["Learning"], name: "Touch typing AM", habitType: HabitTypeBoolean, frequencyType: HabitFrequencyDaily, weeklyGoal: 7, sortOrder: 4},
-		{categoryID: categories["Learning"], name: "Touch typing PM", habitType: HabitTypeBoolean, frequencyType: HabitFrequencyDaily, weeklyGoal: 7, sortOrder: 5},
-		{categoryID: categories["Exercise"], name: "Gym", habitType: HabitTypeBoolean, frequencyType: HabitFrequencyWeekly, frequencyDays: []int{1, 2, 3, 4, 5, 6, 7}, weeklyGoal: 4, sortOrder: 6},
-		{categoryID: categories["Learning"], name: "Read", habitType: HabitTypeBoolean, frequencyType: HabitFrequencyDaily, weeklyGoal: 7, sortOrder: 7},
-		{categoryID: categories["Health"], name: "Sleep by midnight", habitType: HabitTypeBoolean, frequencyType: HabitFrequencyDaily, weeklyGoal: 7, sortOrder: 8},
+		{categoryID: categories["Health"], name: "Water intake", habitType: HabitTypeNumeric, targetValue: &glasses, targetUnit: &glassesUnit, frequencyType: HabitFrequencyDaily, weeklyGoal: 7, sortOrder: 2},
+		{categoryID: categories["Deep Work"], name: "Deep Work Session", habitType: HabitTypeNumeric, targetValue: &dwGoal, targetUnit: &dwUnit, frequencyType: HabitFrequencyDaily, weeklyGoal: 7, sortOrder: 3},
+		{categoryID: categories["Communication"], name: "Formal Vocabulary", habitType: HabitTypeBoolean, frequencyType: HabitFrequencyDaily, weeklyGoal: 7, sortOrder: 4},
+		{categoryID: categories["Communication"], name: "Interview & Intro Prep", habitType: HabitTypeBoolean, frequencyType: HabitFrequencyDaily, weeklyGoal: 7, sortOrder: 5},
+		{categoryID: categories["Technical"], name: "Commit to Side Project", habitType: HabitTypeBoolean, frequencyType: HabitFrequencyDaily, weeklyGoal: 7, sortOrder: 6},
+		{categoryID: categories["Digital Health"], name: "Posture & Ergonomics", habitType: HabitTypeBoolean, frequencyType: HabitFrequencyDaily, weeklyGoal: 7, sortOrder: 7},
+		{categoryID: categories["Digital Health"], name: "Eye Rest (20-20-20)", habitType: HabitTypeBoolean, frequencyType: HabitFrequencyDaily, weeklyGoal: 7, sortOrder: 8},
+		{categoryID: categories["Digital Health"], name: "Less Instagram / Screen Time", habitType: HabitTypeNumeric, targetValue: &screenTimeGoal, targetUnit: &screenTimeUnit, frequencyType: HabitFrequencyDaily, weeklyGoal: 7, sortOrder: 9},
+		{categoryID: categories["Technical"], name: "Read Tech Blog/Paper", habitType: HabitTypeBoolean, frequencyType: HabitFrequencyDaily, weeklyGoal: 7, sortOrder: 10},
+		{categoryID: categories["Exercise"], name: "Gym", habitType: HabitTypeBoolean, frequencyType: HabitFrequencyWeekly, frequencyDays: []int{1, 2, 3, 4, 5, 6, 7}, weeklyGoal: 4, sortOrder: 11},
+		{categoryID: categories["Learning"], name: "Read", habitType: HabitTypeBoolean, frequencyType: HabitFrequencyDaily, weeklyGoal: 7, sortOrder: 12},
+		{categoryID: categories["Health"], name: "Sleep by midnight", habitType: HabitTypeBoolean, frequencyType: HabitFrequencyDaily, weeklyGoal: 7, sortOrder: 13},
 	}
 }
