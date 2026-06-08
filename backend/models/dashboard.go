@@ -120,7 +120,7 @@ func (model DashboardModel) habitSummary(ctx context.Context, userID string) (Da
 		       )::int
 		FROM habits h
 		LEFT JOIN habit_logs hl ON hl.habit_id = h.id AND hl.logged_date = CURRENT_DATE
-		WHERE h.user_id = $1
+		WHERE h.user_id = $1 AND h.deleted_at IS NULL
 	`, userID).Scan(&summary.Total, &summary.Checked)
 	return summary, err
 }
@@ -164,7 +164,7 @@ func (model DashboardModel) weeklyHabitChart(ctx context.Context, userID string)
 		         END
 		       )::int AS checked
 		FROM days d
-		LEFT JOIN habits h ON h.user_id = $1
+		LEFT JOIN habits h ON h.user_id = $1 AND h.deleted_at IS NULL
 		LEFT JOIN habit_logs hl ON hl.habit_id = h.id AND hl.logged_date = d.day
 		GROUP BY d.day
 		ORDER BY d.day
@@ -178,6 +178,51 @@ func (model DashboardModel) weeklyHabitChart(ctx context.Context, userID string)
 	for rows.Next() {
 		var item DashboardHabitChartItem
 		if err := rows.Scan(&item.Date, &item.Total, &item.Checked); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
+type ActivityHeatmapItem struct {
+	Date      string `json:"date"`
+	Total     int    `json:"total"`
+	Completed int    `json:"completed"`
+}
+
+func (model DashboardModel) ActivityHeatmap(ctx context.Context, userID string, days int) ([]ActivityHeatmapItem, error) {
+	if days <= 0 {
+		days = 365
+	}
+	rows, err := model.pool.Query(ctx, `
+		WITH dates AS (
+			SELECT generate_series(CURRENT_DATE - ($2::int - 1), CURRENT_DATE, INTERVAL '1 day')::date AS day
+		)
+		SELECT d.day::text,
+		       COUNT(h.id)::int AS total,
+		       COUNT(h.id) FILTER (
+		         WHERE CASE
+		           WHEN h.type = 'boolean' THEN COALESCE(hl.value, 0) >= 1
+		           WHEN h.target_value IS NULL THEN COALESCE(hl.value, 0) > 0
+		           ELSE COALESCE(hl.value, 0) >= h.target_value
+		         END
+		       )::int AS completed
+		FROM dates d
+		LEFT JOIN habits h ON h.user_id = $1 AND h.deleted_at IS NULL
+		LEFT JOIN habit_logs hl ON hl.habit_id = h.id AND hl.logged_date = d.day
+		GROUP BY d.day
+		ORDER BY d.day
+	`, userID, days)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	items := make([]ActivityHeatmapItem, 0)
+	for rows.Next() {
+		var item ActivityHeatmapItem
+		if err := rows.Scan(&item.Date, &item.Total, &item.Completed); err != nil {
 			return nil, err
 		}
 		items = append(items, item)

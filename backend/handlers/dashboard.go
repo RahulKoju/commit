@@ -30,3 +30,18 @@ func (handler DashboardHandler) Summary(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"summary": summary})
 }
+
+func (handler DashboardHandler) ActivityHeatmap(c *gin.Context) {
+	userID, ok := currentUserID(c)
+	if !ok {
+		return
+	}
+
+	heatmap, err := handler.dashboard.ActivityHeatmap(c.Request.Context(), userID, 365)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load activity heatmap"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"heatmap": heatmap})
+}

@@ -50,6 +50,7 @@ func Register(router *gin.Engine, deps Dependencies) {
 	protected.Use(middleware.RequireAuth(deps.AuthService))
 	protected.GET("/auth/me", authHandler.Me)
 	protected.GET("/dashboard/summary", dashboardHandler.Summary)
+	protected.GET("/dashboard/activity-heatmap", dashboardHandler.ActivityHeatmap)
 	protected.GET("/tasks", taskHandler.List)
 	protected.POST("/tasks", taskHandler.Create)
 	protected.PATCH("/tasks/:id", taskHandler.Update)

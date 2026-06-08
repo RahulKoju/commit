@@ -144,7 +144,7 @@ func (model ReviewModel) BuildSnapshot(ctx context.Context, userID string, perio
 					FROM habit_logs hl
 					WHERE hl.habit_id = h.id AND hl.logged_date BETWEEN $2::date AND $3::date
 				) logged ON true
-				WHERE h.user_id = $1
+				WHERE h.user_id = $1 AND h.deleted_at IS NULL
 			),
 			'tasks_completed', (
 				SELECT COUNT(*)::int
@@ -186,7 +186,7 @@ func (model ReviewModel) BuildSnapshot(ctx context.Context, userID string, perio
 				SELECT h.name
 				FROM habits h
 				LEFT JOIN habit_logs hl ON hl.habit_id = h.id AND hl.logged_date BETWEEN $2::date AND $3::date
-				WHERE h.user_id = $1
+				WHERE h.user_id = $1 AND h.deleted_at IS NULL
 				GROUP BY h.id, h.name
 				ORDER BY COUNT(*) FILTER (WHERE hl.value > 0) DESC, h.name
 				LIMIT 1
@@ -195,7 +195,7 @@ func (model ReviewModel) BuildSnapshot(ctx context.Context, userID string, perio
 				SELECT h.name
 				FROM habits h
 				LEFT JOIN habit_logs hl ON hl.habit_id = h.id AND hl.logged_date BETWEEN $2::date AND $3::date
-				WHERE h.user_id = $1
+				WHERE h.user_id = $1 AND h.deleted_at IS NULL
 				GROUP BY h.id, h.name
 				ORDER BY COUNT(*) FILTER (WHERE hl.value > 0) ASC, h.name
 				LIMIT 1

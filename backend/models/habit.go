@@ -47,6 +47,7 @@ type Habit struct {
 	TodayLog      *HabitLog          `json:"today_log"`
 	CreatedAt     time.Time          `json:"created_at"`
 	UpdatedAt     time.Time          `json:"updated_at"`
+	DeletedAt     *time.Time         `json:"deleted_at"`
 }
 
 type HabitLog struct {
@@ -166,7 +167,7 @@ func (model HabitModel) ListHabits(ctx context.Context, userID string) ([]Habit,
 		       h.frequency_type, h.frequency_days, h.weekly_goal, h.sort_order, h.created_at, h.updated_at
 		FROM habits h
 		INNER JOIN habit_categories c ON c.id = h.category_id AND c.user_id = h.user_id
-		WHERE h.user_id = $1
+		WHERE h.user_id = $1 AND h.deleted_at IS NULL
 		ORDER BY c.name, h.sort_order, h.name
 	`, userID)
 	if err != nil {
@@ -195,7 +196,7 @@ func (model HabitModel) GetHabitByID(ctx context.Context, userID string, id stri
 		       h.frequency_type, h.frequency_days, h.weekly_goal, h.sort_order, h.created_at, h.updated_at
 		FROM habits h
 		INNER JOIN habit_categories c ON c.id = h.category_id AND c.user_id = h.user_id
-		WHERE h.user_id = $1 AND h.id = $2
+		WHERE h.user_id = $1 AND h.id = $2 AND h.deleted_at IS NULL
 	`, userID, id)
 
 	habit, err := scanHabit(row)
@@ -215,7 +216,7 @@ func (model HabitModel) CreateHabit(ctx context.Context, params CreateHabitParam
 		SELECT $1, c.id, $3, $4, $5, $6, $7, $8, $9, $10, $11
 		FROM habit_categories c
 		WHERE c.user_id = $1 AND c.id = $2
-		ON CONFLICT (user_id, name) DO UPDATE SET updated_at = now()
+		ON CONFLICT (user_id, name) DO UPDATE SET updated_at = now(), deleted_at = NULL
 		RETURNING id
 	`, params.UserID, params.CategoryID, params.Name, params.Description, params.Type, params.TargetValue, params.TargetUnit, params.FrequencyType, frequencyDays, params.WeeklyGoal, params.SortOrder)
 
@@ -259,7 +260,7 @@ func (model HabitModel) UpdateHabit(ctx context.Context, params UpdateHabitParam
 }
 
 func (model HabitModel) DeleteHabit(ctx context.Context, userID string, id string) error {
-	commandTag, err := model.pool.Exec(ctx, "DELETE FROM habits WHERE user_id = $1 AND id = $2", userID, id)
+	commandTag, err := model.pool.Exec(ctx, "UPDATE habits SET deleted_at = now() WHERE user_id = $1 AND id = $2 AND deleted_at IS NULL", userID, id)
 	if err != nil {
 		return err
 	}
@@ -274,7 +275,7 @@ func (model HabitModel) LogHabit(ctx context.Context, params LogHabitParams) (Ha
 		INSERT INTO habit_logs (user_id, habit_id, logged_date, value)
 		SELECT $1, h.id, $3::date, $4
 		FROM habits h
-		WHERE h.user_id = $1 AND h.id = $2
+		WHERE h.user_id = $1 AND h.id = $2 AND h.deleted_at IS NULL
 		ON CONFLICT (habit_id, logged_date)
 		DO UPDATE SET value = EXCLUDED.value, updated_at = now()
 		RETURNING id, user_id, habit_id, logged_date::text, value::float8, created_at, updated_at
