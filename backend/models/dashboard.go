@@ -314,19 +314,19 @@ func (model DashboardModel) weekComparison(ctx context.Context, userID string) (
 	var comp DashboardWeekComparison
 	err := model.pool.QueryRow(ctx, `
 		WITH this_week AS (
-			SELECT CURRENT_DATE - INTERVAL '6 days' AS start, CURRENT_DATE AS end
+			SELECT CURRENT_DATE - INTERVAL '6 days' AS start_date, CURRENT_DATE AS end_date
 		), last_week AS (
-			SELECT CURRENT_DATE - INTERVAL '13 days' AS start, CURRENT_DATE - INTERVAL '7 days' AS end
+			SELECT CURRENT_DATE - INTERVAL '13 days' AS start_date, CURRENT_DATE - INTERVAL '7 days' AS end_date
 		)
 		SELECT
-			COALESCE((SELECT COUNT(*)::int FROM tasks WHERE user_id = $1 AND status = 'done' AND scheduled_date BETWEEN (SELECT start FROM this_week) AND (SELECT end)), 0),
-			COALESCE((SELECT COUNT(*)::int FROM tasks WHERE user_id = $1 AND status = 'done' AND scheduled_date BETWEEN (SELECT start FROM last_week) AND (SELECT end)), 0),
-			COALESCE((SELECT COUNT(*)::int FROM habit_logs hl INNER JOIN habits h ON h.id = hl.habit_id WHERE h.user_id = $1 AND h.deleted_at IS NULL AND hl.logged_date BETWEEN (SELECT start FROM this_week) AND (SELECT end)), 0),
-			COALESCE((SELECT COUNT(*)::int FROM habit_logs hl INNER JOIN habits h ON h.id = hl.habit_id WHERE h.user_id = $1 AND h.deleted_at IS NULL AND hl.logged_date BETWEEN (SELECT start FROM last_week) AND (SELECT end)), 0),
-			COALESCE((SELECT COUNT(*)::int FROM learn_entries WHERE user_id = $1 AND studied_at::date BETWEEN (SELECT start FROM this_week) AND (SELECT end)), 0),
-			COALESCE((SELECT COUNT(*)::int FROM learn_entries WHERE user_id = $1 AND studied_at::date BETWEEN (SELECT start FROM last_week) AND (SELECT end)), 0),
-			COALESCE((SELECT COALESCE(SUM(duration_minutes), 0)::int FROM focus_sessions WHERE user_id = $1 AND start_time::date BETWEEN (SELECT start FROM this_week) AND (SELECT end)), 0),
-			COALESCE((SELECT COALESCE(SUM(duration_minutes), 0)::int FROM focus_sessions WHERE user_id = $1 AND start_time::date BETWEEN (SELECT start FROM last_week) AND (SELECT end)), 0)
+			COALESCE((SELECT COUNT(*)::int FROM tasks WHERE user_id = $1 AND status = 'done' AND scheduled_date BETWEEN (SELECT start_date FROM this_week) AND (SELECT end_date FROM this_week)), 0),
+			COALESCE((SELECT COUNT(*)::int FROM tasks WHERE user_id = $1 AND status = 'done' AND scheduled_date BETWEEN (SELECT start_date FROM last_week) AND (SELECT end_date FROM last_week)), 0),
+			COALESCE((SELECT COUNT(*)::int FROM habit_logs hl INNER JOIN habits h ON h.id = hl.habit_id WHERE h.user_id = $1 AND h.deleted_at IS NULL AND hl.logged_date BETWEEN (SELECT start_date FROM this_week) AND (SELECT end_date FROM this_week)), 0),
+			COALESCE((SELECT COUNT(*)::int FROM habit_logs hl INNER JOIN habits h ON h.id = hl.habit_id WHERE h.user_id = $1 AND h.deleted_at IS NULL AND hl.logged_date BETWEEN (SELECT start_date FROM last_week) AND (SELECT end_date FROM last_week)), 0),
+			COALESCE((SELECT COUNT(*)::int FROM learn_entries WHERE user_id = $1 AND studied_at::date BETWEEN (SELECT start_date FROM this_week) AND (SELECT end_date FROM this_week)), 0),
+			COALESCE((SELECT COUNT(*)::int FROM learn_entries WHERE user_id = $1 AND studied_at::date BETWEEN (SELECT start_date FROM last_week) AND (SELECT end_date FROM last_week)), 0),
+			COALESCE((SELECT COALESCE(SUM(duration_minutes), 0)::int FROM focus_sessions WHERE user_id = $1 AND start_time::date BETWEEN (SELECT start_date FROM this_week) AND (SELECT end_date FROM this_week)), 0),
+			COALESCE((SELECT COALESCE(SUM(duration_minutes), 0)::int FROM focus_sessions WHERE user_id = $1 AND start_time::date BETWEEN (SELECT start_date FROM last_week) AND (SELECT end_date FROM last_week)), 0)
 	`, userID).Scan(
 		&comp.TasksDoneThisWeek,
 		&comp.TasksDoneLastWeek,
