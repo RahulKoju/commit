@@ -22,6 +22,13 @@ export const dashboardHabitChartItemSchema = z.object({
   checked: z.number().int(),
 })
 
+export const dashboardProductivityChartItemSchema = z.object({
+  date: z.string(),
+  tasks_done: z.number().int(),
+  habits_checked: z.number().int(),
+  learning_sessions: z.number().int(),
+})
+
 export const dashboardFocusSessionSchema = z.object({
   id: z.string().uuid(),
   task_id: z.string().uuid(),
@@ -37,6 +44,7 @@ export const dashboardSummarySchema = z.object({
   learning_streak: z.number().int(),
   recent_notes: z.array(dashboardNoteSchema),
   weekly_habit_chart: z.array(dashboardHabitChartItemSchema),
+  weekly_productivity: z.array(dashboardProductivityChartItemSchema),
   active_focus_session: dashboardFocusSessionSchema.nullable(),
 })
 

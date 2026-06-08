@@ -1,6 +1,7 @@
 import { createBrowserRouter, Navigate, RouterProvider } from "react-router-dom"
 
 import { AppShell } from "@/components/AppShell"
+import { AdminUsersPage } from "@/pages/AdminUsersPage"
 import { DashboardPage } from "@/pages/DashboardPage"
 import { FocusPage } from "@/pages/FocusPage"
 import { HabitsPage } from "@/pages/HabitsPage"
@@ -23,6 +24,7 @@ const router = createBrowserRouter([
       { path: "/notes", element: <NotesPage /> },
       { path: "/learn", element: <LearnPage /> },
       { path: "/reviews", element: <ReviewsPage /> },
+      { path: "/admin/users", element: <AdminUsersPage /> },
     ],
   },
 ])

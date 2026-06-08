@@ -8,13 +8,21 @@ import (
 )
 
 type DashboardSummary struct {
-	Today              string                    `json:"today"`
-	TaskSummary        DashboardTaskSummary      `json:"task_summary"`
-	HabitSummary       DashboardHabitSummary     `json:"habit_summary"`
-	LearningStreak     int                       `json:"learning_streak"`
-	RecentNotes        []DashboardNote           `json:"recent_notes"`
-	WeeklyHabitChart   []DashboardHabitChartItem `json:"weekly_habit_chart"`
-	ActiveFocusSession *DashboardFocusSession    `json:"active_focus_session"`
+	Today              string                           `json:"today"`
+	TaskSummary        DashboardTaskSummary             `json:"task_summary"`
+	HabitSummary       DashboardHabitSummary            `json:"habit_summary"`
+	LearningStreak     int                              `json:"learning_streak"`
+	RecentNotes        []DashboardNote                  `json:"recent_notes"`
+	WeeklyHabitChart   []DashboardHabitChartItem        `json:"weekly_habit_chart"`
+	WeeklyProductivity []DashboardProductivityChartItem `json:"weekly_productivity"`
+	ActiveFocusSession *DashboardFocusSession           `json:"active_focus_session"`
+}
+
+type DashboardProductivityChartItem struct {
+	Date             string `json:"date"`
+	TasksDone        int    `json:"tasks_done"`
+	HabitsChecked    int    `json:"habits_checked"`
+	LearningSessions int    `json:"learning_sessions"`
 }
 
 type DashboardTaskSummary struct {
@@ -77,6 +85,10 @@ func (model DashboardModel) Summary(ctx context.Context, userID string) (Dashboa
 	if err != nil {
 		return DashboardSummary{}, err
 	}
+	productivityChart, err := model.weeklyProductivity(ctx, userID)
+	if err != nil {
+		return DashboardSummary{}, err
+	}
 	focusSession, err := model.activeFocusSession(ctx, userID)
 	if err != nil {
 		return DashboardSummary{}, err
@@ -89,6 +101,7 @@ func (model DashboardModel) Summary(ctx context.Context, userID string) (Dashboa
 		LearningStreak:     streak,
 		RecentNotes:        recentNotes,
 		WeeklyHabitChart:   habitChart,
+		WeeklyProductivity: productivityChart,
 		ActiveFocusSession: focusSession,
 	}, nil
 }
@@ -189,6 +202,56 @@ type ActivityHeatmapItem struct {
 	Date      string `json:"date"`
 	Total     int    `json:"total"`
 	Completed int    `json:"completed"`
+}
+
+func (model DashboardModel) weeklyProductivity(ctx context.Context, userID string) ([]DashboardProductivityChartItem, error) {
+	rows, err := model.pool.Query(ctx, `
+		WITH days AS (
+			SELECT generate_series(CURRENT_DATE - INTERVAL '6 days', CURRENT_DATE, INTERVAL '1 day')::date AS day
+		)
+		SELECT d.day::text,
+		       COALESCE(t.done_count, 0)::int,
+		       COALESCE(h.checked_count, 0)::int,
+		       COALESCE(l.session_count, 0)::int
+		FROM days d
+		LEFT JOIN (
+			SELECT scheduled_date, COUNT(*)::int AS done_count
+			FROM tasks
+			WHERE user_id = $1 AND status = 'done'
+			  AND scheduled_date >= CURRENT_DATE - INTERVAL '6 days'
+			GROUP BY scheduled_date
+		) t ON t.scheduled_date = d.day
+		LEFT JOIN (
+			SELECT hl.logged_date, COUNT(*)::int AS checked_count
+			FROM habit_logs hl
+			INNER JOIN habits h ON h.id = hl.habit_id
+			WHERE h.user_id = $1 AND h.deleted_at IS NULL
+			  AND hl.logged_date >= CURRENT_DATE - INTERVAL '6 days'
+			GROUP BY hl.logged_date
+		) h ON h.logged_date = d.day
+		LEFT JOIN (
+			SELECT studied_at::date AS study_date, COUNT(*)::int AS session_count
+			FROM learn_entries
+			WHERE user_id = $1
+			  AND studied_at >= CURRENT_DATE - INTERVAL '6 days'
+			GROUP BY studied_at::date
+		) l ON l.study_date = d.day
+		ORDER BY d.day
+	`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	items := make([]DashboardProductivityChartItem, 0)
+	for rows.Next() {
+		var item DashboardProductivityChartItem
+		if err := rows.Scan(&item.Date, &item.TasksDone, &item.HabitsChecked, &item.LearningSessions); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
 }
 
 func (model DashboardModel) ActivityHeatmap(ctx context.Context, userID string, days int) ([]ActivityHeatmapItem, error) {

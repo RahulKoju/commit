@@ -1,7 +1,7 @@
 import { BookOpen, CheckCircle2, Clock, Flame, NotebookPen, Target } from "lucide-react"
 import type { ComponentType } from "react"
 import { Link } from "react-router-dom"
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts"
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from "recharts"
 import { Button } from "@workspace/ui/components/button"
 
 import { useCurrentUser } from "@/hooks/useAuth"
@@ -91,6 +91,25 @@ function DashboardWidgets({ summary }: { summary: DashboardSummary }) {
           </div>
 
           <div className="rounded-xl border bg-background p-4">
+            <h2 className="font-semibold">Weekly productivity</h2>
+            <div className="mt-4">
+              <ResponsiveContainer width="100%" height={200}>
+                <BarChart data={productivityData(summary.weekly_productivity)}>
+                  <XAxis dataKey="day" tick={{ fontSize: 12 }} axisLine={false} tickLine={false} />
+                  <YAxis hide />
+                  <Tooltip
+                    contentStyle={{ fontSize: 13, borderRadius: 8, border: "1px solid var(--color-border)" }}
+                  />
+                  <Legend wrapperStyle={{ fontSize: 12 }} />
+                  <Bar dataKey="tasks" name="Tasks" fill="var(--color-primary)" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="habits" name="Habits" fill="#22c55e" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="learning" name="Learning" fill="#a855f7" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          <div className="rounded-xl border bg-background p-4">
             <h2 className="font-semibold">Activity</h2>
             <div className="mt-4">
               {heatmapQuery.isLoading ? (
@@ -174,5 +193,14 @@ function chartData(items: DashboardSummary["weekly_habit_chart"]) {
   return items.map((item) => ({
     day: shortDay(item.date),
     completed: item.checked,
+  }))
+}
+
+function productivityData(items: DashboardSummary["weekly_productivity"]) {
+  return items.map((item) => ({
+    day: shortDay(item.date),
+    tasks: item.tasks_done,
+    habits: item.habits_checked,
+    learning: item.learning_sessions,
   }))
 }
