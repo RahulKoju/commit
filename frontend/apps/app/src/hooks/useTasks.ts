@@ -76,6 +76,7 @@ function normalizeCreateTaskInput(input: CreateTaskInput): CreateTaskInput {
     ...input,
     topic_id: input.topic_id ?? "",
     scheduled_date: input.scheduled_date ?? "",
+    recurrence_rule: input.recurrence_rule ?? "",
   }
 }
 
@@ -84,5 +85,6 @@ function normalizeUpdateTaskInput(input: UpdateTaskInput): UpdateTaskInput {
     ...input,
     topic_id: input.topic_id ?? "",
     scheduled_date: input.scheduled_date ?? "",
+    recurrence_rule: input.recurrence_rule ?? "",
   }
 }

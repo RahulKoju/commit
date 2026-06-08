@@ -3,6 +3,7 @@ import { useEffect, useState } from "react"
 import { Outlet } from "react-router-dom"
 import { Button } from "@workspace/ui/components/button"
 
+import { CommandPalette } from "@/components/CommandPalette"
 import { Sidebar } from "@/components/Sidebar"
 import { TopBar } from "@/components/TopBar"
 import { useCurrentUser } from "@/hooks/useAuth"
@@ -71,6 +72,7 @@ export function AppShell() {
           </div>
         </div>
       ) : null}
+      <CommandPalette />
     </div>
   )
 }

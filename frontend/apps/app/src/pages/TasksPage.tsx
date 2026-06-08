@@ -1,5 +1,5 @@
 import DOMPurify from "dompurify"
-import { CalendarPlus, Pencil, Plus, Trash2 } from "lucide-react"
+import { AlertTriangle, CalendarPlus, Pencil, Plus, Repeat, Trash2 } from "lucide-react"
 import { useMemo, useRef, useState, type FormEvent } from "react"
 import { Button } from "@workspace/ui/components/button"
 import { RichTextEditor } from "@workspace/ui/components/rich-text-editor"
@@ -12,6 +12,7 @@ import {
 } from "@/hooks/useTasks"
 import type {
   CreateTaskInput,
+  RecurrenceRule,
   Task,
   TaskPriority,
   TaskStatus,
@@ -36,6 +37,13 @@ const statuses: Array<{ value: TaskStatus; label: string }> = [
   { value: "in-progress", label: "In progress" },
   { value: "done", label: "Done" },
 ]
+
+const recurrenceLabels: Record<RecurrenceRule, string> = {
+  daily: "Daily",
+  weekdays: "Weekdays",
+  weekly: "Weekly",
+  monthly: "Monthly",
+}
 
 export function TasksPage() {
   const [view, setView] = useState<TaskView>("today")
@@ -166,7 +174,7 @@ export function TaskForm({ onDone }: { onDone: () => void }) {
           required
         />
       </div>
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <label className="grid gap-2 text-sm">
           <span className="font-medium">Priority</span>
           <select name="priority" defaultValue="medium" className="h-9 rounded-md border bg-background px-3">
@@ -190,6 +198,15 @@ export function TaskForm({ onDone }: { onDone: () => void }) {
         <label className="grid gap-2 text-sm">
           <span className="font-medium">Due date</span>
           <input name="scheduled_date" type="date" className="h-9 rounded-md border bg-background px-3" />
+        </label>
+        <label className="grid gap-2 text-sm">
+          <span className="font-medium">Repeat</span>
+          <select name="recurrence_rule" className="h-9 rounded-md border bg-background px-3">
+            <option value="">Never</option>
+            {Object.entries(recurrenceLabels).map(([value, label]) => (
+              <option key={value} value={value}>{label}</option>
+            ))}
+          </select>
         </label>
       </div>
       <RichTextEditor
@@ -332,7 +349,26 @@ function TaskCard({ task }: { task: Task }) {
             </span>
           </div>
           <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
-            <span>{task.scheduled_date ? `Due ${task.scheduled_date}` : "No due date"}</span>
+            {task.scheduled_date ? (
+              <span className="flex items-center gap-1">
+                {task.status !== "done" && task.scheduled_date < today ? (
+                  <span className="flex items-center gap-1 text-destructive">
+                    <AlertTriangle className="size-3" />
+                    Overdue {task.scheduled_date}
+                  </span>
+                ) : (
+                  <>Due {task.scheduled_date}</>
+                )}
+              </span>
+            ) : (
+              <span>No due date</span>
+            )}
+            {task.recurrence_rule ? (
+              <span className="flex items-center gap-1">
+                <Repeat className="size-3" />
+                {recurrenceLabels[task.recurrence_rule as RecurrenceRule] ?? task.recurrence_rule}
+              </span>
+            ) : null}
             {task.completed_at ? <span>Completed {new Date(task.completed_at).toLocaleDateString()}</span> : null}
           </div>
         </div>
@@ -412,6 +448,7 @@ function taskInputFromFormData(formData: FormData): CreateTaskInput {
     priority: String(formData.get("priority") ?? "medium") as TaskPriority,
     scheduled_date: String(formData.get("scheduled_date") ?? ""),
     status: String(formData.get("status") ?? "todo") as TaskStatus,
+    recurrence_rule: String(formData.get("recurrence_rule") ?? ""),
   }
 }
 

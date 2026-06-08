@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"commit/backend/models"
 )
@@ -23,24 +24,26 @@ type ListTasksInput struct {
 }
 
 type CreateTaskInput struct {
-	UserID        string
-	TopicID       string
-	Title         string
-	Description   string
-	Priority      string
-	ScheduledDate string
-	Status        string
+	UserID         string
+	TopicID        string
+	Title          string
+	Description    string
+	Priority       string
+	ScheduledDate  string
+	Status         string
+	RecurrenceRule string
 }
 
 type UpdateTaskInput struct {
-	UserID        string
-	ID            string
-	TopicID       *string
-	Title         *string
-	Description   *string
-	Priority      *string
-	ScheduledDate *string
-	Status        *string
+	UserID         string
+	ID             string
+	TopicID        *string
+	Title          *string
+	Description    *string
+	Priority       *string
+	ScheduledDate  *string
+	Status         *string
+	RecurrenceRule *string
 }
 
 func NewTaskService(tasks models.TaskModel) TaskService {
@@ -99,14 +102,22 @@ func (service TaskService) Create(ctx context.Context, input CreateTaskInput) (m
 	}
 	description := sanitizer.Sanitize(input.Description)
 
+	recurrenceRule := strings.TrimSpace(input.RecurrenceRule)
+	if recurrenceRule != "" {
+		if _, err := parseRecurrenceRule(recurrenceRule); err != nil {
+			return models.Task{}, err
+		}
+	}
+
 	return service.tasks.Create(ctx, models.CreateTaskParams{
-		UserID:        input.UserID,
-		TopicID:       strings.TrimSpace(input.TopicID),
-		Title:         title,
-		Description:   description,
-		Priority:      priority,
-		ScheduledDate: strings.TrimSpace(input.ScheduledDate),
-		Status:        status,
+		UserID:         input.UserID,
+		TopicID:        strings.TrimSpace(input.TopicID),
+		Title:          title,
+		Description:    description,
+		Priority:       priority,
+		ScheduledDate:  strings.TrimSpace(input.ScheduledDate),
+		Status:         status,
+		RecurrenceRule: recurrenceRule,
 	})
 }
 
@@ -117,14 +128,15 @@ func (service TaskService) Update(ctx context.Context, input UpdateTaskInput) (m
 	}
 
 	params := models.UpdateTaskParams{
-		UserID:        input.UserID,
-		ID:            input.ID,
-		Title:         current.Title,
-		Description:   current.Description,
-		Priority:      current.Priority,
-		Status:        current.Status,
-		ScheduledDate: optionalStringValue(current.ScheduledDate),
-		TopicID:       optionalStringValue(current.TopicID),
+		UserID:         input.UserID,
+		ID:             input.ID,
+		Title:          current.Title,
+		Description:    current.Description,
+		Priority:       current.Priority,
+		Status:         current.Status,
+		ScheduledDate:  optionalStringValue(current.ScheduledDate),
+		TopicID:        optionalStringValue(current.TopicID),
+		RecurrenceRule: current.RecurrenceRule,
 	}
 
 	if input.TopicID != nil {
@@ -153,11 +165,31 @@ func (service TaskService) Update(ctx context.Context, input UpdateTaskInput) (m
 		}
 		params.Status = status
 	}
+	if input.RecurrenceRule != nil {
+		rule := strings.TrimSpace(*input.RecurrenceRule)
+		if rule != "" {
+			if _, err := parseRecurrenceRule(rule); err != nil {
+				return models.Task{}, err
+			}
+		}
+		params.RecurrenceRule = rule
+	}
 	if params.Title == "" {
 		return models.Task{}, fmt.Errorf("title is required")
 	}
 
-	return service.tasks.Update(ctx, params)
+	updated, err := service.tasks.Update(ctx, params)
+	if err != nil {
+		return models.Task{}, err
+	}
+
+	if params.Status == models.TaskStatusDone && current.RecurrenceRule != "" && current.Status != models.TaskStatusDone {
+		if _, err := service.createRecurringTask(ctx, current); err != nil {
+			return models.Task{}, fmt.Errorf("task updated but failed to create recurring instance: %w", err)
+		}
+	}
+
+	return updated, nil
 }
 
 func (service TaskService) Delete(ctx context.Context, userID string, id string) error {
@@ -217,4 +249,59 @@ func optionalStringValue(value *string) string {
 		return ""
 	}
 	return *value
+}
+
+func parseRecurrenceRule(value string) (models.RecurrenceRule, error) {
+	switch models.RecurrenceRule(value) {
+	case models.RecurrenceDaily, models.RecurrenceWeekdays, models.RecurrenceWeekly, models.RecurrenceMonthly:
+		return models.RecurrenceRule(value), nil
+	default:
+		return "", fmt.Errorf("invalid recurrence rule: %q", value)
+	}
+}
+
+func (service TaskService) createRecurringTask(ctx context.Context, original models.Task) (models.Task, error) {
+	nextDate := nextRecurrenceDate(original.ScheduledDate, models.RecurrenceRule(original.RecurrenceRule))
+	if nextDate == "" {
+		return models.Task{}, fmt.Errorf("unable to compute next recurrence date")
+	}
+
+	return service.tasks.Create(ctx, models.CreateTaskParams{
+		UserID:         original.UserID,
+		TopicID:        optionalStringValue(original.TopicID),
+		Title:          original.Title,
+		Description:    original.Description,
+		Priority:       original.Priority,
+		ScheduledDate:  nextDate,
+		Status:         models.TaskStatusTodo,
+		RecurrenceRule: original.RecurrenceRule,
+	})
+}
+
+func nextRecurrenceDate(currentDate *string, rule models.RecurrenceRule) string {
+	if currentDate == nil || *currentDate == "" {
+		return time.Now().Format("2006-01-02")
+	}
+
+	parsed, err := time.Parse("2006-01-02", *currentDate)
+	if err != nil {
+		return ""
+	}
+
+	switch rule {
+	case models.RecurrenceDaily:
+		return parsed.AddDate(0, 0, 1).Format("2006-01-02")
+	case models.RecurrenceWeekdays:
+		next := parsed.AddDate(0, 0, 1)
+		for next.Weekday() == time.Saturday || next.Weekday() == time.Sunday {
+			next = next.AddDate(0, 0, 1)
+		}
+		return next.Format("2006-01-02")
+	case models.RecurrenceWeekly:
+		return parsed.AddDate(0, 0, 7).Format("2006-01-02")
+	case models.RecurrenceMonthly:
+		return parsed.AddDate(0, 1, 0).Format("2006-01-02")
+	default:
+		return ""
+	}
 }
