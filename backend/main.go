@@ -51,6 +51,7 @@ func main() {
 	habitModel := models.NewHabitModel(pool)
 	reviewModel := models.NewReviewModel(pool)
 	refreshTokenModel := models.NewRefreshTokenModel(pool)
+	passwordResetTokenModel := models.NewPasswordResetTokenModel(pool)
 	dashboardModel := models.NewDashboardModel(pool, learnModel)
 	adminService := services.NewAdminService(userModel)
 	taskService := services.NewTaskService(taskModel)
@@ -60,7 +61,7 @@ func main() {
 	habitService := services.NewHabitService(habitModel)
 	reviewService := services.NewReviewService(reviewModel)
 	dashboardService := services.NewDashboardService(dashboardModel)
-	authService := services.NewAuthService(userModel, refreshTokenModel, habitService, cfg.JWTSecret, cfg.JWTExpiryHours, cfg.JWTExpiryMinutes)
+	authService := services.NewAuthService(userModel, refreshTokenModel, passwordResetTokenModel, habitService, cfg.JWTSecret, cfg.JWTExpiryHours, cfg.JWTExpiryMinutes)
 
 	router := gin.New()
 	router.Use(middleware.Logger(), gin.Recovery(), middleware.CORS(cfg.AllowedOrigins))

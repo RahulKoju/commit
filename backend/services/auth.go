@@ -17,11 +17,12 @@ import (
 )
 
 type AuthService struct {
-	users            models.UserModel
-	refreshTokens    models.RefreshTokenModel
-	habits           HabitService
-	jwtSecret        []byte
-	jwtExpiryDur     time.Duration
+	users         models.UserModel
+	refreshTokens models.RefreshTokenModel
+	habits        HabitService
+	resetTokens   models.PasswordResetTokenModel
+	jwtSecret     []byte
+	jwtExpiryDur  time.Duration
 	jwtExpiryMinutes int
 }
 
@@ -50,13 +51,14 @@ type AuthResult struct {
 
 var ErrInvalidCredentials = errors.New("invalid credentials")
 
-func NewAuthService(users models.UserModel, refreshTokens models.RefreshTokenModel, habits HabitService, jwtSecret string, jwtExpiryHours int, jwtExpiryMinutes int) AuthService {
+func NewAuthService(users models.UserModel, refreshTokens models.RefreshTokenModel, resetTokens models.PasswordResetTokenModel, habits HabitService, jwtSecret string, jwtExpiryHours int, jwtExpiryMinutes int) AuthService {
 	return AuthService{
-		users:            users,
-		refreshTokens:    refreshTokens,
-		habits:           habits,
-		jwtSecret:        []byte(jwtSecret),
-		jwtExpiryDur:     time.Duration(jwtExpiryHours) * time.Hour,
+		users:         users,
+		refreshTokens: refreshTokens,
+		resetTokens:   resetTokens,
+		habits:        habits,
+		jwtSecret:     []byte(jwtSecret),
+		jwtExpiryDur:  time.Duration(jwtExpiryHours) * time.Hour,
 		jwtExpiryMinutes: jwtExpiryMinutes,
 	}
 }
@@ -174,6 +176,71 @@ func (service AuthService) RefreshAccessToken(ctx context.Context, refreshTokenT
 
 func (service AuthService) RevokeRefreshTokens(ctx context.Context, userID string) error {
 	return service.refreshTokens.DeleteByUserID(ctx, userID)
+}
+
+func (service AuthService) ForgotPassword(ctx context.Context, email string) (string, error) {
+	email = strings.ToLower(strings.TrimSpace(email))
+	if email == "" {
+		return "", fmt.Errorf("email is required")
+	}
+
+	user, err := service.users.GetByEmail(ctx, email)
+	if err != nil {
+		if errors.Is(err, models.ErrNotFound) {
+			return "", fmt.Errorf("if that email exists, a reset link has been sent")
+		}
+		return "", err
+	}
+
+	rawToken, err := generateRandomToken()
+	if err != nil {
+		return "", err
+	}
+
+	hashed := hashToken(rawToken)
+	if _, err := service.resetTokens.Create(ctx, user.ID, hashed, time.Now().Add(1*time.Hour)); err != nil {
+		return "", err
+	}
+
+	return rawToken, nil
+}
+
+func (service AuthService) ResetPassword(ctx context.Context, token string, newPassword string) error {
+	if len(newPassword) < 8 {
+		return fmt.Errorf("password must be at least 8 characters")
+	}
+
+	hashed := hashToken(token)
+	resetToken, err := service.resetTokens.GetByHash(ctx, hashed)
+	if err != nil {
+		if errors.Is(err, models.ErrNotFound) {
+			return fmt.Errorf("invalid or expired reset token")
+		}
+		return err
+	}
+
+	if resetToken.Used {
+		return fmt.Errorf("reset token has already been used")
+	}
+
+	if time.Now().After(resetToken.ExpiresAt) {
+		return fmt.Errorf("reset token has expired")
+	}
+
+	passwordHash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+
+	if err := service.users.UpdatePassword(ctx, resetToken.UserID, string(passwordHash)); err != nil {
+		return err
+	}
+
+	if err := service.resetTokens.MarkUsed(ctx, resetToken.ID); err != nil {
+		return err
+	}
+
+	return service.refreshTokens.DeleteByUserID(ctx, resetToken.UserID)
 }
 
 func (service AuthService) signTokens(ctx context.Context, user models.User) (string, string, error) {

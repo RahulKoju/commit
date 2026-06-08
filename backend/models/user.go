@@ -124,6 +124,17 @@ func (model UserModel) List(ctx context.Context) ([]User, error) {
 	return users, rows.Err()
 }
 
+func (model UserModel) UpdatePassword(ctx context.Context, id string, passwordHash string) error {
+	commandTag, err := model.pool.Exec(ctx, "UPDATE users SET password_hash = $1, updated_at = now() WHERE id = $2", passwordHash, id)
+	if err != nil {
+		return err
+	}
+	if commandTag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 func (model UserModel) Delete(ctx context.Context, id string) error {
 	commandTag, err := model.pool.Exec(ctx, "DELETE FROM users WHERE id = $1", id)
 	if err != nil {

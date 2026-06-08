@@ -132,6 +132,46 @@ func (handler AuthHandler) Me(c *gin.Context) {
 	c.JSON(http.StatusOK, authResponse{User: user})
 }
 
+type forgotPasswordRequest struct {
+	Email string `json:"email" binding:"required,email"`
+}
+
+type resetPasswordRequest struct {
+	Token       string `json:"token" binding:"required"`
+	NewPassword string `json:"new_password" binding:"required,min=8"`
+}
+
+func (handler AuthHandler) ForgotPassword(c *gin.Context) {
+	var request forgotPasswordRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "valid email is required"})
+		return
+	}
+
+	rawToken, err := handler.auth.ForgotPassword(c.Request.Context(), request.Email)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "if that email exists, a reset link has been sent", "token": rawToken})
+}
+
+func (handler AuthHandler) ResetPassword(c *gin.Context) {
+	var request resetPasswordRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "token and new password (min 8 chars) are required"})
+		return
+	}
+
+	if err := handler.auth.ResetPassword(c.Request.Context(), request.Token, request.NewPassword); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "password has been reset successfully"})
+}
+
 func setAuthCookies(c *gin.Context, accessToken string, refreshToken string) {
 	http.SetCookie(c.Writer, &http.Cookie{
 		Name:     accessCookieName,
