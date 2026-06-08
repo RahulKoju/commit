@@ -12,6 +12,7 @@ export const noteSchema = z.object({
   title: z.string(),
   body: z.string(),
   topics: z.array(noteTopicSchema),
+  tags: z.array(z.string()),
   created_at: z.string(),
   updated_at: z.string(),
 })
@@ -43,6 +44,7 @@ export type CreateNoteInput = {
   title: string
   body: string
   topic_ids: string[]
+  tags: string[]
 }
 
 export type UpdateNoteInput = Partial<CreateNoteInput>

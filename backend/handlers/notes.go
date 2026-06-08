@@ -19,12 +19,14 @@ type noteRequest struct {
 	Title    string   `json:"title" binding:"required"`
 	Body     string   `json:"body"`
 	TopicIDs []string `json:"topic_ids"`
+	Tags     []string `json:"tags"`
 }
 
 type updateNoteRequest struct {
 	Title    *string   `json:"title"`
 	Body     *string   `json:"body"`
 	TopicIDs *[]string `json:"topic_ids"`
+	Tags     *[]string `json:"tags"`
 }
 
 func NewNoteHandler(notes services.NoteService) NoteHandler {
@@ -84,6 +86,7 @@ func (handler NoteHandler) Create(c *gin.Context) {
 		Title:    request.Title,
 		Body:     request.Body,
 		TopicIDs: request.TopicIDs,
+		Tags:     request.Tags,
 	})
 	if err != nil {
 		writeNoteError(c, err)
@@ -112,6 +115,7 @@ func (handler NoteHandler) Update(c *gin.Context) {
 		Title:    request.Title,
 		Body:     request.Body,
 		TopicIDs: request.TopicIDs,
+		Tags:     request.Tags,
 	})
 	if err != nil {
 		writeNoteError(c, err)

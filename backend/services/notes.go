@@ -28,6 +28,7 @@ type CreateNoteInput struct {
 	Title    string
 	Body     string
 	TopicIDs []string
+	Tags     []string
 }
 
 type UpdateNoteInput struct {
@@ -36,6 +37,7 @@ type UpdateNoteInput struct {
 	Title    *string
 	Body     *string
 	TopicIDs *[]string
+	Tags     *[]string
 }
 
 func NewNoteService(notes models.NoteModel) NoteService {
@@ -70,6 +72,7 @@ func (service NoteService) Create(ctx context.Context, input CreateNoteInput) (m
 		Title:    title,
 		Body:     body,
 		TopicIDs: normalizeTopicIDs(input.TopicIDs),
+		Tags:     normalizeTags(input.Tags),
 	})
 }
 
@@ -85,6 +88,7 @@ func (service NoteService) Update(ctx context.Context, input UpdateNoteInput) (m
 		Title:    current.Title,
 		Body:     current.Body,
 		TopicIDs: noteTopicIDs(current.Topics),
+		Tags:     current.Tags,
 	}
 	if input.Title != nil {
 		params.Title = strings.TrimSpace(*input.Title)
@@ -94,6 +98,9 @@ func (service NoteService) Update(ctx context.Context, input UpdateNoteInput) (m
 	}
 	if input.TopicIDs != nil {
 		params.TopicIDs = normalizeTopicIDs(*input.TopicIDs)
+	}
+	if input.Tags != nil {
+		params.Tags = normalizeTags(*input.Tags)
 	}
 	if params.Title == "" {
 		return models.Note{}, fmt.Errorf("title is required")
@@ -128,6 +135,20 @@ func noteTopicIDs(topics []models.NoteTopic) []string {
 	result := make([]string, 0, len(topics))
 	for _, topic := range topics {
 		result = append(result, topic.ID)
+	}
+	return result
+}
+
+func normalizeTags(values []string) []string {
+	seen := make(map[string]bool)
+	result := make([]string, 0)
+	for _, value := range values {
+		tag := strings.ToLower(strings.TrimSpace(value))
+		if tag == "" || seen[tag] {
+			continue
+		}
+		seen[tag] = true
+		result = append(result, tag)
 	}
 	return result
 }
