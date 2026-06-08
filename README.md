@@ -66,10 +66,15 @@ Commit is a full-stack personal productivity application that helps you manage y
 
 ## Documentation
 
-- [Overview](docs/overview.md) — app description, tech stack, monorepo structure, startup sequence
-- [API Reference](docs/api.md) — all endpoints with methods, paths, auth requirements, request/response shapes
-- [Database Schema](docs/database.md) — every table, column types, relationships, pulled from migration files
-- [Environment Variables](docs/environment.md) — every env var, what it does, example values, which service uses it
+| Doc | Contents |
+|-----|----------|
+| [Overview](docs/overview.md) | App description, 10 features, tech stack, monorepo structure |
+| [Getting Started](docs/getting-started.md) | Prerequisites, setup, running locally, troubleshooting |
+| [Architecture](docs/architecture.md) | Backend startup, middleware pipeline, auth flow, common patterns |
+| [API Reference](docs/api.md) | All 50+ endpoints across 10 modules with request/response shapes |
+| [Database Schema](docs/database.md) | All 16 tables, columns, indexes, constraints, relationships |
+| [Environment Variables](docs/environment.md) | Backend and frontend env vars, defaults, examples |
+| [Frontend](docs/frontend.md) | Monorepo layout, routing, state management, UI system, shortcuts |
 
 ## Environment Variables
 
