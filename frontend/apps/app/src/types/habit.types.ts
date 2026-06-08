@@ -111,6 +111,19 @@ export type CreateHabitInput = {
   sort_order: number
 }
 
+export type UpdateHabitInput = {
+  category_id?: string
+  name?: string
+  description?: string
+  type?: HabitType
+  target_value?: number
+  target_unit?: string
+  frequency_type?: HabitFrequencyType
+  frequency_days?: number[]
+  weekly_goal?: number
+  sort_order?: number
+}
+
 export type LogHabitInput = {
   value: number
   logged_date: string

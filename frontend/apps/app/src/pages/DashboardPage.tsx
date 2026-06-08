@@ -1,10 +1,12 @@
 import { BookOpen, CheckCircle2, Clock, Flame, NotebookPen, Target } from "lucide-react"
 import type { ComponentType } from "react"
 import { Link } from "react-router-dom"
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts"
 import { Button } from "@workspace/ui/components/button"
 
 import { useCurrentUser } from "@/hooks/useAuth"
-import { useDashboardSummary } from "@/hooks/useDashboard"
+import { useActivityHeatmap, useDashboardSummary } from "@/hooks/useDashboard"
+import { ActivityHeatmap } from "@/components/ActivityHeatmap"
 import type { DashboardSummary } from "@/types/dashboard.types"
 
 export function DashboardPage() {
@@ -12,6 +14,7 @@ export function DashboardPage() {
   const user = data?.user ?? null
   const dashboardQuery = useDashboardSummary()
   const summary = dashboardQuery.data?.summary
+  const heatmapQuery = useActivityHeatmap()
 
   return (
     <section className="space-y-6">
@@ -35,24 +38,21 @@ export function DashboardPage() {
 }
 
 function DashboardWidgets({ summary }: { summary: DashboardSummary }) {
-  const taskPercent = percent(summary.task_summary.done, summary.task_summary.total)
-  const habitPercent = percent(summary.habit_summary.checked, summary.habit_summary.total)
-
   return (
     <div className="space-y-6">
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard
           icon={CheckCircle2}
-          label="Today's tasks"
+          label="Tasks"
           value={`${summary.task_summary.done}/${summary.task_summary.total}`}
-          detail={`${taskPercent}% complete`}
+          detail="for today"
           href="/tasks"
         />
         <MetricCard
           icon={Flame}
-          label="Today's habits"
+          label="Habits"
           value={`${summary.habit_summary.checked}/${summary.habit_summary.total}`}
-          detail={`${habitPercent}% checked`}
+          detail="checked today"
           href="/habits"
         />
         <MetricCard
@@ -72,21 +72,33 @@ function DashboardWidgets({ summary }: { summary: DashboardSummary }) {
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[1fr_24rem]">
-        <div className="rounded-xl border bg-background p-4">
-          <h2 className="font-semibold">Weekly habit completion</h2>
-          <div className="mt-4 grid grid-cols-7 gap-2">
-            {summary.weekly_habit_chart.map((item) => (
-              <div key={item.date} className="grid gap-2 text-center text-xs">
-                <div className="flex h-32 items-end rounded-lg bg-muted px-2">
-                  <div
-                    className="w-full rounded-md bg-primary"
-                    style={{ height: `${Math.max(6, percent(item.checked, item.total))}%` }}
+        <div className="space-y-6">
+          <div className="rounded-xl border bg-background p-4">
+            <h2 className="font-semibold">Weekly habit completion</h2>
+            <div className="mt-4">
+              <ResponsiveContainer width="100%" height={160}>
+                <BarChart data={chartData(summary.weekly_habit_chart)}>
+                  <XAxis dataKey="day" tick={{ fontSize: 12 }} axisLine={false} tickLine={false} />
+                  <YAxis hide />
+                  <Tooltip
+                    contentStyle={{ fontSize: 13, borderRadius: 8, border: "1px solid var(--color-border)" }}
+                    formatter={(value: number, name: string) => [value, name === "completed" ? "Completed" : "Total"]}
                   />
-                </div>
-                <span className="text-muted-foreground">{shortDay(item.date)}</span>
-                <span className="font-medium">{item.checked}/{item.total}</span>
-              </div>
-            ))}
+                  <Bar dataKey="completed" fill="var(--color-primary)" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          <div className="rounded-xl border bg-background p-4">
+            <h2 className="font-semibold">Activity</h2>
+            <div className="mt-4">
+              {heatmapQuery.isLoading ? (
+                <p className="text-sm text-muted-foreground">Loading heatmap...</p>
+              ) : heatmapQuery.data?.heatmap ? (
+                <ActivityHeatmap data={heatmapQuery.data.heatmap} />
+              ) : null}
+            </div>
           </div>
         </div>
 
@@ -156,4 +168,11 @@ function formatDate(value: string | undefined): string {
 
 function shortDay(value: string): string {
   return new Date(value).toLocaleDateString(undefined, { weekday: "short" })
+}
+
+function chartData(items: DashboardSummary["weekly_habit_chart"]) {
+  return items.map((item) => ({
+    day: shortDay(item.date),
+    completed: item.checked,
+  }))
 }

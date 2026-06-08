@@ -1,5 +1,5 @@
-import { BookOpen, Plus } from "lucide-react"
-import { useMemo, useState, type FormEvent } from "react"
+import { BookOpen, Plus, Zap } from "lucide-react"
+import { useMemo, useRef, useState, type FormEvent } from "react"
 import { Button } from "@workspace/ui/components/button"
 
 import {
@@ -19,6 +19,7 @@ export function LearnPage() {
   const summaryQuery = useLearnSummary()
   const createTopic = useCreateLearningTopic()
   const createEntry = useCreateLearnEntry()
+  const entryFormRef = useRef<HTMLFormElement>(null)
   const [topicError, setTopicError] = useState<string | null>(null)
   const [entryError, setEntryError] = useState<string | null>(null)
   const studyDays = summaryQuery.data?.study_days ?? []
@@ -27,6 +28,10 @@ export function LearnPage() {
     () => topicStats.reduce((total, item) => total + item.total_minutes, 0) / 60,
     [topicStats]
   )
+  const lastTopicId = useMemo(() => {
+    const entries = entriesQuery.data?.data
+    return entries && entries.length > 0 ? entries[0].topic_id : ""
+  }, [entriesQuery.data?.data])
 
   async function onCreateTopic(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -48,6 +53,11 @@ export function LearnPage() {
     setEntryError(null)
     const form = event.currentTarget
     const formData = new FormData(form)
+    const studiedAt = String(formData.get("studied_at") ?? "")
+    if (studiedAt && new Date(studiedAt) > new Date()) {
+      setEntryError("Studied at cannot be in the future")
+      return
+    }
     const input = entryInputFromFormData(formData)
 
     try {
@@ -55,6 +65,22 @@ export function LearnPage() {
       form.reset()
     } catch (error) {
       setEntryError(error instanceof Error ? error.message : "Unable to log study entry")
+    }
+  }
+
+  async function quickLog() {
+    if (!lastTopicId) return
+    setEntryError(null)
+    try {
+      await createEntry.mutateAsync({
+        topic_id: lastTopicId,
+        duration_minutes: 25,
+        confidence: 3,
+        note: "",
+        studied_at: new Date().toISOString(),
+      })
+    } catch (error) {
+      setEntryError(error instanceof Error ? error.message : "Unable to log quick entry")
     }
   }
 
@@ -67,9 +93,15 @@ export function LearnPage() {
             Log study time, confidence, and topic progress.
           </p>
         </div>
-        <div className="grid grid-cols-2 gap-3 text-sm">
-          <Metric label="Study streak" value={`${summaryQuery.data?.streak ?? 0} days`} />
-          <Metric label="Total hours" value={totalHours.toFixed(1)} />
+        <div className="flex items-center gap-3">
+          <Button type="button" variant="outline" onClick={quickLog} disabled={createEntry.isPending || !lastTopicId}>
+            <Zap className="size-4" />
+            Quick log
+          </Button>
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            <Metric label="Study streak" value={`${summaryQuery.data?.streak ?? 0} days`} />
+            <Metric label="Total hours" value={totalHours.toFixed(1)} />
+          </div>
         </div>
       </div>
 
@@ -77,7 +109,7 @@ export function LearnPage() {
         <div className="space-y-6">
           <div className="rounded-xl border bg-background p-4">
             <h2 className="font-semibold">Log study entry</h2>
-            <form className="mt-4 grid gap-4" onSubmit={onCreateEntry}>
+            <form className="mt-4 grid gap-4" onSubmit={onCreateEntry} ref={entryFormRef}>
               <label className="grid gap-2 text-sm">
                 <span className="font-medium">Topic</span>
                 <select name="topic_id" required className="h-10 rounded-md border bg-background px-3">
@@ -91,11 +123,12 @@ export function LearnPage() {
               </label>
               <div className="grid gap-3 sm:grid-cols-3">
                 <label className="grid gap-2 text-sm">
-                  <span className="font-medium">Duration</span>
+                  <span className="font-medium">Duration (min)</span>
                   <input
                     name="duration_minutes"
                     type="number"
                     min={1}
+                    defaultValue={25}
                     required
                     className="h-10 rounded-md border bg-background px-3"
                   />
@@ -112,7 +145,7 @@ export function LearnPage() {
                 </label>
                 <label className="grid gap-2 text-sm">
                   <span className="font-medium">Studied at</span>
-                  <input name="studied_at" type="datetime-local" className="h-10 rounded-md border bg-background px-3" />
+                  <input name="studied_at" type="datetime-local" max={new Date().toISOString().slice(0, 16)} className="h-10 rounded-md border bg-background px-3" />
                 </label>
               </div>
               <label className="grid gap-2 text-sm">

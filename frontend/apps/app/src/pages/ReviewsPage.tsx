@@ -135,7 +135,7 @@ function ReviewForm() {
         {error ? <p className="text-sm text-destructive">{error}</p> : null}
         <Button type="submit" disabled={createReview.isPending}>
           <FileText className="size-4" />
-          {createReview.isPending ? "Generating..." : "Generate review"}
+          {createReview.isPending ? "Creating..." : "Create review"}
         </Button>
       </div>
     </form>

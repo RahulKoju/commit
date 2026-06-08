@@ -1,6 +1,6 @@
 import DOMPurify from "dompurify"
 import { Edit3, Eye, Plus, Trash2 } from "lucide-react"
-import { useMemo, useState, type FormEvent } from "react"
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react"
 import { Button } from "@workspace/ui/components/button"
 import { RichTextEditor } from "@workspace/ui/components/rich-text-editor"
 
@@ -9,24 +9,18 @@ import { useCreateNote, useDeleteNote, useNotes, useUpdateNote } from "@/hooks/u
 import type { CreateNoteInput, Note } from "@/types/note.types"
 
 export function NotesPage() {
-  const [searchInput, setSearchInput] = useState("")
   const [search, setSearch] = useState("")
-  const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null)
-  const [editingNoteId, setEditingNoteId] = useState<string | null>("new")
-  const [preview, setPreview] = useState(false)
   const notesQuery = useNotes(search)
   const topicsQuery = useLearningTopics()
+  const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null)
+  const [editingNoteId, setEditingNoteId] = useState<string | null>("new")
+  const [preview, setPreview] = useState(true)
   const notes = notesQuery.data?.data ?? []
   const selectedNote = useMemo(
     () => notes.find((note) => note.id === selectedNoteId) ?? notes[0] ?? null,
     [notes, selectedNoteId]
   )
   const activeNote = editingNoteId === "new" ? null : notes.find((note) => note.id === editingNoteId) ?? selectedNote
-
-  function onSearchSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    setSearch(searchInput)
-  }
 
   return (
     <section className="space-y-6">
@@ -45,17 +39,7 @@ export function NotesPage() {
 
       <div className="grid gap-6 xl:grid-cols-[20rem_1fr]">
         <aside className="rounded-xl border bg-background p-4">
-          <form className="flex gap-2" onSubmit={onSearchSubmit}>
-            <input
-              value={searchInput}
-              onChange={(event) => setSearchInput(event.target.value)}
-              placeholder="Search notes"
-              className="h-10 min-w-0 flex-1 rounded-md border bg-background px-3 text-sm"
-            />
-            <Button type="submit" variant="outline">
-              Search
-            </Button>
-          </form>
+          <DebouncedSearch value={search} onChange={setSearch} />
           <div className="mt-4 grid gap-2">
             {notesQuery.isLoading ? <p className="text-sm text-muted-foreground">Loading notes...</p> : null}
             {notes.length === 0 && !notesQuery.isLoading ? (
@@ -102,22 +86,48 @@ export function NotesPage() {
               </Button>
             </div>
           </div>
-          {preview && activeNote ? (
-            <NotePreview note={activeNote} onEdit={() => setPreview(false)} />
-          ) : (
-            <NoteForm
-              note={editingNoteId === "new" ? null : activeNote}
-              topics={topicsQuery.data?.topics ?? []}
-              onSaved={(note) => {
-                setSelectedNoteId(note.id)
-                setEditingNoteId(note.id)
-                setPreview(true)
-              }}
-            />
-          )}
+          <div className="grid gap-4 xl:grid-cols-2">
+            {!preview || !activeNote ? (
+              <div className={activeNote && preview ? "xl:col-span-1" : "xl:col-span-2"}>
+                <NoteForm
+                  note={editingNoteId === "new" ? null : activeNote}
+                  topics={topicsQuery.data?.topics ?? []}
+                  onSaved={(note) => {
+                    setSelectedNoteId(note.id)
+                    setEditingNoteId(note.id)
+                    setPreview(true)
+                  }}
+                />
+              </div>
+            ) : null}
+            {preview && activeNote ? (
+              <div className={!preview || !activeNote ? "xl:col-span-2" : "xl:col-span-1"}>
+                <NotePreview note={activeNote} onEdit={() => setPreview(false)} />
+              </div>
+            ) : null}
+          </div>
         </div>
       </div>
     </section>
+  )
+}
+
+function DebouncedSearch({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const [local, setLocal] = useState(value)
+  const timer = useRef<ReturnType<typeof setTimeout>>()
+
+  useEffect(() => {
+    timer.current = setTimeout(() => onChange(local), 300)
+    return () => clearTimeout(timer.current)
+  }, [local, onChange])
+
+  return (
+    <input
+      value={local}
+      onChange={(e) => setLocal(e.target.value)}
+      placeholder="Search notes"
+      className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+    />
   )
 }
 

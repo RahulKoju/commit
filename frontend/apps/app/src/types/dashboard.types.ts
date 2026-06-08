@@ -44,5 +44,17 @@ export const dashboardSummaryResponseSchema = z.object({
   summary: dashboardSummarySchema,
 })
 
+export const activityHeatmapItemSchema = z.object({
+  date: z.string(),
+  total: z.number().int(),
+  completed: z.number().int(),
+})
+
+export const activityHeatmapResponseSchema = z.object({
+  heatmap: z.array(activityHeatmapItemSchema),
+})
+
 export type DashboardSummary = z.infer<typeof dashboardSummarySchema>
 export type DashboardSummaryResponse = z.infer<typeof dashboardSummaryResponseSchema>
+export type ActivityHeatmapItem = z.infer<typeof activityHeatmapItemSchema>
+export type ActivityHeatmapResponse = z.infer<typeof activityHeatmapResponseSchema>

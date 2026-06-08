@@ -17,6 +17,7 @@ import {
   type HabitResponse,
   type HabitsResponse,
   type LogHabitInput,
+  type UpdateHabitInput,
 } from "@/types/habit.types"
 
 export const habitQueryKeys = {
@@ -67,6 +68,28 @@ export function useCreateHabit() {
         body: input,
         schema: habitResponseSchema,
       }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: habitQueryKeys.all }),
+  })
+}
+
+export function useUpdateHabit() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ habitId, input }: { habitId: string; input: UpdateHabitInput }) =>
+      apiFetch<HabitResponse>(`/api/v1/habits/${habitId}`, {
+        method: "PATCH",
+        body: input,
+        schema: habitResponseSchema,
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: habitQueryKeys.all }),
+  })
+}
+
+export function useDeleteHabit() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (habitId: string) =>
+      apiFetch(`/api/v1/habits/${habitId}`, { method: "DELETE" }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: habitQueryKeys.all }),
   })
 }

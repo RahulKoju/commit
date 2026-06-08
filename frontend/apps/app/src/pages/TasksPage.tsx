@@ -1,6 +1,6 @@
 import DOMPurify from "dompurify"
-import { Plus, Trash2 } from "lucide-react"
-import { useMemo, useState, type FormEvent } from "react"
+import { CalendarPlus, Pencil, Plus, Trash2 } from "lucide-react"
+import { useMemo, useRef, useState, type FormEvent } from "react"
 import { Button } from "@workspace/ui/components/button"
 import { RichTextEditor } from "@workspace/ui/components/rich-text-editor"
 
@@ -233,25 +233,89 @@ function TaskList({ tasks }: { tasks: Task[] }) {
 function TaskCard({ task }: { task: Task }) {
   const updateTask = useUpdateTask()
   const deleteTask = useDeleteTask()
+  const [editingField, setEditingField] = useState<"title" | "description" | null>(null)
+  const [editValue, setEditValue] = useState("")
+  const titleInputRef = useRef<HTMLInputElement>(null)
+  const today = new Date().toISOString().slice(0, 10)
+  const isNotToday = task.scheduled_date !== today
 
   async function updateStatus(status: TaskStatus) {
     await updateTask.mutateAsync({ id: task.id, input: { status } })
+  }
+
+  async function moveToToday() {
+    await updateTask.mutateAsync({ id: task.id, input: { scheduled_date: today } })
   }
 
   async function deleteCurrentTask() {
     await deleteTask.mutateAsync(task.id)
   }
 
+  function startEdit(field: "title" | "description") {
+    setEditValue(field === "title" ? task.title : DOMPurify.sanitize(task.description, { ALLOWED_TAGS: [] }))
+    setEditingField(field)
+  }
+
+  async function saveEdit() {
+    const field = editingField
+    setEditingField(null)
+    const trimmed = editValue.trim()
+    if (!trimmed) return
+    if (field === "title") {
+      await updateTask.mutateAsync({ id: task.id, input: { title: trimmed } })
+    } else {
+      await updateTask.mutateAsync({ id: task.id, input: { description: trimmed } })
+    }
+  }
+
+  function handleKeyDown(event: React.KeyboardEvent) {
+    if (event.key === "Enter" && editingField === "title") {
+      event.preventDefault()
+      saveEdit()
+    }
+    if (event.key === "Enter" && (event.ctrlKey || event.metaKey) && editingField === "description") {
+      event.preventDefault()
+      saveEdit()
+    }
+    if (event.key === "Escape") {
+      setEditingField(null)
+    }
+  }
+
+  const statusColors: Record<TaskStatus, string> = {
+    "todo": "bg-muted text-muted-foreground border-muted-foreground/30",
+    "in-progress": "bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/30 dark:text-amber-400",
+    "done": "bg-green-100 text-green-800 border-green-300 dark:bg-green-900/30 dark:text-green-400",
+  }
+
   return (
-    <article className="rounded-xl border bg-background p-4">
+    <article className="group rounded-xl border bg-background p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0 space-y-1">
+        <div className="min-w-0 flex-1 space-y-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="font-semibold">{task.title}</h2>
+            {editingField === "title" ? (
+              <input
+                ref={titleInputRef}
+                className="h-8 rounded-md border bg-background px-2 text-sm font-semibold"
+                value={editValue}
+                onChange={(e) => setEditValue(e.target.value)}
+                onBlur={saveEdit}
+                onKeyDown={handleKeyDown}
+                autoFocus
+              />
+            ) : (
+              <h2
+                className="group/title flex items-center gap-1.5 font-semibold"
+                onClick={() => startEdit("title")}
+              >
+                {task.title}
+                <Pencil className="size-3.5 opacity-0 transition-opacity group-hover/title:opacity-100 text-muted-foreground" />
+              </h2>
+            )}
             <span className="rounded-full border px-2 py-0.5 text-xs capitalize">
               {task.priority}
             </span>
-            <span className="rounded-full border px-2 py-0.5 text-xs">
+            <span className={`rounded-full border px-2 py-0.5 text-xs ${statusColors[task.status]}`}>
               {statusLabel(task.status)}
             </span>
           </div>
@@ -261,32 +325,70 @@ function TaskCard({ task }: { task: Task }) {
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          {task.status !== "todo" ? (
-            <Button type="button" variant="outline" size="sm" onClick={() => updateStatus("todo")}>
-              Todo
+          {isNotToday && task.status !== "done" ? (
+            <Button type="button" variant="outline" size="sm" onClick={moveToToday}>
+              <CalendarPlus className="size-3.5" />
+              Today
             </Button>
           ) : null}
-          {task.status !== "in-progress" ? (
-            <Button type="button" variant="outline" size="sm" onClick={() => updateStatus("in-progress")}>
-              Start
-            </Button>
-          ) : null}
-          {task.status !== "done" ? (
-            <Button type="button" size="sm" onClick={() => updateStatus("done")}>
-              Complete
-            </Button>
-          ) : null}
+          <div className="flex overflow-hidden rounded-lg border">
+            {(["todo", "in-progress", "done"] as const).map((status) => (
+              <Button
+                key={status}
+                type="button"
+                size="sm"
+                variant={task.status === status ? "default" : "ghost"}
+                className={`rounded-none border-0 ${task.status === status ? "" : "text-muted-foreground"}`}
+                onClick={() => updateStatus(status)}
+              >
+                {statusLabel(status)}
+              </Button>
+            ))}
+          </div>
           <Button type="button" variant="outline" size="icon" aria-label="Delete task" onClick={deleteCurrentTask}>
             <Trash2 className="size-4" />
           </Button>
         </div>
       </div>
-      {task.description ? (
-        <div
-          className="prose prose-sm mt-3 max-w-none text-sm text-muted-foreground"
-          dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(task.description) }}
-        />
-      ) : null}
+      {editingField === "description" ? (
+        <div className="mt-3 space-y-2">
+          <textarea
+            className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+            rows={3}
+            value={editValue}
+            onChange={(e) => setEditValue(e.target.value)}
+            onKeyDown={handleKeyDown}
+            autoFocus
+          />
+          <div className="flex justify-end gap-2">
+            <Button type="button" size="sm" variant="outline" onClick={() => setEditingField(null)}>Cancel</Button>
+            <Button type="button" size="sm" onClick={saveEdit}>Save</Button>
+          </div>
+        </div>
+      ) : task.description ? (
+        <div className="group/desc relative">
+          <div
+            className="prose prose-sm mt-3 max-w-none text-sm text-muted-foreground"
+            dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(task.description) }}
+          />
+          <button
+            type="button"
+            className="absolute right-0 top-0 opacity-0 transition-opacity group-hover/desc:opacity-100 text-muted-foreground hover:text-foreground"
+            onClick={() => startEdit("description")}
+          >
+            <Pencil className="size-3.5" />
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          className="mt-3 flex items-center gap-1 text-xs text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100"
+          onClick={() => startEdit("description")}
+        >
+          <Pencil className="size-3" />
+          Add description
+        </button>
+      )}
     </article>
   )
 }
