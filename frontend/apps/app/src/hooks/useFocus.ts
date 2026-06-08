@@ -5,15 +5,28 @@ import { appendPagination, type PaginationParams } from "@/types/common.types"
 import {
   focusSessionResponseSchema,
   focusSessionsResponseSchema,
+  focusStatsResponseSchema,
   type CreateFocusSessionInput,
   type FocusSessionFilters,
   type FocusSessionResponse,
   type FocusSessionsResponse,
+  type FocusStatsResponse,
 } from "@/types/focus.types"
 
 export const focusQueryKeys = {
   all: ["focus"] as const,
   sessions: (filters: FocusSessionFilters, pagination?: PaginationParams) => ["focus", "sessions", filters, pagination] as const,
+  stats: ["focus", "stats"] as const,
+}
+
+export function useFocusStats() {
+  return useQuery({
+    queryKey: focusQueryKeys.stats,
+    queryFn: () =>
+      apiFetch<FocusStatsResponse>("/api/v1/focus/stats", {
+        schema: focusStatsResponseSchema,
+      }),
+  })
 }
 
 export function useFocusSessions(filters: FocusSessionFilters, pagination?: PaginationParams) {

@@ -16,9 +16,20 @@ type FocusSession struct {
 	TaskID          string    `json:"task_id"`
 	TaskTitle       string    `json:"task_title"`
 	TopicID         *string   `json:"topic_id"`
+	Tags            []string  `json:"tags"`
 	StartTime       time.Time `json:"start_time"`
 	DurationMinutes int       `json:"duration_minutes"`
 	CreatedAt       time.Time `json:"created_at"`
+}
+
+type FocusStats struct {
+	TotalSessions      int     `json:"total_sessions"`
+	TotalMinutes       int     `json:"total_minutes"`
+	AverageMinutes     float64 `json:"average_minutes"`
+	CurrentWeekMinutes int     `json:"current_week_minutes"`
+	LastWeekMinutes    int     `json:"last_week_minutes"`
+	LongestSession     int     `json:"longest_session"`
+	SessionDays        int     `json:"session_days"`
 }
 
 type ListFocusSessionsParams struct {
@@ -34,6 +45,7 @@ type CreateFocusSessionParams struct {
 	UserID                  string
 	TaskID                  string
 	TopicID                 string
+	Tags                    []string
 	StartTime               time.Time
 	DurationMinutes         int
 	FocusDailyMinimumMinute int
@@ -73,7 +85,11 @@ func (model FocusModel) List(ctx context.Context, params ListFocusSessionsParams
 		sessions = append(sessions, session)
 	}
 
-	return sessions, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return model.attachFocusTags(ctx, sessions)
 }
 
 func (model FocusModel) CountFocusSessions(ctx context.Context, params ListFocusSessionsParams) (int, error) {
@@ -116,6 +132,10 @@ func (model FocusModel) Create(ctx context.Context, params CreateFocusSessionPar
 		return FocusSession{}, err
 	}
 
+	if err := replaceFocusSessionTags(ctx, tx, session.ID, params.Tags); err != nil {
+		return FocusSession{}, err
+	}
+
 	if err := model.autoCheckFocusedStudy(ctx, tx, params.UserID, session.StartTime, params.FocusDailyMinimumMinute); err != nil {
 		return FocusSession{}, err
 	}
@@ -124,7 +144,11 @@ func (model FocusModel) Create(ctx context.Context, params CreateFocusSessionPar
 		return FocusSession{}, err
 	}
 
-	return session, nil
+	sessions, err := model.attachFocusTags(ctx, []FocusSession{session})
+	if err != nil {
+		return FocusSession{}, err
+	}
+	return sessions[0], nil
 }
 
 type focusScanner interface {
@@ -180,4 +204,86 @@ func scanFocusSession(scanner focusScanner) (FocusSession, error) {
 	}
 
 	return session, nil
+}
+
+func (model FocusModel) attachFocusTags(ctx context.Context, sessions []FocusSession) ([]FocusSession, error) {
+	if len(sessions) == 0 {
+		return sessions, nil
+	}
+
+	sessionIDs := make([]string, 0, len(sessions))
+	sessionIndex := make(map[string]int)
+	for index, session := range sessions {
+		sessionIDs = append(sessionIDs, session.ID)
+		sessionIndex[session.ID] = index
+		sessions[index].Tags = make([]string, 0)
+	}
+
+	rows, err := model.pool.Query(ctx, `
+		SELECT session_id, tag
+		FROM focus_session_tags
+		WHERE session_id = ANY($1)
+		ORDER BY tag
+	`, sessionIDs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var sessionID string
+		var tag string
+		if err := rows.Scan(&sessionID, &tag); err != nil {
+			return nil, err
+		}
+		index, ok := sessionIndex[sessionID]
+		if ok {
+			sessions[index].Tags = append(sessions[index].Tags, tag)
+		}
+	}
+
+	return sessions, rows.Err()
+}
+
+func (model FocusModel) Stats(ctx context.Context, userID string) (FocusStats, error) {
+	var stats FocusStats
+	err := model.pool.QueryRow(ctx, `
+		SELECT
+			COUNT(*)::int,
+			COALESCE(SUM(duration_minutes), 0)::int,
+			COALESCE(ROUND(AVG(duration_minutes), 1), 0),
+			COALESCE(SUM(duration_minutes) FILTER (WHERE start_time >= CURRENT_DATE - INTERVAL '6 days'), 0)::int,
+			COALESCE(SUM(duration_minutes) FILTER (WHERE start_time >= CURRENT_DATE - INTERVAL '13 days' AND start_time < CURRENT_DATE - INTERVAL '6 days'), 0)::int,
+			COALESCE(MAX(duration_minutes), 0)::int,
+			COALESCE(COUNT(DISTINCT start_time::date), 0)::int
+		FROM focus_sessions
+		WHERE user_id = $1
+	`, userID).Scan(
+		&stats.TotalSessions,
+		&stats.TotalMinutes,
+		&stats.AverageMinutes,
+		&stats.CurrentWeekMinutes,
+		&stats.LastWeekMinutes,
+		&stats.LongestSession,
+		&stats.SessionDays,
+	)
+	return stats, err
+}
+
+func replaceFocusSessionTags(ctx context.Context, tx pgx.Tx, sessionID string, tags []string) error {
+	if _, err := tx.Exec(ctx, "DELETE FROM focus_session_tags WHERE session_id = $1", sessionID); err != nil {
+		return err
+	}
+
+	for _, tag := range tags {
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO focus_session_tags (session_id, tag)
+			VALUES ($1, $2)
+			ON CONFLICT DO NOTHING
+		`, sessionID, tag); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

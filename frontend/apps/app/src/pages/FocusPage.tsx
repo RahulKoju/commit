@@ -1,9 +1,9 @@
-import { Maximize2, Minimize2, Pause, Play, RotateCcw, Square } from "lucide-react"
+import { BarChart3, Clock, Maximize2, Minimize2, Pause, Play, RotateCcw, Square, Target, TrendingUp } from "lucide-react"
 import { useEffect, useMemo, useState, type FormEvent } from "react"
 import { useLocation } from "react-router-dom"
 import { Button } from "@workspace/ui/components/button"
 
-import { useCreateFocusSession, useFocusSessions } from "@/hooks/useFocus"
+import { useCreateFocusSession, useFocusSessions, useFocusStats } from "@/hooks/useFocus"
 import { useTasks } from "@/hooks/useTasks"
 import { useFocusStore } from "@/store/useFocusStore"
 import type { FocusSessionFilters } from "@/types/focus.types"
@@ -49,6 +49,7 @@ export function FocusPage() {
     [dateFrom, dateTo, topicId]
   )
   const sessionsQuery = useFocusSessions(filters)
+  const statsQuery = useFocusStats()
   const selectedTask = tasksQuery.data?.data.find((task) => task.id === selectedTaskId)
   const isRunning = mode === "work" || mode === "short-break" || mode === "long-break"
   const isWorkRunning = mode === "work"
@@ -266,7 +267,45 @@ export function FocusPage() {
       </div>
 
       {!isFullScreen ? (
-        <div className="rounded-xl border bg-background p-4">
+        <div className="grid gap-6 xl:grid-cols-[1fr_1fr]">
+          <div className="rounded-xl border bg-background p-4">
+            <h2 className="font-semibold">Stats</h2>
+            {statsQuery.isLoading ? <p className="mt-4 text-sm text-muted-foreground">Loading stats...</p> : null}
+            {statsQuery.data?.stats ? (
+              <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                <div className="rounded-lg border p-3">
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <Clock className="size-4" />
+                    <span>Total time</span>
+                  </div>
+                  <p className="mt-1 text-xl font-semibold">{Math.round(statsQuery.data.stats.total_minutes / 60)}h</p>
+                </div>
+                <div className="rounded-lg border p-3">
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <BarChart3 className="size-4" />
+                    <span>Sessions</span>
+                  </div>
+                  <p className="mt-1 text-xl font-semibold">{statsQuery.data.stats.total_sessions}</p>
+                </div>
+                <div className="rounded-lg border p-3">
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <TrendingUp className="size-4" />
+                    <span>Avg session</span>
+                  </div>
+                  <p className="mt-1 text-xl font-semibold">{Math.round(statsQuery.data.stats.average_minutes)} min</p>
+                </div>
+                <div className="rounded-lg border p-3">
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <Target className="size-4" />
+                    <span>This week</span>
+                  </div>
+                  <p className="mt-1 text-xl font-semibold">{statsQuery.data.stats.current_week_minutes} min</p>
+                </div>
+              </div>
+            ) : null}
+          </div>
+
+          <div className="rounded-xl border bg-background p-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="font-semibold">Session history</h2>
             <form className="flex flex-wrap gap-2" onSubmit={onHistorySubmit}>
@@ -286,11 +325,21 @@ export function FocusPage() {
                 <div>
                   <p className="font-medium">{session.task_title}</p>
                   <p className="text-muted-foreground">{new Date(session.start_time).toLocaleString()}</p>
+                  {session.tags.length > 0 ? (
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      {session.tags.map((tag) => (
+                        <span key={tag} className="rounded-full border bg-muted/50 px-2 py-0.5 text-xs text-muted-foreground">
+                          #{tag}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
                 <span className="font-medium">{session.duration_minutes} min</span>
               </div>
             ))}
           </div>
+        </div>
         </div>
       ) : null}
     </section>

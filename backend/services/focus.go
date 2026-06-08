@@ -26,6 +26,7 @@ type CreateFocusSessionInput struct {
 	UserID                  string
 	TaskID                  string
 	TopicID                 string
+	Tags                    []string
 	StartTime               string
 	DurationMinutes         int
 	FocusDailyMinimumMinute int
@@ -80,10 +81,15 @@ func (service FocusService) Create(ctx context.Context, input CreateFocusSession
 		UserID:                  input.UserID,
 		TaskID:                  taskID,
 		TopicID:                 strings.TrimSpace(input.TopicID),
+		Tags:                    normalizeTags(input.Tags),
 		StartTime:               startTime,
 		DurationMinutes:         input.DurationMinutes,
 		FocusDailyMinimumMinute: input.FocusDailyMinimumMinute,
 	})
+}
+
+func (service FocusService) Stats(ctx context.Context, userID string) (models.FocusStats, error) {
+	return service.focus.Stats(ctx, userID)
 }
 
 func validateOptionalDate(value string) error {

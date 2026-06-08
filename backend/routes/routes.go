@@ -64,6 +64,7 @@ func Register(router *gin.Engine, deps Dependencies) {
 	protected.DELETE("/tasks/:id", taskHandler.Delete)
 	protected.GET("/focus/sessions", focusHandler.List)
 	protected.POST("/focus/sessions", focusHandler.Create)
+	protected.GET("/focus/stats", focusHandler.Stats)
 	protected.GET("/learn/entries", learnHandler.ListEntries)
 	protected.POST("/learn/entries", learnHandler.CreateEntry)
 	protected.PATCH("/learn/entries/:id", learnHandler.UpdateEntry)
