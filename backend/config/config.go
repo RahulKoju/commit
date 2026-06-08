@@ -62,7 +62,7 @@ func Load() (Config, error) {
 		DBMaxConnIdleMinutes:     dbMaxConnIdle,
 		ResendAPIKey:            os.Getenv("RESEND_API_KEY"),
 		EmailFrom:               os.Getenv("EMAIL_FROM"),
-		AppURL:                  os.Getenv("VITE_APP_URL"),
+		AppURL:                  os.Getenv("VITE_WEB_URL"),
 	}
 
 	missing := missingEnv(cfg)

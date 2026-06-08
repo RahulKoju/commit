@@ -7,7 +7,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"log"
 	"strings"
 	"time"
 
@@ -209,11 +208,9 @@ func (service AuthService) ForgotPassword(ctx context.Context, email string) err
 
 	resetURL := service.appURL + "/reset-password?token=" + rawToken
 
-	go func() {
-		if err := service.email.SendPasswordReset(user.Email, resetURL); err != nil {
-			log.Printf("failed to send password reset email to %s: %v", user.Email, err)
-		}
-	}()
+	if err := service.email.SendPasswordReset(user.Email, resetURL); err != nil {
+		return err
+	}
 
 	return nil
 }

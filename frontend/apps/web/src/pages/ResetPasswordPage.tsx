@@ -25,10 +25,9 @@ export function ResetPasswordPage() {
     } catch (submitError) {
       const message = submitError instanceof Error ? submitError.message : "Failed to reset password"
       const status = (submitError as Error & { status?: number }).status
+      setFormError(message)
       if (status && status >= 500) {
         toast.error(`${status} ${message}`)
-      } else {
-        setFormError(message)
       }
     } finally {
       setLoading(false)

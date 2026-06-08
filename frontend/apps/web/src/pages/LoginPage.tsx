@@ -24,10 +24,9 @@ export function LoginPage() {
     } catch (submitError) {
       const message = submitError instanceof Error ? submitError.message : "Unable to login"
       const status = (submitError as Error & { status?: number }).status
+      setFormError(message)
       if (status && status >= 500) {
         toast.error(`${status} ${message}`)
-      } else {
-        setFormError(message)
       }
     } finally {
       setLoading(false)

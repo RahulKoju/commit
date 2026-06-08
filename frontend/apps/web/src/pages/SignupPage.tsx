@@ -58,6 +58,7 @@ export function SignupPage() {
       const status = (submitError as Error & { status?: number }).status
       const lower = message.toLowerCase()
       if (status && status >= 500) {
+        setFormError(message)
         toast.error(`${status} ${message}`)
       } else if (lower.includes("email") && (lower.includes("already") || lower.includes("exists") || lower.includes("registered") || lower.includes("duplicate"))) {
         setEmailError(message)
