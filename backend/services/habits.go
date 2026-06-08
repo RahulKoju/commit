@@ -17,6 +17,12 @@ type CreateHabitCategoryInput struct {
 	Name   string
 }
 
+type UpdateHabitCategoryInput struct {
+	UserID string
+	ID     string
+	Name   string
+}
+
 type CreateHabitInput struct {
 	UserID        string
 	CategoryID    string
@@ -67,6 +73,18 @@ func (service HabitService) CreateCategory(ctx context.Context, input CreateHabi
 		return models.HabitCategory{}, fmt.Errorf("category name is required")
 	}
 	return service.habits.CreateCategory(ctx, models.CreateHabitCategoryParams{UserID: input.UserID, Name: name})
+}
+
+func (service HabitService) UpdateCategory(ctx context.Context, input UpdateHabitCategoryInput) (models.HabitCategory, error) {
+	name := strings.TrimSpace(input.Name)
+	if name == "" {
+		return models.HabitCategory{}, fmt.Errorf("category name is required")
+	}
+	return service.habits.UpdateCategory(ctx, models.UpdateHabitCategoryParams{UserID: input.UserID, ID: input.ID, Name: name})
+}
+
+func (service HabitService) DeleteCategory(ctx context.Context, userID string, id string) error {
+	return service.habits.DeleteCategory(ctx, userID, id)
 }
 
 func (service HabitService) ListHabits(ctx context.Context, userID string) ([]models.Habit, error) {

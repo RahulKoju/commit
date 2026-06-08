@@ -17,6 +17,7 @@ import {
   type HabitResponse,
   type HabitsResponse,
   type LogHabitInput,
+  type UpdateHabitCategoryInput,
   type UpdateHabitInput,
 } from "@/types/habit.types"
 
@@ -55,6 +56,28 @@ export function useCreateHabitCategory() {
         body: input,
         schema: habitCategoryResponseSchema,
       }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: habitQueryKeys.categories }),
+  })
+}
+
+export function useUpdateHabitCategory() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ categoryId, input }: { categoryId: string; input: UpdateHabitCategoryInput }) =>
+      apiFetch<HabitCategoryResponse>(`/api/v1/habit-categories/${categoryId}`, {
+        method: "PATCH",
+        body: input,
+        schema: habitCategoryResponseSchema,
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: habitQueryKeys.categories }),
+  })
+}
+
+export function useDeleteHabitCategory() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (categoryId: string) =>
+      apiFetch(`/api/v1/habit-categories/${categoryId}`, { method: "DELETE" }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: habitQueryKeys.categories }),
   })
 }

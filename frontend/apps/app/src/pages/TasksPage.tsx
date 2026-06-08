@@ -288,8 +288,20 @@ function TaskCard({ task }: { task: Task }) {
     "done": "bg-green-100 text-green-800 border-green-300 dark:bg-green-900/30 dark:text-green-400",
   }
 
+  const priorityColors: Record<TaskPriority, string> = {
+    "high": "bg-red-100 text-red-800 border-red-300 dark:bg-red-900/30 dark:text-red-400",
+    "medium": "bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/30 dark:text-amber-400",
+    "low": "bg-muted text-muted-foreground border-muted-foreground/30",
+  }
+
+  const priorityBorders: Record<TaskPriority, string> = {
+    "high": "border-l-red-500 dark:border-l-red-400",
+    "medium": "border-l-amber-500 dark:border-l-amber-400",
+    "low": "border-l-muted-foreground/30",
+  }
+
   return (
-    <article className="group rounded-xl border bg-background p-4">
+    <article className={`group rounded-xl border bg-background p-4 border-l-4 ${priorityBorders[task.priority]}`}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1 space-y-1">
           <div className="flex flex-wrap items-center gap-2">
@@ -312,7 +324,7 @@ function TaskCard({ task }: { task: Task }) {
                 <Pencil className="size-3.5 opacity-0 transition-opacity group-hover/title:opacity-100 text-muted-foreground" />
               </h2>
             )}
-            <span className="rounded-full border px-2 py-0.5 text-xs capitalize">
+            <span className={`rounded-full border px-2 py-0.5 text-xs capitalize ${priorityColors[task.priority]}`}>
               {task.priority}
             </span>
             <span className={`rounded-full border px-2 py-0.5 text-xs ${statusColors[task.status]}`}>

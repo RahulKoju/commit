@@ -1,4 +1,4 @@
-import { BarChart3, Plus, Trash2, Pencil, X, Search } from "lucide-react"
+import { BarChart3, Check, Plus, Trash2, Pencil, X, Search } from "lucide-react"
 import { useMemo, useState, useEffect, useRef, type FormEvent } from "react"
 import { Button } from "@workspace/ui/components/button"
 import { Input } from "@workspace/ui/components/input"
@@ -8,11 +8,13 @@ import {
   useCreateHabit,
   useCreateHabitCategory,
   useDeleteHabit,
+  useDeleteHabitCategory,
   useHabitAnalytics,
   useHabitCategories,
   useHabits,
   useLogHabit,
   useUpdateHabit,
+  useUpdateHabitCategory,
 } from "@/hooks/useHabits"
 import type { CreateHabitInput, Habit, HabitType } from "@/types/habit.types"
 
@@ -274,15 +276,29 @@ function EditHabitModal({
 /* ─── Category form ─── */
 function CategoryForm() {
   const [open, setOpen] = useState(false)
+  const categoriesQuery = useHabitCategories()
   const createCategory = useCreateHabitCategory()
+  const updateCategory = useUpdateHabitCategory()
+  const deleteCategory = useDeleteHabitCategory()
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editName, setEditName] = useState("")
 
-  async function onSubmit(event: FormEvent<HTMLFormElement>) {
+  async function onCreate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    const form = event.currentTarget
-    const formData = new FormData(form)
+    const formData = new FormData(event.currentTarget)
     await createCategory.mutateAsync({ name: String(formData.get("name") ?? "") })
-    form.reset()
-    setOpen(false)
+    event.currentTarget.reset()
+  }
+
+  async function onUpdate(id: string) {
+    if (!editName.trim()) return
+    await updateCategory.mutateAsync({ categoryId: id, input: { name: editName.trim() } })
+    setEditingId(null)
+    setEditName("")
+  }
+
+  async function onDelete(id: string) {
+    await deleteCategory.mutateAsync(id)
   }
 
   return (
@@ -291,13 +307,51 @@ function CategoryForm() {
         Category
       </Button>
       {open ? (
-        <form className="absolute right-0 z-20 mt-2 flex w-72 gap-2 rounded-xl border bg-background p-3 shadow-xl" onSubmit={onSubmit}>
-          <Label htmlFor="category-name" className="sr-only">Category name</Label>
-          <input id="category-name" name="name" required placeholder="Mindfulness" className="h-9 min-w-0 flex-1 rounded-md border bg-background px-3 text-sm" />
-          <Button type="submit" size="icon" aria-label="Create category">
-            <Plus className="size-4" />
-          </Button>
-        </form>
+        <div className="absolute right-0 z-20 mt-2 w-80 rounded-xl border bg-background p-3 shadow-xl" onClick={(e) => e.stopPropagation()}>
+          <form className="flex gap-2" onSubmit={onCreate}>
+            <Label htmlFor="category-name" className="sr-only">Category name</Label>
+            <input id="category-name" name="name" required placeholder="New category name" className="h-9 min-w-0 flex-1 rounded-md border bg-background px-3 text-sm" />
+            <Button type="submit" size="icon" aria-label="Create category" disabled={createCategory.isPending}>
+              <Plus className="size-4" />
+            </Button>
+          </form>
+
+          {categoriesQuery.data?.categories.length ? (
+            <div className="mt-3 space-y-1">
+              {categoriesQuery.data.categories.map((cat) => (
+                <div key={cat.id} className="flex items-center gap-2 rounded-md px-2 py-1 text-sm hover:bg-muted/50">
+                  {editingId === cat.id ? (
+                    <>
+                      <input
+                        value={editName}
+                        onChange={(e) => setEditName(e.target.value)}
+                        className="h-7 min-w-0 flex-1 rounded border bg-background px-2 text-sm"
+                        autoFocus
+                        onKeyDown={(e) => { if (e.key === "Enter") onUpdate(cat.id); if (e.key === "Escape") setEditingId(null) }}
+                      />
+                      <button type="button" onClick={() => onUpdate(cat.id)} className="rounded p-1 text-green-600 hover:bg-green-100">
+                        <Check className="size-3.5" />
+                      </button>
+                      <button type="button" onClick={() => setEditingId(null)} className="rounded p-1 text-muted-foreground hover:bg-muted">
+                        <X className="size-3.5" />
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <span className="flex-1 truncate">{cat.name}</span>
+                      <button type="button" onClick={() => { setEditingId(cat.id); setEditName(cat.name) }} className="rounded p-1 text-muted-foreground hover:text-foreground">
+                        <Pencil className="size-3.5" />
+                      </button>
+                      <button type="button" onClick={() => onDelete(cat.id)} className="rounded p-1 text-muted-foreground hover:text-destructive">
+                        <Trash2 className="size-3.5" />
+                      </button>
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </div>
       ) : null}
     </div>
   )

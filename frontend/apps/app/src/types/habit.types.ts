@@ -98,6 +98,10 @@ export type CreateHabitCategoryInput = {
   name: string
 }
 
+export type UpdateHabitCategoryInput = {
+  name: string
+}
+
 export type CreateHabitInput = {
   category_id: string
   name: string

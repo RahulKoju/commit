@@ -3,6 +3,7 @@ package models
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math"
 	"time"
 
@@ -111,6 +112,12 @@ type UpdateHabitParams struct {
 	SortOrder     int
 }
 
+type UpdateHabitCategoryParams struct {
+	UserID string
+	ID     string
+	Name   string
+}
+
 type LogHabitParams struct {
 	UserID     string
 	HabitID    string
@@ -159,6 +166,40 @@ func (model HabitModel) CreateCategory(ctx context.Context, params CreateHabitCa
 		RETURNING id, user_id, name, created_at, updated_at
 	`, params.UserID, params.Name).Scan(&category.ID, &category.UserID, &category.Name, &category.CreatedAt, &category.UpdatedAt)
 	return category, err
+}
+
+func (model HabitModel) UpdateCategory(ctx context.Context, params UpdateHabitCategoryParams) (HabitCategory, error) {
+	var category HabitCategory
+	err := model.pool.QueryRow(ctx, `
+		UPDATE habit_categories
+		SET name = $3, updated_at = now()
+		WHERE user_id = $1 AND id = $2
+		RETURNING id, user_id, name, created_at, updated_at
+	`, params.UserID, params.ID, params.Name).Scan(&category.ID, &category.UserID, &category.Name, &category.CreatedAt, &category.UpdatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return HabitCategory{}, ErrNotFound
+	}
+	return category, err
+}
+
+func (model HabitModel) DeleteCategory(ctx context.Context, userID string, id string) error {
+	var count int
+	err := model.pool.QueryRow(ctx, `SELECT COUNT(*) FROM habits WHERE user_id = $1 AND category_id = $2`, userID, id).Scan(&count)
+	if err != nil {
+		return err
+	}
+	if count > 0 {
+		return fmt.Errorf("category has %d habit(s); delete or reassign them first", count)
+	}
+
+	tag, err := model.pool.Exec(ctx, `DELETE FROM habit_categories WHERE user_id = $1 AND id = $2`, userID, id)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 func (model HabitModel) ListHabits(ctx context.Context, userID string) ([]Habit, error) {

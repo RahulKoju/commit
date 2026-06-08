@@ -88,6 +88,43 @@ func (handler HabitHandler) CreateCategory(c *gin.Context) {
 	c.JSON(http.StatusCreated, gin.H{"category": category})
 }
 
+func (handler HabitHandler) UpdateCategory(c *gin.Context) {
+	userID, ok := currentUserID(c)
+	if !ok {
+		return
+	}
+
+	var request habitCategoryRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid category request"})
+		return
+	}
+
+	category, err := handler.habits.UpdateCategory(c.Request.Context(), services.UpdateHabitCategoryInput{
+		UserID: userID,
+		ID:     c.Param("id"),
+		Name:   request.Name,
+	})
+	if err != nil {
+		writeHabitError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"category": category})
+}
+
+func (handler HabitHandler) DeleteCategory(c *gin.Context) {
+	userID, ok := currentUserID(c)
+	if !ok {
+		return
+	}
+
+	if err := handler.habits.DeleteCategory(c.Request.Context(), userID, c.Param("id")); err != nil {
+		writeHabitError(c, err)
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
 func (handler HabitHandler) ListHabits(c *gin.Context) {
 	userID, ok := currentUserID(c)
 	if !ok {
