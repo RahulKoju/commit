@@ -10,7 +10,7 @@ import {
   X,
 } from "lucide-react"
 import type { ComponentType } from "react"
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { Link } from "react-router-dom"
 import {
   AreaChart,

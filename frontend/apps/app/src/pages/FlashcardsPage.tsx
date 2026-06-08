@@ -6,7 +6,6 @@ import { useLearningTopics } from "@/hooks/useLearn"
 import { apiFetch } from "@/lib/api"
 import type { Flashcard, FlashcardListResponse, FlashcardDueResponse, FlashcardCreateResponse, FlashcardUpdateResponse, FlashcardReviewResponse } from "@/types/flashcard.types"
 
-const QUALITY_LABELS = ["Again", "", "", "Good", "", "Easy"] as const
 const QUALITY_SHORT = ["Again", "Hard", "Good", "Easy"] as const
 const QUALITY_MAP = [0, 0, 1, 2, 3, 3] as const
 

@@ -10,6 +10,7 @@ export function SignupPage() {
   const [emailError, setEmailError] = useState<string | null>(null)
   const [passwordError, setPasswordError] = useState<string | null>(null)
   const [confirmError, setConfirmError] = useState<string | null>(null)
+  const [formError, setFormError] = useState<string | null>(null)
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -18,6 +19,7 @@ export function SignupPage() {
     setEmailError(null)
     setPasswordError(null)
     setConfirmError(null)
+    setFormError(null)
 
     const formData = new FormData(event.currentTarget)
     const name = String(formData.get("name") ?? "")
@@ -132,6 +134,7 @@ export function SignupPage() {
           {confirmError ? <p className="text-xs text-destructive">{confirmError}</p> : null}
           {!confirmError ? <p className="text-xs text-muted-foreground">Please confirm your password.</p> : null}
         </div>
+        {formError ? <p className="text-xs text-destructive">{formError}</p> : null}
         <button
           type="submit"
           disabled={loading}

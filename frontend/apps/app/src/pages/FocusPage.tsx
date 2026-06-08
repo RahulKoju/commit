@@ -34,7 +34,6 @@ export function FocusPage() {
   const setTimerMode = useFocusStore((state) => state.setTimerMode)
   const isFullScreen = useFocusStore((state) => state.isFullScreen)
   const setIsFullScreen = useFocusStore((state) => state.setIsFullScreen)
-  const preselectedTaskId = useFocusStore((state) => state.preselectedTaskId)
   const preselectedTaskTitle = useFocusStore((state) => state.preselectedTaskTitle)
   const setPreselectedTask = useFocusStore((state) => state.setPreselectedTask)
   const clearPreselectedTask = useFocusStore((state) => state.clearPreselectedTask)

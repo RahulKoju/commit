@@ -65,7 +65,6 @@ function buildWeeks(data: HeatmapDataItem[]): WeekGrid {
   }
 
   for (const item of data) {
-    const date = new Date(item.date)
     if (currentWeek.length === 7) {
       weeks.push(currentWeek)
       currentWeek = []

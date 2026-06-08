@@ -119,7 +119,7 @@ export function NotesPage() {
 
 function DebouncedSearch({ value, onChange }: { value: string; onChange: (value: string) => void }) {
   const [local, setLocal] = useState(value)
-  const timer = useRef<ReturnType<typeof setTimeout>>()
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined)
 
   useEffect(() => {
     timer.current = setTimeout(() => onChange(local), 300)
