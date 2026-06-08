@@ -9,6 +9,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+type WidgetLayout []string
+
 type UserRole string
 
 const (
@@ -133,6 +135,23 @@ func (model UserModel) UpdatePassword(ctx context.Context, id string, passwordHa
 		return ErrNotFound
 	}
 	return nil
+}
+
+func (model UserModel) GetWidgetLayout(ctx context.Context, userID string) (WidgetLayout, error) {
+	var layout WidgetLayout
+	err := model.pool.QueryRow(ctx, "SELECT widget_layout FROM users WHERE id = $1", userID).Scan(&layout)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return layout, nil
+}
+
+func (model UserModel) SetWidgetLayout(ctx context.Context, userID string, layout WidgetLayout) error {
+	_, err := model.pool.Exec(ctx, "UPDATE users SET widget_layout = $1, updated_at = now() WHERE id = $2", layout, userID)
+	return err
 }
 
 func (model UserModel) Delete(ctx context.Context, id string) error {

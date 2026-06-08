@@ -11,9 +11,13 @@ type FocusState = {
   elapsedSeconds: number
   mode: "idle" | "work" | "short-break" | "long-break"
   timerMode: TimerMode
+  preselectedTaskId: string | null
+  preselectedTaskTitle: string | null
   setIsFullScreen: (value: boolean) => void
   setSelectedTaskId: (value: string) => void
   setTimerMode: (value: TimerMode) => void
+  setPreselectedTask: (taskId: string, taskTitle: string) => void
+  clearPreselectedTask: () => void
   startTimer: (durationSeconds: number, startedAt: number) => void
   tick: () => void
   resetTimer: () => void
@@ -29,9 +33,13 @@ export const useFocusStore = create<FocusState>((set) => ({
   elapsedSeconds: 0,
   mode: "idle",
   timerMode: "pomodoro",
+  preselectedTaskId: null,
+  preselectedTaskTitle: null,
   setIsFullScreen: (value) => set({ isFullScreen: value }),
   setSelectedTaskId: (value) => set({ selectedTaskId: value }),
   setTimerMode: (value) => set({ timerMode: value }),
+  setPreselectedTask: (taskId, taskTitle) => set({ preselectedTaskId: taskId, preselectedTaskTitle: taskTitle }),
+  clearPreselectedTask: () => set({ preselectedTaskId: null, preselectedTaskTitle: null }),
   startTimer: (durationSeconds, startedAt) =>
     set({ durationSeconds, remainingSeconds: durationSeconds, elapsedSeconds: 0, startedAt, mode: "work" }),
   tick: () =>
@@ -44,7 +52,7 @@ export const useFocusStore = create<FocusState>((set) => ({
       return { remainingSeconds: Math.max(0, state.durationSeconds - elapsed) }
     }),
   resetTimer: () =>
-    set({ remainingSeconds: 0, elapsedSeconds: 0, startedAt: null, durationSeconds: 0, mode: "idle", isFullScreen: false }),
+    set({ remainingSeconds: 0, elapsedSeconds: 0, startedAt: null, durationSeconds: 0, mode: "idle", isFullScreen: false, preselectedTaskId: null, preselectedTaskTitle: null }),
   startBreak: (durationSeconds, mode) =>
     set({ durationSeconds, remainingSeconds: durationSeconds, elapsedSeconds: 0, startedAt: Date.now(), mode }),
 }))

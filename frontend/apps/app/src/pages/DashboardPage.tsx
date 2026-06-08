@@ -1,20 +1,94 @@
-import { BookOpen, CheckCircle2, Clock, Flame, NotebookPen, Target } from "lucide-react"
+import { BookOpen, CheckCircle2, Clock, Flame, GripVertical, LayoutGrid, NotebookPen, Target, X } from "lucide-react"
 import type { ComponentType } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Link } from "react-router-dom"
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from "recharts"
 import { Button } from "@workspace/ui/components/button"
 
 import { useCurrentUser } from "@/hooks/useAuth"
-import { useActivityHeatmap, useDashboardSummary } from "@/hooks/useDashboard"
+import { useActivityHeatmap, useDashboardLayout, useDashboardSummary, useSaveDashboardLayout } from "@/hooks/useDashboard"
 import { ActivityHeatmap } from "@/components/ActivityHeatmap"
 import type { DashboardSummary } from "@/types/dashboard.types"
 
+/* ─── Widget registry ─── */
+interface WidgetDef {
+  id: string
+  label: string
+  Component: ComponentType<{ summary: DashboardSummary; heatmapQuery: ReturnType<typeof useActivityHeatmap> }>
+}
+
+const DEFAULT_WIDGET_ORDER = ["metric-cards", "habit-chart", "productivity-chart", "activity-heatmap", "recent-notes"]
+
+const WIDGET_REGISTRY: WidgetDef[] = [
+  { id: "metric-cards", label: "Metric cards", Component: MetricCardsWidget },
+  { id: "habit-chart", label: "Weekly habits", Component: HabitChartWidget },
+  { id: "productivity-chart", label: "Weekly productivity", Component: ProductivityChartWidget },
+  { id: "activity-heatmap", label: "Activity heatmap", Component: ActivityHeatmapWidget },
+  { id: "recent-notes", label: "Recent notes", Component: RecentNotesWidget },
+]
+
+/* ─── Dashboard page ─── */
 export function DashboardPage() {
   const { data } = useCurrentUser()
   const user = data?.user ?? null
   const dashboardQuery = useDashboardSummary()
+  const layoutQuery = useDashboardLayout()
+  const saveLayout = useSaveDashboardLayout()
   const summary = dashboardQuery.data?.summary
   const heatmapQuery = useActivityHeatmap()
+  const [customizing, setCustomizing] = useState(false)
+  const [dragId, setDragId] = useState<string | null>(null)
+
+  const savedLayout = layoutQuery.data?.layout
+  const order = useMemo(() => {
+    if (!savedLayout) return DEFAULT_WIDGET_ORDER
+    const filtered = savedLayout.filter((id) => WIDGET_REGISTRY.some((w) => w.id === id))
+    const missing = DEFAULT_WIDGET_ORDER.filter((id) => !filtered.includes(id))
+    return [...filtered, ...missing]
+  }, [savedLayout])
+
+  const [currentOrder, setCurrentOrder] = useState(order)
+
+  useEffect(() => {
+    setCurrentOrder(order)
+  }, [order])
+
+  function onDragStart(id: string) {
+    setDragId(id)
+  }
+
+  function onDragOver(e: React.DragEvent) {
+    e.preventDefault()
+  }
+
+  function onDrop(targetId: string) {
+    if (dragId === null || dragId === targetId) return
+    setCurrentOrder((prev) => {
+      const copy = [...prev]
+      const from = copy.indexOf(dragId)
+      const to = copy.indexOf(targetId)
+      if (from === -1 || to === -1) return prev
+      copy.splice(from, 1)
+      copy.splice(to, 0, dragId)
+      return copy
+    })
+    setDragId(null)
+  }
+
+  const handleSave = useCallback(async () => {
+    await saveLayout.mutateAsync(currentOrder)
+    setCustomizing(false)
+  }, [currentOrder, saveLayout])
+
+  function handleCancel() {
+    setCurrentOrder(order)
+    setCustomizing(false)
+  }
+
+  const widgets = useMemo(
+    () => currentOrder.map((id) => WIDGET_REGISTRY.find((w) => w.id === id)).filter(Boolean) as WidgetDef[],
+    [currentOrder],
+  )
 
   return (
     <section className="space-y-6">
@@ -23,133 +97,191 @@ export function DashboardPage() {
           <p className="text-sm text-muted-foreground">{formatDate(summary?.today)}</p>
           <h1 className="text-2xl font-semibold">Hello, {user?.name ?? "developer"}</h1>
         </div>
-        <Button asChild>
-          <Link to="/focus">
-            <Target className="size-4" />
-            Start focus
-          </Link>
-        </Button>
+        <div className="flex gap-2">
+          {customizing ? (
+            <>
+              <Button type="button" variant="outline" onClick={handleCancel}>
+                <X className="size-4" />
+                Cancel
+              </Button>
+              <Button type="button" onClick={handleSave} disabled={saveLayout.isPending}>
+                {saveLayout.isPending ? "Saving..." : "Save layout"}
+              </Button>
+            </>
+          ) : (
+            <Button type="button" variant="outline" onClick={() => setCustomizing(true)}>
+              <LayoutGrid className="size-4" />
+              Customize
+            </Button>
+          )}
+          <Button asChild>
+            <Link to="/focus">
+              <Target className="size-4" />
+              Start focus
+            </Link>
+          </Button>
+        </div>
       </div>
 
       {dashboardQuery.isLoading ? <p className="text-sm text-muted-foreground">Loading dashboard...</p> : null}
-      {summary ? <DashboardWidgets summary={summary} heatmapQuery={heatmapQuery} /> : null}
+      {summary ? (
+        <div className="space-y-6">
+          {widgets.map(({ id, label, Component }) => (
+            <DraggableWidget
+              key={id}
+              id={id}
+              label={label}
+              customizing={customizing}
+              onDragStart={onDragStart}
+              onDragOver={onDragOver}
+              onDrop={onDrop}
+            >
+              <Component summary={summary} heatmapQuery={heatmapQuery} />
+            </DraggableWidget>
+          ))}
+        </div>
+      ) : null}
     </section>
   )
 }
 
-function DashboardWidgets({ summary, heatmapQuery }: { summary: DashboardSummary; heatmapQuery: ReturnType<typeof useActivityHeatmap> }) {
+/* ─── Draggable widget wrapper ─── */
+function DraggableWidget({
+  id,
+  label,
+  customizing,
+  onDragStart,
+  onDragOver,
+  onDrop,
+  children,
+}: {
+  id: string
+  label: string
+  customizing: boolean
+  onDragStart: (id: string) => void
+  onDragOver: (e: React.DragEvent) => void
+  onDrop: (id: string) => void
+  children: React.ReactNode
+}) {
   return (
-    <div className="space-y-6">
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <MetricCard
-          icon={CheckCircle2}
-          label="Tasks"
-          value={`${summary.task_summary.done}/${summary.task_summary.total}`}
-          detail="for today"
-          href="/tasks"
-        />
-        <MetricCard
-          icon={Flame}
-          label="Habits"
-          value={`${summary.habit_summary.checked}/${summary.habit_summary.total}`}
-          detail="checked today"
-          href="/habits"
-        />
-        <MetricCard
-          icon={BookOpen}
-          label="Learning streak"
-          value={`${summary.learning_streak}`}
-          detail="consecutive study days"
-          href="/learn"
-        />
-        <MetricCard
-          icon={Clock}
-          label="Focus"
-          value={summary.active_focus_session ? `${summary.active_focus_session.duration_minutes} min` : "Ready"}
-          detail={summary.active_focus_session?.task_title ?? "Start a session"}
-          href="/focus"
-        />
-      </div>
-
-      <div className="grid gap-6 xl:grid-cols-[1fr_24rem]">
-        <div className="space-y-6">
-          <div className="rounded-xl border bg-background p-4">
-            <h2 className="font-semibold">Weekly habit completion</h2>
-            <div className="mt-4">
-              <ResponsiveContainer width="100%" height={160}>
-                <BarChart data={chartData(summary.weekly_habit_chart)}>
-                  <XAxis dataKey="day" tick={{ fontSize: 12 }} axisLine={false} tickLine={false} />
-                  <YAxis hide />
-                  <Tooltip
-                    contentStyle={{ fontSize: 13, borderRadius: 8, border: "1px solid var(--color-border)" }}
-                    formatter={(value: number, name: string) => [value, name === "completed" ? "Completed" : "Total"]}
-                  />
-                  <Bar dataKey="completed" fill="var(--color-primary)" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          <div className="rounded-xl border bg-background p-4">
-            <h2 className="font-semibold">Weekly productivity</h2>
-            <div className="mt-4">
-              <ResponsiveContainer width="100%" height={200}>
-                <BarChart data={productivityData(summary.weekly_productivity)}>
-                  <XAxis dataKey="day" tick={{ fontSize: 12 }} axisLine={false} tickLine={false} />
-                  <YAxis hide />
-                  <Tooltip
-                    contentStyle={{ fontSize: 13, borderRadius: 8, border: "1px solid var(--color-border)" }}
-                  />
-                  <Legend wrapperStyle={{ fontSize: 12 }} />
-                  <Bar dataKey="tasks" name="Tasks" fill="var(--color-primary)" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="habits" name="Habits" fill="#22c55e" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="learning" name="Learning" fill="#a855f7" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          <div className="rounded-xl border bg-background p-4">
-            <h2 className="font-semibold">Activity</h2>
-            <div className="mt-4">
-              {heatmapQuery.isLoading ? (
-                <p className="text-sm text-muted-foreground">Loading heatmap...</p>
-              ) : heatmapQuery.data?.heatmap ? (
-                <ActivityHeatmap data={heatmapQuery.data.heatmap} />
-              ) : null}
-            </div>
-          </div>
+    <div
+      draggable={customizing}
+      onDragStart={() => onDragStart(id)}
+      onDragOver={onDragOver}
+      onDrop={() => onDrop(id)}
+      className={`relative ${customizing ? "cursor-grab rounded-xl border-2 border-dashed border-muted-foreground/30 p-1 active:cursor-grabbing" : ""}`}
+    >
+      {customizing ? (
+        <div className="mb-2 flex items-center gap-2 px-2 pt-1 text-xs font-medium text-muted-foreground">
+          <GripVertical className="size-4" />
+          {label}
         </div>
+      ) : null}
+      {children}
+    </div>
+  )
+}
 
-        <div className="rounded-xl border bg-background p-4">
-          <div className="flex items-center justify-between">
-            <h2 className="font-semibold">Recent notes</h2>
-            <Button asChild variant="outline">
-              <Link to="/notes">View all</Link>
-            </Button>
-          </div>
-          <div className="mt-4 grid gap-2">
-            {summary.recent_notes.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No notes yet.</p>
-            ) : null}
-            {summary.recent_notes.map((note) => (
-              <Link key={note.id} to="/notes" className="rounded-lg border p-3 text-sm hover:bg-muted/50">
-                <div className="flex items-center gap-2">
-                  <NotebookPen className="size-4 text-muted-foreground" />
-                  <p className="font-medium">{note.title}</p>
-                </div>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Updated {new Date(note.updated_at).toLocaleString()}
-                </p>
-              </Link>
-            ))}
-          </div>
-        </div>
+/* ─── Widget: Metric cards ─── */
+function MetricCardsWidget({ summary }: { summary: DashboardSummary; heatmapQuery: ReturnType<typeof useActivityHeatmap> }) {
+  return (
+    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <MetricCard icon={CheckCircle2} label="Tasks" value={`${summary.task_summary.done}/${summary.task_summary.total}`} detail="for today" href="/tasks" />
+      <MetricCard icon={Flame} label="Habits" value={`${summary.habit_summary.checked}/${summary.habit_summary.total}`} detail="checked today" href="/habits" />
+      <MetricCard icon={BookOpen} label="Learning streak" value={`${summary.learning_streak}`} detail="consecutive study days" href="/learn" />
+      <MetricCard icon={Clock} label="Focus" value={summary.active_focus_session ? `${summary.active_focus_session.duration_minutes} min` : "Ready"} detail={summary.active_focus_session?.task_title ?? "Start a session"} href="/focus" />
+    </div>
+  )
+}
+
+/* ─── Widget: Habit chart ─── */
+function HabitChartWidget({ summary }: { summary: DashboardSummary; heatmapQuery: ReturnType<typeof useActivityHeatmap> }) {
+  return (
+    <div className="rounded-xl border bg-background p-4">
+      <h2 className="font-semibold">Weekly habit completion</h2>
+      <div className="mt-4">
+        <ResponsiveContainer width="100%" height={160}>
+          <BarChart data={chartData(summary.weekly_habit_chart)}>
+            <XAxis dataKey="day" tick={{ fontSize: 12 }} axisLine={false} tickLine={false} />
+            <YAxis hide />
+            <Tooltip contentStyle={{ fontSize: 13, borderRadius: 8, border: "1px solid var(--color-border)" }} formatter={(value: number, name: string) => [value, name === "completed" ? "Completed" : "Total"]} />
+            <Bar dataKey="completed" fill="var(--color-primary)" radius={[4, 4, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
       </div>
     </div>
   )
 }
 
+/* ─── Widget: Productivity chart ─── */
+function ProductivityChartWidget({ summary }: { summary: DashboardSummary; heatmapQuery: ReturnType<typeof useActivityHeatmap> }) {
+  return (
+    <div className="rounded-xl border bg-background p-4">
+      <h2 className="font-semibold">Weekly productivity</h2>
+      <div className="mt-4">
+        <ResponsiveContainer width="100%" height={200}>
+          <BarChart data={productivityData(summary.weekly_productivity)}>
+            <XAxis dataKey="day" tick={{ fontSize: 12 }} axisLine={false} tickLine={false} />
+            <YAxis hide />
+            <Tooltip contentStyle={{ fontSize: 13, borderRadius: 8, border: "1px solid var(--color-border)" }} />
+            <Legend wrapperStyle={{ fontSize: 12 }} />
+            <Bar dataKey="tasks" name="Tasks" fill="var(--color-primary)" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="habits" name="Habits" fill="#22c55e" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="learning" name="Learning" fill="#a855f7" radius={[4, 4, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  )
+}
+
+/* ─── Widget: Activity heatmap ─── */
+function ActivityHeatmapWidget({ heatmapQuery }: { summary: DashboardSummary; heatmapQuery: ReturnType<typeof useActivityHeatmap> }) {
+  return (
+    <div className="rounded-xl border bg-background p-4">
+      <h2 className="font-semibold">Activity</h2>
+      <div className="mt-4">
+        {heatmapQuery.isLoading ? (
+          <p className="text-sm text-muted-foreground">Loading heatmap...</p>
+        ) : heatmapQuery.data?.heatmap ? (
+          <ActivityHeatmap data={heatmapQuery.data.heatmap} />
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
+/* ─── Widget: Recent notes ─── */
+function RecentNotesWidget({ summary }: { summary: DashboardSummary; heatmapQuery: ReturnType<typeof useActivityHeatmap> }) {
+  return (
+    <div className="rounded-xl border bg-background p-4">
+      <div className="flex items-center justify-between">
+        <h2 className="font-semibold">Recent notes</h2>
+        <Button asChild variant="outline">
+          <Link to="/notes">View all</Link>
+        </Button>
+      </div>
+      <div className="mt-4 grid gap-2">
+        {summary.recent_notes.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No notes yet.</p>
+        ) : null}
+        {summary.recent_notes.map((note) => (
+          <Link key={note.id} to="/notes" className="rounded-lg border p-3 text-sm hover:bg-muted/50">
+            <div className="flex items-center gap-2">
+              <NotebookPen className="size-4 text-muted-foreground" />
+              <p className="font-medium">{note.title}</p>
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Updated {new Date(note.updated_at).toLocaleString()}
+            </p>
+          </Link>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/* ─── Shared helpers ─── */
 function MetricCard({
   icon: Icon,
   label,
@@ -173,11 +305,6 @@ function MetricCard({
       <p className="mt-1 text-sm text-muted-foreground">{detail}</p>
     </Link>
   )
-}
-
-function percent(done: number, total: number): number {
-  if (total === 0) return 0
-  return Math.round((done / total) * 100)
 }
 
 function formatDate(value: string | undefined): string {

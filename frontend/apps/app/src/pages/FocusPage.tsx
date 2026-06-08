@@ -1,5 +1,6 @@
 import { Maximize2, Minimize2, Pause, Play, RotateCcw, Square } from "lucide-react"
 import { useEffect, useMemo, useState, type FormEvent } from "react"
+import { useLocation } from "react-router-dom"
 import { Button } from "@workspace/ui/components/button"
 
 import { useCreateFocusSession, useFocusSessions } from "@/hooks/useFocus"
@@ -22,6 +23,7 @@ export function FocusPage() {
   const [topicId, setTopicId] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [stopwatchMinutes, setStopwatchMinutes] = useState<number | null>(null)
+  const location = useLocation()
   const selectedTaskId = useFocusStore((state) => state.selectedTaskId)
   const setSelectedTaskId = useFocusStore((state) => state.setSelectedTaskId)
   const startedAt = useFocusStore((state) => state.startedAt)
@@ -32,6 +34,10 @@ export function FocusPage() {
   const setTimerMode = useFocusStore((state) => state.setTimerMode)
   const isFullScreen = useFocusStore((state) => state.isFullScreen)
   const setIsFullScreen = useFocusStore((state) => state.setIsFullScreen)
+  const preselectedTaskId = useFocusStore((state) => state.preselectedTaskId)
+  const preselectedTaskTitle = useFocusStore((state) => state.preselectedTaskTitle)
+  const setPreselectedTask = useFocusStore((state) => state.setPreselectedTask)
+  const clearPreselectedTask = useFocusStore((state) => state.clearPreselectedTask)
   const startTimer = useFocusStore((state) => state.startTimer)
   const startBreak = useFocusStore((state) => state.startBreak)
   const resetTimer = useFocusStore((state) => state.resetTimer)
@@ -48,6 +54,15 @@ export function FocusPage() {
   const isWorkRunning = mode === "work"
 
   const displaySeconds = timerMode === "stopwatch" && isWorkRunning ? elapsedSeconds : remainingSeconds
+
+  useEffect(() => {
+    const state = location.state as { taskId?: string; taskTitle?: string } | null
+    if (state?.taskId) {
+      setSelectedTaskId(state.taskId)
+      setPreselectedTask(state.taskId, state.taskTitle ?? "")
+      window.history.replaceState({}, "")
+    }
+  }, [location.state, setSelectedTaskId, setPreselectedTask])
 
   useEffect(() => {
     if (!isRunning || remainingSeconds <= 0) return
@@ -68,6 +83,7 @@ export function FocusPage() {
       })
       .then(() => {
         setStopwatchMinutes(null)
+        clearPreselectedTask()
         startBreak(shortBreakMinutes * 60, "short-break")
       })
       .catch((submitError: unknown) => {
@@ -75,6 +91,7 @@ export function FocusPage() {
         resetTimer()
       })
   }, [
+    clearPreselectedTask,
     createSession,
     mode,
     remainingSeconds,
@@ -116,6 +133,7 @@ export function FocusPage() {
         duration_minutes: mins || 1,
       })
       .then(() => {
+        clearPreselectedTask()
         resetTimer()
       })
       .catch((submitError: unknown) => {
@@ -196,9 +214,13 @@ export function FocusPage() {
             <div className="rounded-xl border bg-muted/40 p-8 text-center">
               <p className="text-sm text-muted-foreground">{timerMode === "stopwatch" && isWorkRunning ? "Elapsed time" : timerModeLabel(mode)}</p>
               <p className="mt-3 text-7xl font-semibold tabular-nums">{formatSeconds(displaySeconds || 0)}</p>
-              <p className="mt-3 text-sm text-muted-foreground">
-                {selectedTask ? selectedTask.title : "No task selected"}
-              </p>
+              {preselectedTaskTitle && !isRunning ? (
+                <p className="mt-3 text-sm font-medium text-primary">Focusing on: {preselectedTaskTitle}</p>
+              ) : (
+                <p className="mt-3 text-sm text-muted-foreground">
+                  {selectedTask ? selectedTask.title : "No task selected"}
+                </p>
+              )}
             </div>
 
             {error ? <p className="text-sm text-destructive">{error}</p> : null}

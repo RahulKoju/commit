@@ -21,6 +21,7 @@ type Dependencies struct {
 	HabitService              services.HabitService
 	ReviewService             services.ReviewService
 	DashboardService          services.DashboardService
+	FlashcardService          services.FlashcardService
 	FocusDailyMinimumMinute   int
 }
 
@@ -35,6 +36,7 @@ func Register(router *gin.Engine, deps Dependencies) {
 	habitHandler := handlers.NewHabitHandler(deps.HabitService)
 	reviewHandler := handlers.NewReviewHandler(deps.ReviewService)
 	dashboardHandler := handlers.NewDashboardHandler(deps.DashboardService)
+	flashcardHandler := handlers.NewFlashcardHandler(deps.FlashcardService)
 
 	router.GET("/healthz", healthHandler.Health)
 
@@ -54,6 +56,8 @@ func Register(router *gin.Engine, deps Dependencies) {
 	protected.GET("/auth/me", authHandler.Me)
 	protected.GET("/dashboard/summary", dashboardHandler.Summary)
 	protected.GET("/dashboard/activity-heatmap", dashboardHandler.ActivityHeatmap)
+	protected.GET("/dashboard/layout", dashboardHandler.GetLayout)
+	protected.PATCH("/dashboard/layout", dashboardHandler.SaveLayout)
 	protected.GET("/tasks", taskHandler.List)
 	protected.POST("/tasks", taskHandler.Create)
 	protected.PATCH("/tasks/:id", taskHandler.Update)
@@ -89,6 +93,12 @@ func Register(router *gin.Engine, deps Dependencies) {
 	protected.GET("/reviews", reviewHandler.List)
 	protected.POST("/reviews", reviewHandler.Create)
 	protected.GET("/reviews/:id", reviewHandler.Get)
+	protected.GET("/flashcards", flashcardHandler.List)
+	protected.GET("/flashcards/due", flashcardHandler.Due)
+	protected.POST("/flashcards", flashcardHandler.Create)
+	protected.PATCH("/flashcards/:id", flashcardHandler.Update)
+	protected.DELETE("/flashcards/:id", flashcardHandler.Delete)
+	protected.POST("/flashcards/:id/review", flashcardHandler.Review)
 
 	admin := protected.Group("/admin")
 	admin.Use(middleware.RequireRole(models.RoleAdmin))

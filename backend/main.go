@@ -50,6 +50,7 @@ func main() {
 	noteModel := models.NewNoteModel(pool)
 	habitModel := models.NewHabitModel(pool)
 	reviewModel := models.NewReviewModel(pool)
+	flashcardModel := models.NewFlashcardModel(pool)
 	refreshTokenModel := models.NewRefreshTokenModel(pool)
 	passwordResetTokenModel := models.NewPasswordResetTokenModel(pool)
 	dashboardModel := models.NewDashboardModel(pool, learnModel)
@@ -60,7 +61,8 @@ func main() {
 	noteService := services.NewNoteService(noteModel)
 	habitService := services.NewHabitService(habitModel)
 	reviewService := services.NewReviewService(reviewModel)
-	dashboardService := services.NewDashboardService(dashboardModel)
+	dashboardService := services.NewDashboardService(dashboardModel, userModel)
+	flashcardService := services.NewFlashcardService(flashcardModel)
 
 	var emailSender services.EmailSender
 	if cfg.ResendAPIKey != "" {
@@ -83,6 +85,7 @@ func main() {
 		HabitService:              habitService,
 		ReviewService:             reviewService,
 		DashboardService:          dashboardService,
+		FlashcardService:          flashcardService,
 		FocusDailyMinimumMinute:   cfg.FocusDailyMinimumMinute,
 	})
 

@@ -66,3 +66,9 @@ export type DashboardSummary = z.infer<typeof dashboardSummarySchema>
 export type DashboardSummaryResponse = z.infer<typeof dashboardSummaryResponseSchema>
 export type ActivityHeatmapItem = z.infer<typeof activityHeatmapItemSchema>
 export type ActivityHeatmapResponse = z.infer<typeof activityHeatmapResponseSchema>
+
+export const dashboardLayoutResponseSchema = z.object({
+  layout: z.array(z.string()).nullable(),
+})
+
+export type DashboardLayoutResponse = z.infer<typeof dashboardLayoutResponseSchema>

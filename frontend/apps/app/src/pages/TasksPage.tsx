@@ -1,6 +1,7 @@
 import DOMPurify from "dompurify"
-import { AlertTriangle, CalendarPlus, Clock, Pencil, Plus, Repeat, Trash2 } from "lucide-react"
+import { AlertTriangle, CalendarPlus, Clock, Pencil, Play, Plus, Repeat, Trash2 } from "lucide-react"
 import { useMemo, useRef, useState, type FormEvent } from "react"
+import { useNavigate } from "react-router-dom"
 import { Button } from "@workspace/ui/components/button"
 import { RichTextEditor } from "@workspace/ui/components/rich-text-editor"
 
@@ -252,6 +253,7 @@ function TaskList({ tasks }: { tasks: Task[] }) {
 }
 
 function TaskCard({ task }: { task: Task }) {
+  const navigate = useNavigate()
   const updateTask = useUpdateTask()
   const deleteTask = useDeleteTask()
   const [editingField, setEditingField] = useState<"title" | "description" | null>(null)
@@ -387,6 +389,17 @@ function TaskCard({ task }: { task: Task }) {
             <Button type="button" variant="outline" size="sm" onClick={moveToToday}>
               <CalendarPlus className="size-3.5" />
               Today
+            </Button>
+          ) : null}
+          {task.status !== "done" ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => navigate("/focus", { state: { taskId: task.id, taskTitle: task.title } })}
+            >
+              <Play className="size-3.5" />
+              Focus
             </Button>
           ) : null}
           <div className="flex overflow-hidden rounded-lg border">
