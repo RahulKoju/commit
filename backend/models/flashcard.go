@@ -70,7 +70,7 @@ func (model FlashcardModel) List(ctx context.Context, params ListFlashcardsParam
 		FROM flashcards f
 		LEFT JOIN topics t ON t.id = f.topic_id
 		WHERE f.user_id = $1
-		  AND ($4 = '' OR f.topic_id = $4::uuid)
+		  AND (NULLIF($4, '') IS NULL OR f.topic_id = $4::uuid)
 		ORDER BY f.created_at DESC
 		LIMIT $2 OFFSET $3
 	`, params.UserID, params.Limit, params.Offset, params.TopicID)
@@ -134,32 +134,60 @@ func (model FlashcardModel) GetByID(ctx context.Context, userID string, id strin
 }
 
 func (model FlashcardModel) Create(ctx context.Context, params CreateFlashcardParams) (Flashcard, error) {
-	row := model.pool.QueryRow(ctx, `
+	tx, err := model.pool.Begin(ctx)
+	if err != nil {
+		return Flashcard{}, err
+	}
+	defer tx.Rollback(ctx)
+
+	row := tx.QueryRow(ctx, `
 		INSERT INTO flashcards (user_id, topic_id, front, back)
 		VALUES ($1, NULLIF($2, '')::uuid, $3, $4)
-		RETURNING id, user_id, topic_id, (SELECT COALESCE(name, '') FROM topics WHERE id = $2), front, back, ease_factor, interval_days, repetitions, next_review_at, created_at, updated_at
+		RETURNING id, user_id, topic_id, COALESCE((SELECT name FROM topics WHERE id = NULLIF($2, '')::uuid), ''), front, back, ease_factor, interval_days, repetitions, next_review_at, created_at, updated_at
 	`, params.UserID, params.TopicID, params.Front, params.Back)
 
 	card, err := scanFlashcard(row)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return Flashcard{}, ErrNotFound
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return Flashcard{}, ErrNotFound
+		}
+		return Flashcard{}, err
 	}
-	return card, err
+
+	if err := tx.Commit(ctx); err != nil {
+		return Flashcard{}, err
+	}
+
+	return card, nil
 }
 
 func (model FlashcardModel) Update(ctx context.Context, params UpdateFlashcardParams) (Flashcard, error) {
-	row := model.pool.QueryRow(ctx, `
+	tx, err := model.pool.Begin(ctx)
+	if err != nil {
+		return Flashcard{}, err
+	}
+	defer tx.Rollback(ctx)
+
+	row := tx.QueryRow(ctx, `
 		UPDATE flashcards
 		SET front = $3, back = $4, topic_id = NULLIF($5, '')::uuid, updated_at = now()
 		WHERE id = $1 AND user_id = $2
-		RETURNING id, user_id, topic_id, (SELECT COALESCE(name, '') FROM topics WHERE id = $5), front, back, ease_factor, interval_days, repetitions, next_review_at, created_at, updated_at
+		RETURNING id, user_id, topic_id, COALESCE((SELECT name FROM topics WHERE id = NULLIF($5, '')::uuid), ''), front, back, ease_factor, interval_days, repetitions, next_review_at, created_at, updated_at
 	`, params.ID, params.UserID, params.Front, params.Back, params.TopicID)
 
 	card, err := scanFlashcard(row)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return Flashcard{}, ErrNotFound
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return Flashcard{}, ErrNotFound
+		}
+		return Flashcard{}, err
 	}
-	return card, err
+
+	if err := tx.Commit(ctx); err != nil {
+		return Flashcard{}, err
+	}
+
+	return card, nil
 }
 
 func (model FlashcardModel) Delete(ctx context.Context, userID string, id string) error {
@@ -174,7 +202,13 @@ func (model FlashcardModel) Delete(ctx context.Context, userID string, id string
 }
 
 func (model FlashcardModel) Review(ctx context.Context, params ReviewFlashcardParams) (Flashcard, error) {
-	row := model.pool.QueryRow(ctx, `
+	tx, err := model.pool.Begin(ctx)
+	if err != nil {
+		return Flashcard{}, err
+	}
+	defer tx.Rollback(ctx)
+
+	row := tx.QueryRow(ctx, `
 		UPDATE flashcards
 		SET ease_factor = $3, interval_days = $4, repetitions = $5, next_review_at = $6, updated_at = now()
 		WHERE id = $1 AND user_id = $2
@@ -182,10 +216,18 @@ func (model FlashcardModel) Review(ctx context.Context, params ReviewFlashcardPa
 	`, params.ID, params.UserID, params.EaseFactor, params.IntervalDays, params.Repetitions, params.NextReviewAt)
 
 	card, err := scanFlashcard(row)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return Flashcard{}, ErrNotFound
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return Flashcard{}, ErrNotFound
+		}
+		return Flashcard{}, err
 	}
-	return card, err
+
+	if err := tx.Commit(ctx); err != nil {
+		return Flashcard{}, err
+	}
+
+	return card, nil
 }
 
 type flashcardScanner interface {

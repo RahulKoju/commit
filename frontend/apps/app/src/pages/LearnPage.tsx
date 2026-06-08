@@ -50,21 +50,15 @@ export function LearnPage() {
 
   async function onCreateEntry(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    setEntryError(null)
     const form = event.currentTarget
     const formData = new FormData(form)
-    const studiedAt = String(formData.get("studied_at") ?? "")
-    if (studiedAt && new Date(studiedAt) > new Date()) {
-      setEntryError("Studied at cannot be in the future")
-      return
-    }
     const input = entryInputFromFormData(formData)
 
     try {
       await createEntry.mutateAsync(input)
       form.reset()
-    } catch (error) {
-      setEntryError(error instanceof Error ? error.message : "Unable to log study entry")
+    } catch (submitError) {
+      setEntryError(submitError instanceof Error ? submitError.message : "Unable to log entry")
     }
   }
 
@@ -121,7 +115,7 @@ export function LearnPage() {
                   ))}
                 </select>
               </label>
-              <div className="grid gap-3 sm:grid-cols-3">
+              <div className="grid gap-3 sm:grid-cols-2">
                 <label className="grid gap-2 text-sm">
                   <span className="font-medium">Duration (min)</span>
                   <input
@@ -142,10 +136,6 @@ export function LearnPage() {
                       </option>
                     ))}
                   </select>
-                </label>
-                <label className="grid gap-2 text-sm">
-                  <span className="font-medium">Studied at</span>
-                  <input name="studied_at" type="datetime-local" max={new Date().toISOString().slice(0, 16)} className="h-10 rounded-md border bg-background px-3" />
                 </label>
               </div>
               <label className="grid gap-2 text-sm">
@@ -277,13 +267,12 @@ function TopicStatsList({ stats }: { stats: TopicStats[] }) {
 }
 
 function entryInputFromFormData(formData: FormData): CreateLearnEntryInput {
-  const studiedAt = String(formData.get("studied_at") ?? "")
   return {
     topic_id: String(formData.get("topic_id") ?? ""),
     duration_minutes: Number(formData.get("duration_minutes") ?? 0),
     confidence: Number(formData.get("confidence") ?? 3),
     note: String(formData.get("note") ?? ""),
-    studied_at: studiedAt ? new Date(studiedAt).toISOString() : "",
+    studied_at: new Date().toISOString(),
   }
 }
 
