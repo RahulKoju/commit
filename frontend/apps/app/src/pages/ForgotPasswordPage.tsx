@@ -24,18 +24,6 @@ export function ForgotPasswordPage() {
           <p className="text-sm text-muted-foreground">
             If an account with that email exists, a reset link has been sent.
           </p>
-          <p className="text-xs text-muted-foreground">
-            In development mode, the reset token is shown in the server logs and API response.
-          </p>
-          {forgotPassword.data?.token ? (
-            <div className="rounded-lg border bg-muted p-3 text-left text-xs">
-              <p className="font-medium text-muted-foreground">Dev token:</p>
-              <code className="break-all text-foreground">{forgotPassword.data.token}</code>
-              <p className="mt-1 text-muted-foreground">
-                Use at <code className="text-foreground">/reset-password?token=...</code>
-              </p>
-            </div>
-          ) : null}
           <Link to="/login" className="block text-sm text-muted-foreground underline">
             Back to login
           </Link>

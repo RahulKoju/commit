@@ -15,7 +15,6 @@ export const authResponseSchema = z.object({
 
 export const forgotPasswordResponseSchema = z.object({
   message: z.string(),
-  token: z.string(),
 })
 
 export const resetPasswordResponseSchema = z.object({

@@ -61,7 +61,15 @@ func main() {
 	habitService := services.NewHabitService(habitModel)
 	reviewService := services.NewReviewService(reviewModel)
 	dashboardService := services.NewDashboardService(dashboardModel)
-	authService := services.NewAuthService(userModel, refreshTokenModel, passwordResetTokenModel, habitService, cfg.JWTSecret, cfg.JWTExpiryHours, cfg.JWTExpiryMinutes)
+
+	var emailSender services.EmailSender
+	if cfg.SMTPHost != "" {
+		emailSender = services.NewSmtpSender(cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPUsername, cfg.SMTPPassword, cfg.SMTPFrom, cfg.AppURL)
+	} else {
+		emailSender = services.NewLogSender(cfg.AppURL)
+	}
+
+	authService := services.NewAuthService(userModel, refreshTokenModel, passwordResetTokenModel, emailSender, cfg.AppURL, habitService, cfg.JWTSecret, cfg.JWTExpiryHours, cfg.JWTExpiryMinutes)
 
 	router := gin.New()
 	router.Use(middleware.Logger(), gin.Recovery(), middleware.CORS(cfg.AllowedOrigins))

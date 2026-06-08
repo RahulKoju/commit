@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -21,6 +22,8 @@ type AuthService struct {
 	refreshTokens models.RefreshTokenModel
 	habits        HabitService
 	resetTokens   models.PasswordResetTokenModel
+	email         EmailSender
+	appURL        string
 	jwtSecret     []byte
 	jwtExpiryDur  time.Duration
 	jwtExpiryMinutes int
@@ -51,11 +54,13 @@ type AuthResult struct {
 
 var ErrInvalidCredentials = errors.New("invalid credentials")
 
-func NewAuthService(users models.UserModel, refreshTokens models.RefreshTokenModel, resetTokens models.PasswordResetTokenModel, habits HabitService, jwtSecret string, jwtExpiryHours int, jwtExpiryMinutes int) AuthService {
+func NewAuthService(users models.UserModel, refreshTokens models.RefreshTokenModel, resetTokens models.PasswordResetTokenModel, email EmailSender, appURL string, habits HabitService, jwtSecret string, jwtExpiryHours int, jwtExpiryMinutes int) AuthService {
 	return AuthService{
 		users:         users,
 		refreshTokens: refreshTokens,
 		resetTokens:   resetTokens,
+		email:         email,
+		appURL:        appURL,
 		habits:        habits,
 		jwtSecret:     []byte(jwtSecret),
 		jwtExpiryDur:  time.Duration(jwtExpiryHours) * time.Hour,
@@ -178,31 +183,39 @@ func (service AuthService) RevokeRefreshTokens(ctx context.Context, userID strin
 	return service.refreshTokens.DeleteByUserID(ctx, userID)
 }
 
-func (service AuthService) ForgotPassword(ctx context.Context, email string) (string, error) {
+func (service AuthService) ForgotPassword(ctx context.Context, email string) error {
 	email = strings.ToLower(strings.TrimSpace(email))
 	if email == "" {
-		return "", fmt.Errorf("email is required")
+		return fmt.Errorf("email is required")
 	}
 
 	user, err := service.users.GetByEmail(ctx, email)
 	if err != nil {
 		if errors.Is(err, models.ErrNotFound) {
-			return "", fmt.Errorf("if that email exists, a reset link has been sent")
+			return nil
 		}
-		return "", err
+		return err
 	}
 
 	rawToken, err := generateRandomToken()
 	if err != nil {
-		return "", err
+		return err
 	}
 
 	hashed := hashToken(rawToken)
 	if _, err := service.resetTokens.Create(ctx, user.ID, hashed, time.Now().Add(1*time.Hour)); err != nil {
-		return "", err
+		return err
 	}
 
-	return rawToken, nil
+	resetURL := service.appURL + "/reset-password?token=" + rawToken
+
+	go func() {
+		if err := service.email.SendPasswordReset(user.Email, resetURL); err != nil {
+			log.Printf("failed to send password reset email to %s: %v", user.Email, err)
+		}
+	}()
+
+	return nil
 }
 
 func (service AuthService) ResetPassword(ctx context.Context, token string, newPassword string) error {

@@ -148,13 +148,12 @@ func (handler AuthHandler) ForgotPassword(c *gin.Context) {
 		return
 	}
 
-	rawToken, err := handler.auth.ForgotPassword(c.Request.Context(), request.Email)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if err := handler.auth.ForgotPassword(c.Request.Context(), request.Email); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to process request"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "if that email exists, a reset link has been sent", "token": rawToken})
+	c.JSON(http.StatusOK, gin.H{"message": "if that email exists, a reset link has been sent"})
 }
 
 func (handler AuthHandler) ResetPassword(c *gin.Context) {

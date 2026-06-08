@@ -41,11 +41,12 @@ func Register(router *gin.Engine, deps Dependencies) {
 	api := router.Group("/api/v1")
 	loginLimiter := middleware.NewRateLimiter(5, 1*time.Minute)
 	registerLimiter := middleware.NewRateLimiter(3, 1*time.Minute)
+	forgotLimiter := middleware.NewRateLimiter(3, 1*time.Minute)
 	api.POST("/auth/register", registerLimiter.Middleware(), authHandler.Register)
 	api.POST("/auth/login", loginLimiter.Middleware(), authHandler.Login)
 	api.POST("/auth/refresh", authHandler.Refresh)
 	api.POST("/auth/logout", authHandler.Logout)
-	api.POST("/auth/forgot-password", authHandler.ForgotPassword)
+	api.POST("/auth/forgot-password", forgotLimiter.Middleware(), authHandler.ForgotPassword)
 	api.POST("/auth/reset-password", authHandler.ResetPassword)
 
 	protected := api.Group("")
