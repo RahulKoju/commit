@@ -1,21 +1,46 @@
-# shadcn/ui monorepo template
+# Commit — Frontend
 
-This is a Vite monorepo template with shadcn/ui.
+Vite-based monorepo for the Commit productivity application.
 
-## Adding components
+## Structure
 
-To add components to your app, run the following command at the root of your `web` app:
+- `apps/app`: The main authenticated SPA (React 19 + Vite).
+- `apps/web`: Marketing site, landing page, and authentication flows (React 19 + Vite).
+- `packages/ui`: Shared UI components based on shadcn/ui.
+
+## Tech Stack
+
+- **Framework**: React 19 (using New Hooks & API)
+- **Styling**: Tailwind CSS v4
+- **State**: TanStack Query (Server State) & Zustand (Client State)
+- **Routing**: React Router v7
+- **UI Components**: shadcn/ui
+
+## Common Commands
+
+Run these from the root of the `frontend` directory:
 
 ```bash
-pnpm dlx shadcn@latest add button -c apps/web
+# Install all dependencies
+pnpm install
+
+# Start both apps in dev mode (Turbo)
+pnpm dev
+
+# Build both apps for production
+pnpm build
+
+# Typecheck and lint
+pnpm typecheck
+pnpm lint
 ```
 
-This will place the ui components in the `packages/ui/src/components` directory.
+## Adding UI Components
 
-## Using components
+To add a new shadcn component to the shared package:
 
-To use the components in your app, import them from the `ui` package.
-
-```tsx
-import { Button } from "@workspace/ui/components/button";
+```bash
+pnpm dlx shadcn@latest add <component-name> -c apps/web
 ```
+
+Components are moved automatically to `packages/ui/src/components` via the workspace configuration.

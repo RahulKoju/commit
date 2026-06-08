@@ -95,6 +95,11 @@ This starts both apps via Turbo:
 | **web** | `http://localhost:5173` | Marketing site + Login/Signup |
 | **app** | `http://localhost:5174` | Main authenticated application |
 
+Running commands from the root:
+- `pnpm build`: Build all workspace packages.
+- `pnpm lint`: Lint all packages.
+- `pnpm typecheck`: Type check all packages.
+
 ## Verify
 
 1. Open `http://localhost:5173` — you should see the landing page
@@ -113,3 +118,4 @@ This starts both apps via Turbo:
 | CORS errors | Backend origin not allowed | Set `APP_ENV` to `development` or configure allowed origins in `middleware/cors.go` |
 | Login returns 401 | Server not running or wrong URL | Check backend is running and `VITE_API_URL` is correct |
 | Migrations fail | DB user lacks permissions | Grant `CREATE` on the database to the user |
+| Turbo cache issues | Outdated build artifacts | Run `pnpm clean` (if available) or manually delete `.turbo` & `dist` |
