@@ -30,7 +30,7 @@ func (handler FlashcardHandler) List(c *gin.Context) {
 
 	cards, err := handler.flashcards.List(c.Request.Context(), userID, limit, offset, topicID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list flashcards"})
+		writeServerError(c, "failed to list flashcards", err)
 		return
 	}
 
@@ -53,7 +53,7 @@ func (handler FlashcardHandler) Due(c *gin.Context) {
 
 	cards, err := handler.flashcards.Due(c.Request.Context(), userID, limit)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch due flashcards"})
+		writeServerError(c, "failed to fetch due flashcards", err)
 		return
 	}
 

@@ -22,7 +22,7 @@ func NewAdminHandler(admin services.AdminService) AdminHandler {
 func (handler AdminHandler) ListUsers(c *gin.Context) {
 	users, err := handler.admin.ListUsers(c.Request.Context())
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list users"})
+		writeServerError(c, "failed to list users", err)
 		return
 	}
 
@@ -42,7 +42,7 @@ func (handler AdminHandler) DeleteUser(c *gin.Context) {
 		if errors.Is(err, models.ErrNotFound) {
 			status = http.StatusNotFound
 		}
-		c.JSON(status, gin.H{"error": "failed to delete user"})
+		c.JSON(status, gin.H{"error": "failed to delete user", "detail": err.Error()})
 		return
 	}
 

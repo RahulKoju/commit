@@ -25,7 +25,7 @@ func (handler DashboardHandler) Summary(c *gin.Context) {
 
 	summary, err := handler.dashboard.Summary(c.Request.Context(), userID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load dashboard"})
+		writeServerError(c, "failed to load dashboard", err)
 		return
 	}
 
@@ -40,7 +40,7 @@ func (handler DashboardHandler) ActivityHeatmap(c *gin.Context) {
 
 	heatmap, err := handler.dashboard.ActivityHeatmap(c.Request.Context(), userID, 365)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load activity heatmap"})
+		writeServerError(c, "failed to load activity heatmap", err)
 		return
 	}
 
@@ -55,7 +55,7 @@ func (handler DashboardHandler) GetLayout(c *gin.Context) {
 
 	layout, err := handler.dashboard.GetLayout(c.Request.Context(), userID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load layout"})
+		writeServerError(c, "failed to load layout", err)
 		return
 	}
 
@@ -79,7 +79,7 @@ func (handler DashboardHandler) SaveLayout(c *gin.Context) {
 	}
 
 	if err := handler.dashboard.SaveLayout(c.Request.Context(), userID, request.Layout); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save layout"})
+		writeServerError(c, "failed to save layout", err)
 		return
 	}
 

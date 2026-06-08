@@ -50,13 +50,13 @@ func (handler NoteHandler) List(c *gin.Context) {
 
 	notes, err := handler.notes.List(c.Request.Context(), input)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list notes"})
+		writeServerError(c, "failed to list notes", err)
 		return
 	}
 
 	total, err := handler.notes.Count(c.Request.Context(), input)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count notes"})
+		writeServerError(c, "failed to count notes", err)
 		return
 	}
 
@@ -134,7 +134,7 @@ func (handler NoteHandler) GetBacklinks(c *gin.Context) {
 
 	links, err := handler.notes.GetBacklinks(c.Request.Context(), userID, c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get backlinks"})
+		writeServerError(c, "failed to get backlinks", err)
 		return
 	}
 

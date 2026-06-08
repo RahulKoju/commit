@@ -65,7 +65,7 @@ func (handler HabitHandler) ExportCSV(c *gin.Context) {
 
 	rows, err := handler.habits.ExportLogs(c.Request.Context(), userID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to export habits"})
+		writeServerError(c, "failed to export habits", err)
 		return
 	}
 
@@ -92,7 +92,7 @@ func (handler HabitHandler) ListCategories(c *gin.Context) {
 
 	categories, err := handler.habits.ListCategories(c.Request.Context(), userID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list habit categories"})
+		writeServerError(c, "failed to list habit categories", err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"categories": categories})
@@ -163,7 +163,7 @@ func (handler HabitHandler) ListHabits(c *gin.Context) {
 
 	habits, err := handler.habits.ListHabits(c.Request.Context(), userID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list habits"})
+		writeServerError(c, "failed to list habits", err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"habits": habits})

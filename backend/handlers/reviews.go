@@ -47,7 +47,7 @@ func (handler ReviewHandler) List(c *gin.Context) {
 
 	total, err := handler.reviews.Count(c.Request.Context(), input)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count reviews"})
+		writeServerError(c, "failed to count reviews", err)
 		return
 	}
 

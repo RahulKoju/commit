@@ -46,7 +46,7 @@ func (handler LearnHandler) ListTopics(c *gin.Context) {
 
 	topics, err := handler.learn.ListTopics(c.Request.Context(), userID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list topics"})
+		writeServerError(c, "failed to list topics", err)
 		return
 	}
 
@@ -118,13 +118,13 @@ func (handler LearnHandler) ListEntries(c *gin.Context) {
 	limit, offset := parsePagination(c)
 	entries, err := handler.learn.ListEntries(c.Request.Context(), userID, limit, offset)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list learning entries"})
+		writeServerError(c, "failed to list learning entries", err)
 		return
 	}
 
 	total, err := handler.learn.CountEntries(c.Request.Context(), userID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count learning entries"})
+		writeServerError(c, "failed to count learning entries", err)
 		return
 	}
 
@@ -215,7 +215,7 @@ func (handler LearnHandler) WeakSpots(c *gin.Context) {
 
 	weakSpots, err := handler.learn.WeakSpots(c.Request.Context(), userID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load weak spots"})
+		writeServerError(c, "failed to load weak spots", err)
 		return
 	}
 
@@ -230,7 +230,7 @@ func (handler LearnHandler) Summary(c *gin.Context) {
 
 	summary, err := handler.learn.Summary(c.Request.Context(), userID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load learning summary"})
+		writeServerError(c, "failed to load learning summary", err)
 		return
 	}
 

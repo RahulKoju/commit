@@ -151,7 +151,7 @@ func (handler AuthHandler) ForgotPassword(c *gin.Context) {
 	}
 
 	if err := handler.auth.ForgotPassword(c.Request.Context(), request.Email); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		writeServerError(c, "password reset failed", err)
 		return
 	}
 

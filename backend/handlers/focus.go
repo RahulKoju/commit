@@ -53,7 +53,7 @@ func (handler FocusHandler) List(c *gin.Context) {
 
 	total, err := handler.focus.Count(c.Request.Context(), input)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count sessions"})
+		writeServerError(c, "failed to count sessions", err)
 		return
 	}
 
@@ -108,7 +108,7 @@ func (handler FocusHandler) Stats(c *gin.Context) {
 
 	stats, err := handler.focus.Stats(c.Request.Context(), userID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get focus stats"})
+		writeServerError(c, "failed to get focus stats", err)
 		return
 	}
 

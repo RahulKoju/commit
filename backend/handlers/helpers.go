@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"log"
 	"net/http"
 	"strconv"
 
@@ -35,4 +36,13 @@ func parsePagination(c *gin.Context) (int, int) {
 	}
 
 	return limit, offset
+}
+
+// writeServerError logs the error and returns it in the JSON response for debugging.
+func writeServerError(c *gin.Context, label string, err error) {
+	log.Printf("[ERROR] %s: %v", label, err)
+	c.JSON(http.StatusInternalServerError, gin.H{
+		"error":  label,
+		"detail": err.Error(),
+	})
 }

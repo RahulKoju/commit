@@ -25,12 +25,14 @@ type taskRequest struct {
 }
 
 type updateTaskRequest struct {
-	TopicID       *string `json:"topic_id"`
-	Title         *string `json:"title"`
-	Description   *string `json:"description"`
-	Priority      *string `json:"priority"`
-	ScheduledDate *string `json:"scheduled_date"`
-	Status        *string `json:"status"`
+	TopicID          *string `json:"topic_id"`
+	Title            *string `json:"title"`
+	Description      *string `json:"description"`
+	Priority         *string `json:"priority"`
+	ScheduledDate    *string `json:"scheduled_date"`
+	Status           *string `json:"status"`
+	RecurrenceRule   *string `json:"recurrence_rule"`
+	EstimatedMinutes *int    `json:"estimated_minutes"`
 }
 
 func NewTaskHandler(tasks services.TaskService) TaskHandler {
@@ -57,13 +59,13 @@ func (handler TaskHandler) List(c *gin.Context) {
 
 	tasks, err := handler.tasks.List(c.Request.Context(), input)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid task filters"})
 		return
 	}
 
 	total, err := handler.tasks.Count(c.Request.Context(), input)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count tasks"})
+		writeServerError(c, "failed to count tasks", err)
 		return
 	}
 
@@ -98,7 +100,7 @@ func (handler TaskHandler) Create(c *gin.Context) {
 		Status:        request.Status,
 	})
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to create task"})
 		return
 	}
 
@@ -119,21 +121,23 @@ func (handler TaskHandler) Update(c *gin.Context) {
 	}
 
 	task, err := handler.tasks.Update(c.Request.Context(), services.UpdateTaskInput{
-		UserID:        userID,
-		ID:            c.Param("id"),
-		TopicID:       request.TopicID,
-		Title:         request.Title,
-		Description:   request.Description,
-		Priority:      request.Priority,
-		ScheduledDate: request.ScheduledDate,
-		Status:        request.Status,
+		UserID:           userID,
+		ID:               c.Param("id"),
+		TopicID:          request.TopicID,
+		Title:            request.Title,
+		Description:      request.Description,
+		Priority:         request.Priority,
+		ScheduledDate:    request.ScheduledDate,
+		Status:           request.Status,
+		RecurrenceRule:   request.RecurrenceRule,
+		EstimatedMinutes: request.EstimatedMinutes,
 	})
 	if err != nil {
 		status := http.StatusBadRequest
 		if errors.Is(err, models.ErrNotFound) {
 			status = http.StatusNotFound
 		}
-		c.JSON(status, gin.H{"error": err.Error()})
+		c.JSON(status, gin.H{"error": "failed to update task"})
 		return
 	}
 
