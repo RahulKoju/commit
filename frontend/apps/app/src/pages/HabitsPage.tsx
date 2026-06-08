@@ -1,4 +1,4 @@
-import { BarChart3, Check, Plus, Trash2, Pencil, X, Search } from "lucide-react"
+import { BarChart3, Check, Download, Plus, Trash2, Pencil, X, Search, Flame } from "lucide-react"
 import { useMemo, useState, useEffect, useRef, type FormEvent } from "react"
 import { Button } from "@workspace/ui/components/button"
 import { Input } from "@workspace/ui/components/input"
@@ -39,6 +39,7 @@ export function HabitsPage() {
           </p>
         </div>
         <div className="flex gap-2">
+          <ExportCSVButton />
           <CategoryForm />
           <HabitForm categories={categoriesQuery.data?.categories ?? []} />
         </div>
@@ -270,6 +271,45 @@ function EditHabitModal({
         </form>
       </div>
     </div>
+  )
+}
+
+/* ─── Export CSV ─── */
+function ExportCSVButton() {
+  const [loading, setLoading] = useState(false)
+
+  async function handleExport() {
+    setLoading(true)
+    try {
+      const resp = await fetch(`${import.meta.env.VITE_API_URL ?? "http://localhost:8080"}/api/v1/habits/export`, {
+        credentials: "include",
+      })
+      if (!resp.ok) {
+        const body = await resp.json().catch(() => null)
+        throw new Error(body?.error ?? "Export failed")
+      }
+      const blob = await resp.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = "habits.csv"
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      const { toast } = await import("sonner")
+      toast.error(err instanceof Error ? err.message : "Export failed")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <Button type="button" variant="outline" onClick={handleExport} disabled={loading}>
+      <Download className="size-4" />
+      {loading ? "Exporting..." : "CSV"}
+    </Button>
   )
 }
 
@@ -601,6 +641,12 @@ function HabitCard({
           <p className="text-sm text-muted-foreground">{habit.description || habit.target_unit || habit.type}</p>
         </div>
         <div className="flex items-center gap-1">
+          {habit.current_streak > 0 ? (
+            <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${streakColor(habit.current_streak)}`}>
+              <Flame className={`size-3 ${habit.current_streak >= 90 ? "drop-shadow-[0_0_4px_currentColor]" : ""}`} />
+              {habit.current_streak}
+            </span>
+          ) : null}
           <span className={`rounded-full px-2 py-0.5 text-xs ${statusClass(habit)}`}>{statusLabel(habit)}</span>
           <button type="button" onClick={(e) => { e.stopPropagation(); onEdit(); }} className="rounded p-1 text-muted-foreground hover:text-foreground" title="Edit">
             <Pencil className="size-3.5" />
@@ -664,6 +710,7 @@ function HabitAnalyticsPanel({ habit }: { habit: Habit }) {
             <Metric label="90 days" value={`${analytics.completion_rate_90}%`} />
             <Metric label="Current streak" value={`${analytics.current_streak}`} />
             <Metric label="Longest streak" value={`${analytics.longest_streak}`} />
+            {habit.longest_streak > 0 ? <Metric label="All-time best" value={`${habit.longest_streak} days`} /> : null}
           </div>
           <div className="grid grid-cols-15 gap-1">
             {analytics.daily_completion.slice(-30).map((day) => (
@@ -714,6 +761,13 @@ function statusClass(habit: Habit): string {
   if (isCompletedToday(habit)) return "bg-green-100 text-green-800"
   if (habit.type === "numeric" && (habit.today_log?.value ?? 0) > 0) return "bg-yellow-100 text-yellow-800"
   return "bg-muted text-muted-foreground"
+}
+
+function streakColor(streak: number): string {
+  if (streak >= 90) return "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 ring-1 ring-red-400"
+  if (streak >= 30) return "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400"
+  if (streak >= 7) return "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
+  return "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400"
 }
 
 function habitInputFromFormData(formData: FormData): CreateHabitInput {

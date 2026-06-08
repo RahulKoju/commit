@@ -184,6 +184,10 @@ func (service HabitService) LogHabit(ctx context.Context, input LogHabitInput) (
 	})
 }
 
+func (service HabitService) ExportLogs(ctx context.Context, userID string) ([]models.HabitExportRow, error) {
+	return service.habits.ExportLogs(ctx, userID)
+}
+
 func (service HabitService) Analytics(ctx context.Context, userID string, habitID string) (models.HabitAnalytics, error) {
 	return service.habits.Analytics(ctx, userID, habitID)
 }

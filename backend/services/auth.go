@@ -182,6 +182,16 @@ func (service AuthService) RevokeRefreshTokens(ctx context.Context, userID strin
 	return service.refreshTokens.DeleteByUserID(ctx, userID)
 }
 
+func (service AuthService) Logout(ctx context.Context, refreshTokenText string, userID string) error {
+	if refreshTokenText != "" {
+		tokenHash := hashToken(refreshTokenText)
+		if err := service.refreshTokens.DeleteByHash(ctx, tokenHash); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (service AuthService) ForgotPassword(ctx context.Context, email string) error {
 	email = strings.ToLower(strings.TrimSpace(email))
 	if email == "" {

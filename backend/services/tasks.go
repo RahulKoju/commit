@@ -24,26 +24,28 @@ type ListTasksInput struct {
 }
 
 type CreateTaskInput struct {
-	UserID         string
-	TopicID        string
-	Title          string
-	Description    string
-	Priority       string
-	ScheduledDate  string
-	Status         string
-	RecurrenceRule string
+	UserID           string
+	TopicID          string
+	Title            string
+	Description      string
+	Priority         string
+	ScheduledDate    string
+	Status           string
+	RecurrenceRule   string
+	EstimatedMinutes *int
 }
 
 type UpdateTaskInput struct {
-	UserID         string
-	ID             string
-	TopicID        *string
-	Title          *string
-	Description    *string
-	Priority       *string
-	ScheduledDate  *string
-	Status         *string
-	RecurrenceRule *string
+	UserID           string
+	ID               string
+	TopicID          *string
+	Title            *string
+	Description      *string
+	Priority         *string
+	ScheduledDate    *string
+	Status           *string
+	RecurrenceRule   *string
+	EstimatedMinutes *int
 }
 
 func NewTaskService(tasks models.TaskModel) TaskService {
@@ -110,14 +112,15 @@ func (service TaskService) Create(ctx context.Context, input CreateTaskInput) (m
 	}
 
 	return service.tasks.Create(ctx, models.CreateTaskParams{
-		UserID:         input.UserID,
-		TopicID:        strings.TrimSpace(input.TopicID),
-		Title:          title,
-		Description:    description,
-		Priority:       priority,
-		ScheduledDate:  strings.TrimSpace(input.ScheduledDate),
-		Status:         status,
-		RecurrenceRule: recurrenceRule,
+		UserID:           input.UserID,
+		TopicID:          strings.TrimSpace(input.TopicID),
+		Title:            title,
+		Description:      description,
+		Priority:         priority,
+		ScheduledDate:    strings.TrimSpace(input.ScheduledDate),
+		Status:           status,
+		RecurrenceRule:   recurrenceRule,
+		EstimatedMinutes: input.EstimatedMinutes,
 	})
 }
 
@@ -128,15 +131,16 @@ func (service TaskService) Update(ctx context.Context, input UpdateTaskInput) (m
 	}
 
 	params := models.UpdateTaskParams{
-		UserID:         input.UserID,
-		ID:             input.ID,
-		Title:          current.Title,
-		Description:    current.Description,
-		Priority:       current.Priority,
-		Status:         current.Status,
-		ScheduledDate:  optionalStringValue(current.ScheduledDate),
-		TopicID:        optionalStringValue(current.TopicID),
-		RecurrenceRule: current.RecurrenceRule,
+		UserID:           input.UserID,
+		ID:               input.ID,
+		Title:            current.Title,
+		Description:      current.Description,
+		Priority:         current.Priority,
+		Status:           current.Status,
+		ScheduledDate:    optionalStringValue(current.ScheduledDate),
+		TopicID:          optionalStringValue(current.TopicID),
+		RecurrenceRule:   current.RecurrenceRule,
+		EstimatedMinutes: current.EstimatedMinutes,
 	}
 
 	if input.TopicID != nil {
@@ -173,6 +177,9 @@ func (service TaskService) Update(ctx context.Context, input UpdateTaskInput) (m
 			}
 		}
 		params.RecurrenceRule = rule
+	}
+	if input.EstimatedMinutes != nil {
+		params.EstimatedMinutes = input.EstimatedMinutes
 	}
 	if params.Title == "" {
 		return models.Task{}, fmt.Errorf("title is required")

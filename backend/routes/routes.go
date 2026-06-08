@@ -81,6 +81,7 @@ func Register(router *gin.Engine, deps Dependencies) {
 	protected.DELETE("/habit-categories/:id", habitHandler.DeleteCategory)
 	protected.GET("/habits", habitHandler.ListHabits)
 	protected.POST("/habits", habitHandler.CreateHabit)
+	protected.GET("/habits/export", habitHandler.ExportCSV)
 	protected.PATCH("/habits/:id", habitHandler.UpdateHabit)
 	protected.DELETE("/habits/:id", habitHandler.DeleteHabit)
 	protected.POST("/habits/:id/log", habitHandler.LogHabit)

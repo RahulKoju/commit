@@ -1,7 +1,9 @@
 package handlers
 
 import (
+	"encoding/csv"
 	"errors"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -52,6 +54,33 @@ type habitLogRequest struct {
 
 func NewHabitHandler(habits services.HabitService) HabitHandler {
 	return HabitHandler{habits: habits}
+}
+
+func (handler HabitHandler) ExportCSV(c *gin.Context) {
+	userID, ok := currentUserID(c)
+	if !ok {
+		return
+	}
+
+	rows, err := handler.habits.ExportLogs(c.Request.Context(), userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to export habits"})
+		return
+	}
+
+	c.Header("Content-Type", "text/csv")
+	c.Header("Content-Disposition", `attachment; filename="habits.csv"`)
+
+	writer := csv.NewWriter(c.Writer)
+	writer.Write([]string{"date", "habit_name", "category", "value", "unit"})
+	for _, row := range rows {
+		unit := ""
+		if row.TargetUnit != nil {
+			unit = *row.TargetUnit
+		}
+		writer.Write([]string{row.Date, row.HabitName, row.Category, formatFloat(row.Value), unit})
+	}
+	writer.Flush()
 }
 
 func (handler HabitHandler) ListCategories(c *gin.Context) {
@@ -257,6 +286,10 @@ func (handler HabitHandler) Analytics(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"analytics": analytics})
+}
+
+func formatFloat(value float64) string {
+	return fmt.Sprintf("%g", value)
 }
 
 func writeHabitError(c *gin.Context, err error) {

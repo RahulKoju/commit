@@ -1,5 +1,5 @@
 import DOMPurify from "dompurify"
-import { AlertTriangle, CalendarPlus, Pencil, Plus, Repeat, Trash2 } from "lucide-react"
+import { AlertTriangle, CalendarPlus, Clock, Pencil, Plus, Repeat, Trash2 } from "lucide-react"
 import { useMemo, useRef, useState, type FormEvent } from "react"
 import { Button } from "@workspace/ui/components/button"
 import { RichTextEditor } from "@workspace/ui/components/rich-text-editor"
@@ -208,6 +208,10 @@ export function TaskForm({ onDone }: { onDone: () => void }) {
             ))}
           </select>
         </label>
+        <label className="grid gap-2 text-sm">
+          <span className="font-medium">Est. time (min)</span>
+          <input name="estimated_minutes" type="number" min={1} className="h-9 rounded-md border bg-background px-3" />
+        </label>
       </div>
       <RichTextEditor
         id="task-description"
@@ -369,6 +373,12 @@ function TaskCard({ task }: { task: Task }) {
                 {recurrenceLabels[task.recurrence_rule as RecurrenceRule] ?? task.recurrence_rule}
               </span>
             ) : null}
+            {task.estimated_minutes ? (
+              <span className="flex items-center gap-1">
+                <Clock className="size-3" />
+                ~{task.estimated_minutes} min
+              </span>
+            ) : null}
             {task.completed_at ? <span>Completed {new Date(task.completed_at).toLocaleDateString()}</span> : null}
           </div>
         </div>
@@ -442,6 +452,8 @@ function TaskCard({ task }: { task: Task }) {
 }
 
 function taskInputFromFormData(formData: FormData): CreateTaskInput {
+  const estimatedRaw = formData.get("estimated_minutes")
+  const estimatedMinutes = estimatedRaw ? Number(estimatedRaw) : null
   return {
     title: String(formData.get("title") ?? ""),
     description: String(formData.get("description") ?? ""),
@@ -449,6 +461,7 @@ function taskInputFromFormData(formData: FormData): CreateTaskInput {
     scheduled_date: String(formData.get("scheduled_date") ?? ""),
     status: String(formData.get("status") ?? "todo") as TaskStatus,
     recurrence_rule: String(formData.get("recurrence_rule") ?? ""),
+    estimated_minutes: estimatedMinutes && estimatedMinutes > 0 ? estimatedMinutes : null,
   }
 }
 

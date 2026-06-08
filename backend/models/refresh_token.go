@@ -71,6 +71,11 @@ func (model RefreshTokenModel) Delete(ctx context.Context, id string) error {
 	return err
 }
 
+func (model RefreshTokenModel) DeleteByHash(ctx context.Context, tokenHash string) error {
+	_, err := model.pool.Exec(ctx, "DELETE FROM refresh_tokens WHERE token_hash = $1", tokenHash)
+	return err
+}
+
 func (model RefreshTokenModel) DeleteByUserID(ctx context.Context, userID string) error {
 	_, err := model.pool.Exec(ctx, "DELETE FROM refresh_tokens WHERE user_id = $1", userID)
 	return err

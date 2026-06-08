@@ -31,18 +31,19 @@ const (
 )
 
 type Task struct {
-	ID              string       `json:"id"`
-	UserID          string       `json:"user_id"`
-	TopicID         *string      `json:"topic_id"`
-	Title           string       `json:"title"`
-	Description     string       `json:"description"`
-	Priority        TaskPriority `json:"priority"`
-	ScheduledDate   *string      `json:"scheduled_date"`
-	Status          TaskStatus   `json:"status"`
-	RecurrenceRule  string       `json:"recurrence_rule"`
-	CompletedAt     *time.Time   `json:"completed_at"`
-	CreatedAt       time.Time    `json:"created_at"`
-	UpdatedAt       time.Time    `json:"updated_at"`
+	ID               string       `json:"id"`
+	UserID           string       `json:"user_id"`
+	TopicID          *string      `json:"topic_id"`
+	Title            string       `json:"title"`
+	Description      string       `json:"description"`
+	Priority         TaskPriority `json:"priority"`
+	ScheduledDate    *string      `json:"scheduled_date"`
+	Status           TaskStatus   `json:"status"`
+	RecurrenceRule   string       `json:"recurrence_rule"`
+	EstimatedMinutes *int         `json:"estimated_minutes"`
+	CompletedAt      *time.Time   `json:"completed_at"`
+	CreatedAt        time.Time    `json:"created_at"`
+	UpdatedAt        time.Time    `json:"updated_at"`
 }
 
 type RecurrenceRule string
@@ -65,26 +66,28 @@ type ListTasksParams struct {
 }
 
 type CreateTaskParams struct {
-	UserID         string
-	TopicID        string
-	Title          string
-	Description    string
-	Priority       TaskPriority
-	ScheduledDate  string
-	Status         TaskStatus
-	RecurrenceRule string
+	UserID           string
+	TopicID          string
+	Title            string
+	Description      string
+	Priority         TaskPriority
+	ScheduledDate    string
+	Status           TaskStatus
+	RecurrenceRule   string
+	EstimatedMinutes *int
 }
 
 type UpdateTaskParams struct {
-	UserID         string
-	ID             string
-	TopicID        string
-	Title          string
-	Description    string
-	Priority       TaskPriority
-	ScheduledDate  string
-	Status         TaskStatus
-	RecurrenceRule string
+	UserID           string
+	ID               string
+	TopicID          string
+	Title            string
+	Description      string
+	Priority         TaskPriority
+	ScheduledDate    string
+	Status           TaskStatus
+	RecurrenceRule   string
+	EstimatedMinutes *int
 }
 
 type TaskModel struct {
@@ -97,7 +100,7 @@ func NewTaskModel(pool *pgxpool.Pool) TaskModel {
 
 func (model TaskModel) List(ctx context.Context, params ListTasksParams) ([]Task, error) {
 	rows, err := model.pool.Query(ctx, `
-		SELECT id, user_id, topic_id, title, description, priority, scheduled_date, status, recurrence_rule, completed_at, created_at, updated_at
+		SELECT id, user_id, topic_id, title, description, priority, scheduled_date, status, recurrence_rule, estimated_minutes, completed_at, created_at, updated_at
 		FROM tasks
 		WHERE user_id = $1
 		  AND (
@@ -156,7 +159,7 @@ func (model TaskModel) CountTasks(ctx context.Context, params ListTasksParams) (
 
 func (model TaskModel) GetByID(ctx context.Context, userID string, id string) (Task, error) {
 	row := model.pool.QueryRow(ctx, `
-		SELECT id, user_id, topic_id, title, description, priority, scheduled_date, status, recurrence_rule, completed_at, created_at, updated_at
+		SELECT id, user_id, topic_id, title, description, priority, scheduled_date, status, recurrence_rule, estimated_minutes, completed_at, created_at, updated_at
 		FROM tasks
 		WHERE user_id = $1 AND id = $2
 	`, userID, id)
@@ -170,10 +173,10 @@ func (model TaskModel) GetByID(ctx context.Context, userID string, id string) (T
 
 func (model TaskModel) Create(ctx context.Context, params CreateTaskParams) (Task, error) {
 	row := model.pool.QueryRow(ctx, `
-		INSERT INTO tasks (user_id, topic_id, title, description, priority, scheduled_date, status, recurrence_rule, completed_at)
-		VALUES ($1, NULLIF($2, '')::uuid, $3, $4, $5, NULLIF($6, '')::date, $7, $8, CASE WHEN $7 = 'done' THEN now() ELSE NULL END)
-		RETURNING id, user_id, topic_id, title, description, priority, scheduled_date, status, recurrence_rule, completed_at, created_at, updated_at
-	`, params.UserID, params.TopicID, params.Title, params.Description, params.Priority, params.ScheduledDate, params.Status, params.RecurrenceRule)
+		INSERT INTO tasks (user_id, topic_id, title, description, priority, scheduled_date, status, recurrence_rule, estimated_minutes, completed_at)
+		VALUES ($1, NULLIF($2, '')::uuid, $3, $4, $5, NULLIF($6, '')::date, $7, $8, $9, CASE WHEN $7 = 'done' THEN now() ELSE NULL END)
+		RETURNING id, user_id, topic_id, title, description, priority, scheduled_date, status, recurrence_rule, estimated_minutes, completed_at, created_at, updated_at
+	`, params.UserID, params.TopicID, params.Title, params.Description, params.Priority, params.ScheduledDate, params.Status, params.RecurrenceRule, params.EstimatedMinutes)
 
 	return scanTask(row)
 }
@@ -188,6 +191,7 @@ func (model TaskModel) Update(ctx context.Context, params UpdateTaskParams) (Tas
 		    scheduled_date = NULLIF($7, '')::date,
 		    status = $8,
 		    recurrence_rule = $9,
+		    estimated_minutes = $10,
 		    completed_at = CASE
 		      WHEN $8 = 'done' AND completed_at IS NULL THEN now()
 		      WHEN $8 <> 'done' THEN NULL
@@ -195,8 +199,8 @@ func (model TaskModel) Update(ctx context.Context, params UpdateTaskParams) (Tas
 		    END,
 		    updated_at = now()
 		WHERE user_id = $1 AND id = $2
-		RETURNING id, user_id, topic_id, title, description, priority, scheduled_date, status, recurrence_rule, completed_at, created_at, updated_at
-	`, params.UserID, params.ID, params.TopicID, params.Title, params.Description, params.Priority, params.ScheduledDate, params.Status, params.RecurrenceRule)
+		RETURNING id, user_id, topic_id, title, description, priority, scheduled_date, status, recurrence_rule, estimated_minutes, completed_at, created_at, updated_at
+	`, params.UserID, params.ID, params.TopicID, params.Title, params.Description, params.Priority, params.ScheduledDate, params.Status, params.RecurrenceRule, params.EstimatedMinutes)
 
 	task, err := scanTask(row)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -236,6 +240,7 @@ func scanTask(scanner taskScanner) (Task, error) {
 		&scheduledDate,
 		&task.Status,
 		&task.RecurrenceRule,
+		&task.EstimatedMinutes,
 		&completedAt,
 		&task.CreatedAt,
 		&task.UpdatedAt,

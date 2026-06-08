@@ -28,6 +28,8 @@ export const habitSchema = z.object({
   weekly_goal: z.number().int(),
   sort_order: z.number().int(),
   today_log: habitLogSchema.nullable(),
+  current_streak: z.number().int(),
+  longest_streak: z.number().int(),
   created_at: z.string(),
   updated_at: z.string(),
 })

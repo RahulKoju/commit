@@ -105,7 +105,9 @@ func (handler AuthHandler) Refresh(c *gin.Context) {
 
 func (handler AuthHandler) Logout(c *gin.Context) {
 	userID, ok := middleware.CurrentUserID(c)
-	if ok {
+	if refreshCookie, err := c.Cookie(refreshCookieName); err == nil && refreshCookie != "" {
+		handler.auth.Logout(c.Request.Context(), refreshCookie, userID)
+	} else if ok {
 		handler.auth.RevokeRefreshTokens(c.Request.Context(), userID)
 	}
 	clearAuthCookies(c)

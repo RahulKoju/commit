@@ -16,6 +16,7 @@ export const taskSchema = z.object({
   scheduled_date: z.string().nullable(),
   status: taskStatusSchema,
   recurrence_rule: z.string(),
+  estimated_minutes: z.number().int().nullable(),
   completed_at: z.string().nullable(),
   created_at: z.string(),
   updated_at: z.string(),
@@ -50,6 +51,7 @@ export type CreateTaskInput = {
   scheduled_date?: string
   status: TaskStatus
   recurrence_rule?: string
+  estimated_minutes?: number | null
 }
 
 export type UpdateTaskInput = Partial<CreateTaskInput>

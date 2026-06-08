@@ -46,6 +46,8 @@ type Habit struct {
 	WeeklyGoal    int                `json:"weekly_goal"`
 	SortOrder     int                `json:"sort_order"`
 	TodayLog      *HabitLog          `json:"today_log"`
+	CurrentStreak int                `json:"current_streak"`
+	LongestStreak int                `json:"longest_streak"`
 	CreatedAt     time.Time          `json:"created_at"`
 	UpdatedAt     time.Time          `json:"updated_at"`
 	DeletedAt     *time.Time         `json:"deleted_at"`
@@ -352,6 +354,39 @@ func (model HabitModel) Analytics(ctx context.Context, userID string, habitID st
 	}, nil
 }
 
+type HabitExportRow struct {
+	Date       string
+	HabitName  string
+	Category   string
+	Value      float64
+	TargetUnit *string
+}
+
+func (model HabitModel) ExportLogs(ctx context.Context, userID string) ([]HabitExportRow, error) {
+	rows, err := model.pool.Query(ctx, `
+		SELECT hl.logged_date::text, h.name, c.name, hl.value::float8, h.target_unit
+		FROM habit_logs hl
+		INNER JOIN habits h ON h.id = hl.habit_id AND h.user_id = hl.user_id
+		INNER JOIN habit_categories c ON c.id = h.category_id
+		WHERE hl.user_id = $1
+		ORDER BY hl.logged_date DESC, h.name
+	`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make([]HabitExportRow, 0)
+	for rows.Next() {
+		var row HabitExportRow
+		if err := rows.Scan(&row.Date, &row.HabitName, &row.Category, &row.Value, &row.TargetUnit); err != nil {
+			return nil, err
+		}
+		result = append(result, row)
+	}
+	return result, rows.Err()
+}
+
 func (model HabitModel) SeedDefaults(ctx context.Context, userID string) error {
 	categories := map[string]string{}
 	for _, name := range []string{"Exercise", "Learning", "Health"} {
@@ -403,8 +438,74 @@ func (model HabitModel) attachTodayLogs(ctx context.Context, habits []Habit) ([]
 			habits[index].TodayLog = &log
 		}
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 
-	return habits, rows.Err()
+	return model.attachStreaks(ctx, habits, indexByID)
+}
+
+func (model HabitModel) attachStreaks(ctx context.Context, habits []Habit, indexByID map[string]int) ([]Habit, error) {
+	habitIDs := make([]string, 0, len(habits))
+	for _, h := range habits {
+		habitIDs = append(habitIDs, h.ID)
+	}
+
+	rows, err := model.pool.Query(ctx, `
+		SELECT habit_id, logged_date::text, value::float8
+		FROM habit_logs
+		WHERE habit_id = ANY($1) AND logged_date >= CURRENT_DATE - 89
+		ORDER BY habit_id, logged_date
+	`, habitIDs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	type entry struct {
+		date  string
+		value float64
+	}
+	grouped := make(map[string][]entry)
+	for rows.Next() {
+		var habitID, date string
+		var value float64
+		if err := rows.Scan(&habitID, &date, &value); err != nil {
+			return nil, err
+		}
+		grouped[habitID] = append(grouped[habitID], entry{date, value})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	for _, h := range habits {
+		days := make([]HabitDayStatus, 0, 90)
+		start := time.Now().AddDate(0, 0, -89)
+		entries := grouped[h.ID]
+		entryIndex := 0
+		for i := 0; i < 90; i++ {
+			date := start.AddDate(0, 0, i).Format("2006-01-02")
+			var value float64
+			if entryIndex < len(entries) && entries[entryIndex].date == date {
+				value = entries[entryIndex].value
+				entryIndex++
+			}
+			days = append(days, HabitDayStatus{
+				Date:      date,
+				Value:     value,
+				Completed: habitCompleted(h, value),
+			})
+		}
+		h.CurrentStreak = currentStreak(days)
+		h.LongestStreak = longestStreak(days)
+		if idx, ok := indexByID[h.ID]; ok {
+			habits[idx].CurrentStreak = h.CurrentStreak
+			habits[idx].LongestStreak = h.LongestStreak
+		}
+	}
+
+	return habits, nil
 }
 
 func (model HabitModel) habitDayStatuses(ctx context.Context, habit Habit, days int) ([]HabitDayStatus, error) {
