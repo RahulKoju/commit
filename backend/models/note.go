@@ -3,11 +3,14 @@ package models
 import (
 	"context"
 	"errors"
+	"regexp"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+var wikiLinkPattern = regexp.MustCompile(`\[\[([^\]]+)\]\]`)
 
 type NoteTopic struct {
 	ID   string `json:"id"`
@@ -142,6 +145,9 @@ func (model NoteModel) Create(ctx context.Context, params CreateNoteParams) (Not
 	if err := replaceNoteTopics(ctx, tx, params.UserID, note.ID, params.TopicIDs); err != nil {
 		return Note{}, err
 	}
+	if err := replaceNoteLinks(ctx, tx, params.UserID, note.ID, params.Body); err != nil {
+		return Note{}, err
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return Note{}, err
 	}
@@ -171,6 +177,9 @@ func (model NoteModel) Update(ctx context.Context, params UpdateNoteParams) (Not
 		return Note{}, err
 	}
 	if err := replaceNoteTopics(ctx, tx, params.UserID, note.ID, params.TopicIDs); err != nil {
+		return Note{}, err
+	}
+	if err := replaceNoteLinks(ctx, tx, params.UserID, note.ID, params.Body); err != nil {
 		return Note{}, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -242,6 +251,95 @@ func scanNoteWithoutTopics(scanner noteScanner) (Note, error) {
 		return Note{}, err
 	}
 	return note, nil
+}
+
+type NoteLink struct {
+	SourceNoteID string `json:"source_note_id"`
+	TargetNoteID string `json:"target_note_id"`
+	TargetTitle  string `json:"target_title"`
+}
+
+func (model NoteModel) GetBacklinks(ctx context.Context, userID string, noteID string) ([]NoteLink, error) {
+	rows, err := model.pool.Query(ctx, `
+		SELECT nl.source_note_id, nl.target_note_id, n.title
+		FROM note_links nl
+		INNER JOIN notes n ON n.id = nl.source_note_id AND n.user_id = $1
+		WHERE nl.target_note_id = $2
+		ORDER BY n.title
+	`, userID, noteID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	links := make([]NoteLink, 0)
+	for rows.Next() {
+		var link NoteLink
+		if err := rows.Scan(&link.SourceNoteID, &link.TargetNoteID, &link.TargetTitle); err != nil {
+			return nil, err
+		}
+		links = append(links, link)
+	}
+	return links, rows.Err()
+}
+
+func extractWikiLinkTitles(body string) []string {
+	matches := wikiLinkPattern.FindAllStringSubmatch(body, -1)
+	seen := make(map[string]bool)
+	titles := make([]string, 0)
+	for _, m := range matches {
+		title := m[1]
+		if !seen[title] {
+			seen[title] = true
+			titles = append(titles, title)
+		}
+	}
+	return titles
+}
+
+func replaceNoteLinks(ctx context.Context, tx pgx.Tx, userID string, noteID string, body string) error {
+	if _, err := tx.Exec(ctx, "DELETE FROM note_links WHERE source_note_id = $1", noteID); err != nil {
+		return err
+	}
+
+	titles := extractWikiLinkTitles(body)
+	if len(titles) == 0 {
+		return nil
+	}
+
+	rows, err := tx.Query(ctx, `
+		SELECT id, title FROM notes
+		WHERE user_id = $1 AND title = ANY($2)
+	`, userID, titles)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	type target struct{ id, title string }
+	var targets []target
+	for rows.Next() {
+		var t target
+		if err := rows.Scan(&t.id, &t.title); err != nil {
+			return err
+		}
+		targets = append(targets, t)
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
+	for _, t := range targets {
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO note_links (source_note_id, target_note_id)
+			VALUES ($1, $2)
+			ON CONFLICT DO NOTHING
+		`, noteID, t.id); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func replaceNoteTopics(ctx context.Context, tx pgx.Tx, userID string, noteID string, topicIDs []string) error {

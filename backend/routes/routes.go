@@ -70,6 +70,7 @@ func Register(router *gin.Engine, deps Dependencies) {
 	protected.GET("/notes", noteHandler.List)
 	protected.POST("/notes", noteHandler.Create)
 	protected.PATCH("/notes/:id", noteHandler.Update)
+	protected.GET("/notes/:id/backlinks", noteHandler.GetBacklinks)
 	protected.DELETE("/notes/:id", noteHandler.Delete)
 	protected.GET("/habit-categories", habitHandler.ListCategories)
 	protected.POST("/habit-categories", habitHandler.CreateCategory)

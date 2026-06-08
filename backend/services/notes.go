@@ -102,6 +102,10 @@ func (service NoteService) Update(ctx context.Context, input UpdateNoteInput) (m
 	return service.notes.Update(ctx, params)
 }
 
+func (service NoteService) GetBacklinks(ctx context.Context, userID string, noteID string) ([]models.NoteLink, error) {
+	return service.notes.GetBacklinks(ctx, userID, noteID)
+}
+
 func (service NoteService) Delete(ctx context.Context, userID string, id string) error {
 	return service.notes.Delete(ctx, userID, id)
 }

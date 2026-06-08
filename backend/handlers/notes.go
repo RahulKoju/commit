@@ -121,6 +121,22 @@ func (handler NoteHandler) Update(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"note": note})
 }
 
+func (handler NoteHandler) GetBacklinks(c *gin.Context) {
+	userID, ok := middleware.CurrentUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
+		return
+	}
+
+	links, err := handler.notes.GetBacklinks(c.Request.Context(), userID, c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get backlinks"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"backlinks": links})
+}
+
 func (handler NoteHandler) Delete(c *gin.Context) {
 	userID, ok := middleware.CurrentUserID(c)
 	if !ok {

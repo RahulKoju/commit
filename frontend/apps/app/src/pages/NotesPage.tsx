@@ -1,11 +1,11 @@
 import DOMPurify from "dompurify"
-import { Edit3, Eye, Plus, Trash2 } from "lucide-react"
+import { Edit3, Eye, Link2, Plus, Trash2 } from "lucide-react"
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react"
 import { Button } from "@workspace/ui/components/button"
 import { RichTextEditor } from "@workspace/ui/components/rich-text-editor"
 
 import { useLearningTopics } from "@/hooks/useLearn"
-import { useCreateNote, useDeleteNote, useNotes, useUpdateNote } from "@/hooks/useNotes"
+import { useCreateNote, useDeleteNote, useNoteBacklinks, useNotes, useUpdateNote } from "@/hooks/useNotes"
 import type { CreateNoteInput, Note } from "@/types/note.types"
 
 export function NotesPage() {
@@ -208,6 +208,7 @@ function NoteForm({
 
 function NotePreview({ note, onEdit }: { note: Note; onEdit: () => void }) {
   const deleteNote = useDeleteNote()
+  const backlinksQuery = useNoteBacklinks(note.id)
 
   async function onDelete() {
     await deleteNote.mutateAsync(note.id)
@@ -242,6 +243,29 @@ function NotePreview({ note, onEdit }: { note: Note; onEdit: () => void }) {
         className="prose prose-sm max-w-none rounded-lg border bg-muted/30 p-4"
         dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(note.body) }}
       />
+      {backlinksQuery.data?.backlinks.length ? (
+        <div className="rounded-lg border bg-muted/20 p-3">
+          <h4 className="flex items-center gap-2 text-sm font-semibold">
+            <Link2 className="size-3.5" />
+            Backlinks ({backlinksQuery.data.backlinks.length})
+          </h4>
+          <div className="mt-2 grid gap-1">
+            {backlinksQuery.data.backlinks.map((link) => (
+              <button
+                key={link.source_note_id}
+                type="button"
+                className="rounded px-2 py-1 text-left text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+                onClick={() => {
+                  const form = document.querySelector(`[data-note-id="${link.source_note_id}"]`)
+                  form?.scrollIntoView({ behavior: "smooth" })
+                }}
+              >
+                {link.target_title}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
     </article>
   )
 }

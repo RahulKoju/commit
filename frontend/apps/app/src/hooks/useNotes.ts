@@ -3,8 +3,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { apiFetch } from "@/lib/api"
 import { appendPagination, type PaginationParams } from "@/types/common.types"
 import {
+  backlinksResponseSchema,
   noteResponseSchema,
   notesResponseSchema,
+  type BacklinksResponse,
   type CreateNoteInput,
   type NoteResponse,
   type NotesResponse,
@@ -57,6 +59,17 @@ export function useDeleteNote() {
   return useMutation({
     mutationFn: (id: string) => apiFetch<undefined>(`/api/v1/notes/${id}`, { method: "DELETE" }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: noteQueryKeys.all }),
+  })
+}
+
+export function useNoteBacklinks(noteId: string | null) {
+  return useQuery({
+    queryKey: ["notes", "backlinks", noteId],
+    queryFn: () =>
+      apiFetch<BacklinksResponse>(`/api/v1/notes/${noteId}/backlinks`, {
+        schema: backlinksResponseSchema,
+      }),
+    enabled: !!noteId,
   })
 }
 
