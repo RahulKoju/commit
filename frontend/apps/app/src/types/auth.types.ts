@@ -13,15 +13,5 @@ export const authResponseSchema = z.object({
   user: userSchema,
 })
 
-export const forgotPasswordResponseSchema = z.object({
-  message: z.string(),
-})
-
-export const resetPasswordResponseSchema = z.object({
-  message: z.string(),
-})
-
 export type User = z.infer<typeof userSchema>
 export type AuthResponse = z.infer<typeof authResponseSchema>
-export type ForgotPasswordResponse = z.infer<typeof forgotPasswordResponseSchema>
-export type ResetPasswordResponse = z.infer<typeof resetPasswordResponseSchema>

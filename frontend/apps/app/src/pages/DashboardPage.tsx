@@ -32,12 +32,12 @@ export function DashboardPage() {
       </div>
 
       {dashboardQuery.isLoading ? <p className="text-sm text-muted-foreground">Loading dashboard...</p> : null}
-      {summary ? <DashboardWidgets summary={summary} /> : null}
+      {summary ? <DashboardWidgets summary={summary} heatmapQuery={heatmapQuery} /> : null}
     </section>
   )
 }
 
-function DashboardWidgets({ summary }: { summary: DashboardSummary }) {
+function DashboardWidgets({ summary, heatmapQuery }: { summary: DashboardSummary; heatmapQuery: ReturnType<typeof useActivityHeatmap> }) {
   return (
     <div className="space-y-6">
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
