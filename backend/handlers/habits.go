@@ -50,6 +50,7 @@ type updateHabitRequest struct {
 type habitLogRequest struct {
 	LoggedDate string  `json:"logged_date"`
 	Value      float64 `json:"value"`
+	Note       string  `json:"note"`
 }
 
 func NewHabitHandler(habits services.HabitService) HabitHandler {
@@ -266,6 +267,7 @@ func (handler HabitHandler) LogHabit(c *gin.Context) {
 		HabitID:    c.Param("id"),
 		LoggedDate: request.LoggedDate,
 		Value:      request.Value,
+		Note:       request.Note,
 	})
 	if err != nil {
 		writeHabitError(c, err)

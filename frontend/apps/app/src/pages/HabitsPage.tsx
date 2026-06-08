@@ -617,10 +617,12 @@ function HabitCard({
   const completed = isCompletedToday(habit)
   const progress = habit.type === "numeric" && habit.target_value ? Math.min(100, ((habit.today_log?.value ?? 0) / habit.target_value) * 100) : completed ? 100 : 0
 
+  const [note, setNote] = useState(habit.today_log?.note ?? "")
+
   async function toggleBoolean() {
     await logHabit.mutateAsync({
       habitId: habit.id,
-      input: { logged_date: today, value: completed ? 0 : 1 },
+      input: { logged_date: today, value: completed ? 0 : 1, note },
     })
   }
 
@@ -629,7 +631,7 @@ function HabitCard({
     const formData = new FormData(event.currentTarget)
     await logHabit.mutateAsync({
       habitId: habit.id,
-      input: { logged_date: today, value: Number(formData.get("value") ?? 0) },
+      input: { logged_date: today, value: Number(formData.get("value") ?? 0), note },
     })
   }
 
@@ -657,9 +659,12 @@ function HabitCard({
         </div>
       </div>
       {habit.type === "boolean" ? (
-        <Button className="mt-4 w-full" type="button" variant={completed ? "outline" : "default"} onClick={toggleBoolean}>
-          {completed ? "Checked" : "Check in"}
-        </Button>
+        <div className="mt-4 space-y-2">
+          <Button className="w-full" type="button" variant={completed ? "outline" : "default"} onClick={toggleBoolean}>
+            {completed ? "Checked" : "Check in"}
+          </Button>
+          <input name="note" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Add a note..." className="h-8 w-full rounded-md border bg-background px-2 text-xs" />
+        </div>
       ) : (
         <form className="mt-4 grid gap-2" onClick={(e) => e.stopPropagation()} onSubmit={onNumericSubmit}>
           <div className="h-2 rounded-full bg-muted">
@@ -669,6 +674,7 @@ function HabitCard({
             <input name="value" type="number" step="0.1" defaultValue={habit.today_log?.value ?? ""} className="h-9 min-w-0 flex-1 rounded-md border bg-background px-3 text-sm" />
             <Button type="submit" variant="outline">Save</Button>
           </div>
+          <input name="note" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Add a note..." className="h-8 w-full rounded-md border bg-background px-2 text-xs" />
         </form>
       )}
     </article>

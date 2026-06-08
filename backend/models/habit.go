@@ -59,6 +59,7 @@ type HabitLog struct {
 	HabitID    string    `json:"habit_id"`
 	LoggedDate string    `json:"logged_date"`
 	Value      float64   `json:"value"`
+	Note       string    `json:"note"`
 	CreatedAt  time.Time `json:"created_at"`
 	UpdatedAt  time.Time `json:"updated_at"`
 }
@@ -125,6 +126,7 @@ type LogHabitParams struct {
 	HabitID    string
 	LoggedDate string
 	Value      float64
+	Note       string
 }
 
 type HabitModel struct {
@@ -315,14 +317,14 @@ func (model HabitModel) DeleteHabit(ctx context.Context, userID string, id strin
 
 func (model HabitModel) LogHabit(ctx context.Context, params LogHabitParams) (HabitLog, error) {
 	row := model.pool.QueryRow(ctx, `
-		INSERT INTO habit_logs (user_id, habit_id, logged_date, value)
-		SELECT $1, h.id, $3::date, $4
+		INSERT INTO habit_logs (user_id, habit_id, logged_date, value, note)
+		SELECT $1, h.id, $3::date, $4, $5
 		FROM habits h
 		WHERE h.user_id = $1 AND h.id = $2 AND h.deleted_at IS NULL
 		ON CONFLICT (habit_id, logged_date)
-		DO UPDATE SET value = EXCLUDED.value, updated_at = now()
-		RETURNING id, user_id, habit_id, logged_date::text, value::float8, created_at, updated_at
-	`, params.UserID, params.HabitID, params.LoggedDate, params.Value)
+		DO UPDATE SET value = EXCLUDED.value, note = EXCLUDED.note, updated_at = now()
+		RETURNING id, user_id, habit_id, logged_date::text, value::float8, note, created_at, updated_at
+	`, params.UserID, params.HabitID, params.LoggedDate, params.Value, params.Note)
 
 	log, err := scanHabitLog(row)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -419,7 +421,7 @@ func (model HabitModel) attachTodayLogs(ctx context.Context, habits []Habit) ([]
 	}
 
 	rows, err := model.pool.Query(ctx, `
-		SELECT id, user_id, habit_id, logged_date::text, value::float8, created_at, updated_at
+		SELECT id, user_id, habit_id, logged_date::text, value::float8, note, created_at, updated_at
 		FROM habit_logs
 		WHERE habit_id = ANY($1) AND logged_date = CURRENT_DATE
 	`, habitIDs)
@@ -596,7 +598,7 @@ func scanHabit(scanner habitScanner) (Habit, error) {
 
 func scanHabitLog(scanner habitScanner) (HabitLog, error) {
 	var log HabitLog
-	err := scanner.Scan(&log.ID, &log.UserID, &log.HabitID, &log.LoggedDate, &log.Value, &log.CreatedAt, &log.UpdatedAt)
+	err := scanner.Scan(&log.ID, &log.UserID, &log.HabitID, &log.LoggedDate, &log.Value, &log.Note, &log.CreatedAt, &log.UpdatedAt)
 	if err != nil {
 		return HabitLog{}, err
 	}

@@ -146,8 +146,8 @@ func (model FocusModel) autoCheckFocusedStudy(ctx context.Context, tx pgx.Tx, us
 	}
 
 	_, err = tx.Exec(ctx, `
-		INSERT INTO habit_logs (user_id, habit_id, logged_date, value)
-		SELECT $1, h.id, $2::date, 1
+		INSERT INTO habit_logs (user_id, habit_id, logged_date, value, note)
+		SELECT $1, h.id, $2::date, 1, ''
 		FROM habits h
 		WHERE h.user_id = $1 AND h.name = 'Focused study' AND h.deleted_at IS NULL
 		ON CONFLICT (habit_id, logged_date)

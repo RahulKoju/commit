@@ -57,6 +57,7 @@ type LogHabitInput struct {
 	HabitID    string
 	LoggedDate string
 	Value      float64
+	Note       string
 }
 
 func NewHabitService(habits models.HabitModel) HabitService {
@@ -181,6 +182,7 @@ func (service HabitService) LogHabit(ctx context.Context, input LogHabitInput) (
 		HabitID:    input.HabitID,
 		LoggedDate: strings.TrimSpace(input.LoggedDate),
 		Value:      input.Value,
+		Note:       input.Note,
 	})
 }
 

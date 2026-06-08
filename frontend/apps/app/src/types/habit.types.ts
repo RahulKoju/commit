@@ -9,6 +9,7 @@ export const habitLogSchema = z.object({
   habit_id: z.string().uuid(),
   logged_date: z.string(),
   value: z.number(),
+  note: z.string(),
   created_at: z.string(),
   updated_at: z.string(),
 })
@@ -133,4 +134,5 @@ export type UpdateHabitInput = {
 export type LogHabitInput = {
   value: number
   logged_date: string
+  note?: string
 }
