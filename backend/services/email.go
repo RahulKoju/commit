@@ -1,63 +1,61 @@
 package services
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"log"
-	"net/smtp"
+	"net/http"
 )
 
 type EmailSender interface {
 	SendPasswordReset(toEmail string, resetURL string) error
 }
 
-type SmtpSender struct {
-	host     string
-	port     string
-	username string
-	password string
-	from     string
-	appURL   string
+type ResendSender struct {
+	apiKey string
+	from   string
 }
 
-func NewSmtpSender(host, port, username, password, from, appURL string) SmtpSender {
-	return SmtpSender{
-		host:     host,
-		port:     port,
-		username: username,
-		password: password,
-		from:     from,
-		appURL:   appURL,
-	}
+func NewResendSender(apiKey, from string) ResendSender {
+	return ResendSender{apiKey: apiKey, from: from}
 }
 
-func (s SmtpSender) SendPasswordReset(toEmail string, resetURL string) error {
-	subject := "Subject: Password Reset\n"
-	mime := "MIME-version: 1.0;\nContent-Type: text/html; charset=\"UTF-8\";\n\n"
-	body := fmt.Sprintf(`<p>Click the link below to reset your password:</p>
+func (s ResendSender) SendPasswordReset(toEmail string, resetURL string) error {
+	body, _ := json.Marshal(map[string]string{
+		"from":    s.from,
+		"to":      toEmail,
+		"subject": "Reset your password",
+		"html": fmt.Sprintf(`<p>Click the link below to reset your password:</p>
 <p><a href="%s">%s</a></p>
 <p>This link expires in 1 hour.</p>
-<p>If you did not request this, you can safely ignore this email.</p>`, resetURL, resetURL)
+<p>If you did not request this, you can safely ignore this email.</p>`, resetURL, resetURL),
+	})
 
-	msg := []byte("From: " + s.from + "\n" +
-		"To: " + toEmail + "\n" +
-		subject + mime + body)
+	req, err := http.NewRequest("POST", "https://api.resend.com/emails", bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("create request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+s.apiKey)
+	req.Header.Set("Content-Type", "application/json")
 
-	addr := s.host + ":" + s.port
-	auth := smtp.PlainAuth("", s.username, s.password, s.host)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("send request: %w", err)
+	}
+	defer resp.Body.Close()
 
-	if err := smtp.SendMail(addr, auth, s.from, []string{toEmail}, msg); err != nil {
-		return fmt.Errorf("send email: %w", err)
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("resend API: %s", resp.Status)
 	}
 
 	return nil
 }
 
-type LogSender struct {
-	appURL string
-}
+type LogSender struct{}
 
-func NewLogSender(appURL string) LogSender {
-	return LogSender{appURL: appURL}
+func NewLogSender() LogSender {
+	return LogSender{}
 }
 
 func (s LogSender) SendPasswordReset(toEmail string, resetURL string) error {

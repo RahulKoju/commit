@@ -63,10 +63,10 @@ func main() {
 	dashboardService := services.NewDashboardService(dashboardModel)
 
 	var emailSender services.EmailSender
-	if cfg.SMTPHost != "" {
-		emailSender = services.NewSmtpSender(cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPUsername, cfg.SMTPPassword, cfg.SMTPFrom, cfg.AppURL)
+	if cfg.ResendAPIKey != "" {
+		emailSender = services.NewResendSender(cfg.ResendAPIKey, cfg.EmailFrom)
 	} else {
-		emailSender = services.NewLogSender(cfg.AppURL)
+		emailSender = services.NewLogSender()
 	}
 
 	authService := services.NewAuthService(userModel, refreshTokenModel, passwordResetTokenModel, emailSender, cfg.AppURL, habitService, cfg.JWTSecret, cfg.JWTExpiryHours, cfg.JWTExpiryMinutes)

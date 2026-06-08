@@ -24,12 +24,9 @@ type Config struct {
 	DBMinConns              int
 	DBMaxConnLifetimeMinutes int
 	DBMaxConnIdleMinutes     int
-	SMTPHost                string
-	SMTPPort                string
-	SMTPUsername            string
-	SMTPPassword            string
-	SMTPFrom                string
-	AppURL                  string
+	ResendAPIKey string
+	EmailFrom    string
+	AppURL       string
 }
 
 func Load() (Config, error) {
@@ -63,12 +60,9 @@ func Load() (Config, error) {
 		DBMinConns:              dbMinConns,
 		DBMaxConnLifetimeMinutes: dbMaxConnLifetime,
 		DBMaxConnIdleMinutes:     dbMaxConnIdle,
-		SMTPHost:                os.Getenv("SMTP_HOST"),
-		SMTPPort:                os.Getenv("SMTP_PORT"),
-		SMTPUsername:            os.Getenv("SMTP_USERNAME"),
-		SMTPPassword:            os.Getenv("SMTP_PASSWORD"),
-		SMTPFrom:                os.Getenv("SMTP_FROM"),
-		AppURL:                  os.Getenv("APP_URL"),
+		ResendAPIKey:            os.Getenv("RESEND_API_KEY"),
+		EmailFrom:               os.Getenv("EMAIL_FROM"),
+		AppURL:                  os.Getenv("VITE_APP_URL"),
 	}
 
 	missing := missingEnv(cfg)
