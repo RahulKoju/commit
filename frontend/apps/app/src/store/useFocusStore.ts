@@ -37,7 +37,13 @@ export const useFocusStore = create<FocusState>((set) => ({
   preselectedTaskTitle: null,
   setIsFullScreen: (value) => set({ isFullScreen: value }),
   setSelectedTaskId: (value) => set({ selectedTaskId: value }),
-  setTimerMode: (value) => set({ timerMode: value }),
+  setTimerMode: (value) =>
+    set((state) => {
+      if (state.startedAt !== null) {
+        return { timerMode: value, remainingSeconds: 0, elapsedSeconds: 0, startedAt: null, durationSeconds: 0, mode: "idle", isFullScreen: false, preselectedTaskId: null, preselectedTaskTitle: null }
+      }
+      return { timerMode: value }
+    }),
   setPreselectedTask: (taskId, taskTitle) => set({ preselectedTaskId: taskId, preselectedTaskTitle: taskTitle }),
   clearPreselectedTask: () => set({ preselectedTaskId: null, preselectedTaskTitle: null }),
   startTimer: (durationSeconds, startedAt) =>

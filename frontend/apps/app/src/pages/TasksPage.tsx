@@ -175,7 +175,7 @@ export function TaskForm({ onDone }: { onDone: () => void }) {
           required
         />
       </div>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
         <label className="grid gap-2 text-sm">
           <span className="font-medium">Priority</span>
           <select name="priority" defaultValue="medium" className="h-9 rounded-md border bg-background px-3">

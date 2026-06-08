@@ -65,7 +65,7 @@ func (model NoteModel) List(ctx context.Context, params ListNotesParams) ([]Note
 		SELECT id, user_id, title, body, created_at, updated_at
 		FROM notes
 		WHERE user_id = $1
-		  AND ($2 = '' OR search_vector @@ websearch_to_tsquery('english', $2))
+		  AND ($2 = '' OR search_vector @@ websearch_to_tsquery('english', $2) OR title ILIKE '%' || $2 || '%')
 		ORDER BY updated_at DESC
 		LIMIT $3 OFFSET $4
 	`, params.UserID, params.Search, params.Limit, params.Offset)
@@ -99,7 +99,7 @@ func (model NoteModel) CountNotes(ctx context.Context, params ListNotesParams) (
 		SELECT COUNT(*)
 		FROM notes
 		WHERE user_id = $1
-		  AND ($2 = '' OR search_vector @@ websearch_to_tsquery('english', $2))
+		  AND ($2 = '' OR search_vector @@ websearch_to_tsquery('english', $2) OR title ILIKE '%' || $2 || '%')
 	`, params.UserID, params.Search).Scan(&count)
 	if err != nil {
 		return 0, err
