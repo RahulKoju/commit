@@ -2,7 +2,7 @@ import { BookOpen, CheckCircle2, Clock, Flame, GripVertical, LayoutGrid, Noteboo
 import type { ComponentType } from "react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Link } from "react-router-dom"
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from "recharts"
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, ReferenceLine } from "recharts"
 import { Button } from "@workspace/ui/components/button"
 
 import { useCurrentUser } from "@/hooks/useAuth"
@@ -184,28 +184,33 @@ function DraggableWidget({
 
 /* ─── Widget: Metric cards ─── */
 function MetricCardsWidget({ summary }: { summary: DashboardSummary; heatmapQuery: ReturnType<typeof useActivityHeatmap> }) {
+  const { week_comparison: wc } = summary
   return (
     <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-      <MetricCard icon={CheckCircle2} label="Tasks" value={`${summary.task_summary.done}/${summary.task_summary.total}`} detail="for today" href="/tasks" />
-      <MetricCard icon={Flame} label="Habits" value={`${summary.habit_summary.checked}/${summary.habit_summary.total}`} detail="checked today" href="/habits" />
+      <MetricCard icon={CheckCircle2} label="Tasks" value={`${summary.task_summary.done}/${summary.task_summary.total}`} detail="for today" href="/tasks" trend={trend(wc.tasks_done_this_week, wc.tasks_done_last_week)} />
+      <MetricCard icon={Flame} label="Habits" value={`${summary.habit_summary.checked}/${summary.habit_summary.total}`} detail="checked today" href="/habits" trend={trend(wc.habits_checked_this_week, wc.habits_checked_last_week)} />
       <MetricCard icon={BookOpen} label="Learning streak" value={`${summary.learning_streak}`} detail="consecutive study days" href="/learn" />
-      <MetricCard icon={Clock} label="Focus" value={summary.active_focus_session ? `${summary.active_focus_session.duration_minutes} min` : "Ready"} detail={summary.active_focus_session?.task_title ?? "Start a session"} href="/focus" />
+      <MetricCard icon={Clock} label="Focus" value={summary.active_focus_session ? `${summary.active_focus_session.duration_minutes} min` : "Ready"} detail={summary.active_focus_session?.task_title ?? "Start a session"} href="/focus" trend={trend(wc.focus_minutes_this_week, wc.focus_minutes_last_week)} />
     </div>
   )
 }
 
 /* ─── Widget: Habit chart ─── */
 function HabitChartWidget({ summary }: { summary: DashboardSummary; heatmapQuery: ReturnType<typeof useActivityHeatmap> }) {
+  const data = chartData(summary.weekly_habit_chart)
+  const separatorIndex = data.length > 7 ? data.length - 7 : -1
   return (
     <div className="rounded-xl border bg-background p-4">
-      <h2 className="font-semibold">Weekly habit completion</h2>
+      <h2 className="font-semibold">Habit completion (last 14 days)</h2>
+      <p className="text-xs text-muted-foreground">Last week vs this week</p>
       <div className="mt-4">
         <ResponsiveContainer width="100%" height={160}>
-          <BarChart data={chartData(summary.weekly_habit_chart)}>
+          <BarChart data={data}>
             <XAxis dataKey="day" tick={{ fontSize: 12 }} axisLine={false} tickLine={false} />
             <YAxis hide />
             <Tooltip contentStyle={{ fontSize: 13, borderRadius: 8, border: "1px solid var(--color-border)" }} formatter={(value: number, name: string) => [value, name === "completed" ? "Completed" : "Total"]} />
             <Bar dataKey="completed" fill="var(--color-primary)" radius={[4, 4, 0, 0]} />
+            {separatorIndex > 0 ? <ReferenceLine x={data[separatorIndex]?.day} stroke="var(--color-border)" strokeDasharray="4 4" /> : null}
           </BarChart>
         </ResponsiveContainer>
       </div>
@@ -215,12 +220,15 @@ function HabitChartWidget({ summary }: { summary: DashboardSummary; heatmapQuery
 
 /* ─── Widget: Productivity chart ─── */
 function ProductivityChartWidget({ summary }: { summary: DashboardSummary; heatmapQuery: ReturnType<typeof useActivityHeatmap> }) {
+  const data = productivityData(summary.weekly_productivity)
+  const separatorIndex = data.length > 7 ? data.length - 7 : -1
   return (
     <div className="rounded-xl border bg-background p-4">
-      <h2 className="font-semibold">Weekly productivity</h2>
+      <h2 className="font-semibold">Productivity (last 14 days)</h2>
+      <p className="text-xs text-muted-foreground">Last week vs this week</p>
       <div className="mt-4">
         <ResponsiveContainer width="100%" height={200}>
-          <BarChart data={productivityData(summary.weekly_productivity)}>
+          <BarChart data={data}>
             <XAxis dataKey="day" tick={{ fontSize: 12 }} axisLine={false} tickLine={false} />
             <YAxis hide />
             <Tooltip contentStyle={{ fontSize: 13, borderRadius: 8, border: "1px solid var(--color-border)" }} />
@@ -228,6 +236,7 @@ function ProductivityChartWidget({ summary }: { summary: DashboardSummary; heatm
             <Bar dataKey="tasks" name="Tasks" fill="var(--color-primary)" radius={[4, 4, 0, 0]} />
             <Bar dataKey="habits" name="Habits" fill="#22c55e" radius={[4, 4, 0, 0]} />
             <Bar dataKey="learning" name="Learning" fill="#a855f7" radius={[4, 4, 0, 0]} />
+            {separatorIndex > 0 ? <ReferenceLine x={data[separatorIndex]?.day} stroke="var(--color-border)" strokeDasharray="4 4" /> : null}
           </BarChart>
         </ResponsiveContainer>
       </div>
@@ -288,12 +297,14 @@ function MetricCard({
   value,
   detail,
   href,
+  trend,
 }: {
   icon: ComponentType<{ className?: string }>
   label: string
   value: string
   detail: string
   href: string
+  trend?: { direction: "up" | "down" | "flat"; label: string }
 }) {
   return (
     <Link to={href} className="rounded-xl border bg-background p-4 hover:bg-muted/50">
@@ -302,9 +313,25 @@ function MetricCard({
         <Icon className="size-5 text-muted-foreground" />
       </div>
       <p className="mt-3 text-2xl font-semibold">{value}</p>
-      <p className="mt-1 text-sm text-muted-foreground">{detail}</p>
+      <div className="mt-1 flex items-center gap-2">
+        <p className="text-sm text-muted-foreground">{detail}</p>
+        {trend ? (
+          <span className={`text-xs font-medium ${trend.direction === "up" ? "text-green-500" : trend.direction === "down" ? "text-red-500" : "text-muted-foreground"}`}>
+            {trend.label}
+          </span>
+        ) : null}
+      </div>
     </Link>
   )
+}
+
+function trend(current: number, previous: number): { direction: "up" | "down" | "flat"; label: string } | undefined {
+  if (previous === 0 && current === 0) return undefined
+  if (previous === 0) return { direction: "up", label: "vs last week" }
+  const diff = current - previous
+  const pct = Math.round((diff / previous) * 100)
+  if (pct === 0) return { direction: "flat", label: "vs last week" }
+  return { direction: pct > 0 ? "up" : "down", label: `${pct > 0 ? "+" : ""}${pct}% vs last week` }
 }
 
 function formatDate(value: string | undefined): string {

@@ -7,6 +7,17 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+type DashboardWeekComparison struct {
+	TasksDoneThisWeek       int `json:"tasks_done_this_week"`
+	TasksDoneLastWeek       int `json:"tasks_done_last_week"`
+	HabitsCheckedThisWeek   int `json:"habits_checked_this_week"`
+	HabitsCheckedLastWeek   int `json:"habits_checked_last_week"`
+	StudySessionsThisWeek   int `json:"study_sessions_this_week"`
+	StudySessionsLastWeek   int `json:"study_sessions_last_week"`
+	FocusMinutesThisWeek    int `json:"focus_minutes_this_week"`
+	FocusMinutesLastWeek    int `json:"focus_minutes_last_week"`
+}
+
 type DashboardSummary struct {
 	Today              string                           `json:"today"`
 	TaskSummary        DashboardTaskSummary             `json:"task_summary"`
@@ -15,6 +26,7 @@ type DashboardSummary struct {
 	RecentNotes        []DashboardNote                  `json:"recent_notes"`
 	WeeklyHabitChart   []DashboardHabitChartItem        `json:"weekly_habit_chart"`
 	WeeklyProductivity []DashboardProductivityChartItem `json:"weekly_productivity"`
+	WeekComparison     DashboardWeekComparison          `json:"week_comparison"`
 	ActiveFocusSession *DashboardFocusSession           `json:"active_focus_session"`
 }
 
@@ -93,6 +105,10 @@ func (model DashboardModel) Summary(ctx context.Context, userID string) (Dashboa
 	if err != nil {
 		return DashboardSummary{}, err
 	}
+	comparison, err := model.weekComparison(ctx, userID)
+	if err != nil {
+		return DashboardSummary{}, err
+	}
 
 	return DashboardSummary{
 		Today:              time.Now().Format("2006-01-02"),
@@ -102,6 +118,7 @@ func (model DashboardModel) Summary(ctx context.Context, userID string) (Dashboa
 		RecentNotes:        recentNotes,
 		WeeklyHabitChart:   habitChart,
 		WeeklyProductivity: productivityChart,
+		WeekComparison:     comparison,
 		ActiveFocusSession: focusSession,
 	}, nil
 }
@@ -165,7 +182,7 @@ func (model DashboardModel) recentNotes(ctx context.Context, userID string) ([]D
 func (model DashboardModel) weeklyHabitChart(ctx context.Context, userID string) ([]DashboardHabitChartItem, error) {
 	rows, err := model.pool.Query(ctx, `
 		WITH days AS (
-			SELECT generate_series(CURRENT_DATE - INTERVAL '6 days', CURRENT_DATE, INTERVAL '1 day')::date AS day
+			SELECT generate_series(CURRENT_DATE - INTERVAL '13 days', CURRENT_DATE, INTERVAL '1 day')::date AS day
 		)
 		SELECT d.day::text,
 		       COUNT(h.id)::int AS total,
@@ -207,7 +224,7 @@ type ActivityHeatmapItem struct {
 func (model DashboardModel) weeklyProductivity(ctx context.Context, userID string) ([]DashboardProductivityChartItem, error) {
 	rows, err := model.pool.Query(ctx, `
 		WITH days AS (
-			SELECT generate_series(CURRENT_DATE - INTERVAL '6 days', CURRENT_DATE, INTERVAL '1 day')::date AS day
+			SELECT generate_series(CURRENT_DATE - INTERVAL '13 days', CURRENT_DATE, INTERVAL '1 day')::date AS day
 		)
 		SELECT d.day::text,
 		       COALESCE(t.done_count, 0)::int,
@@ -218,7 +235,7 @@ func (model DashboardModel) weeklyProductivity(ctx context.Context, userID strin
 			SELECT scheduled_date, COUNT(*)::int AS done_count
 			FROM tasks
 			WHERE user_id = $1 AND status = 'done'
-			  AND scheduled_date >= CURRENT_DATE - INTERVAL '6 days'
+			  AND scheduled_date >= CURRENT_DATE - INTERVAL '13 days'
 			GROUP BY scheduled_date
 		) t ON t.scheduled_date = d.day
 		LEFT JOIN (
@@ -226,14 +243,14 @@ func (model DashboardModel) weeklyProductivity(ctx context.Context, userID strin
 			FROM habit_logs hl
 			INNER JOIN habits h ON h.id = hl.habit_id
 			WHERE h.user_id = $1 AND h.deleted_at IS NULL
-			  AND hl.logged_date >= CURRENT_DATE - INTERVAL '6 days'
+			  AND hl.logged_date >= CURRENT_DATE - INTERVAL '13 days'
 			GROUP BY hl.logged_date
 		) h ON h.logged_date = d.day
 		LEFT JOIN (
 			SELECT studied_at::date AS study_date, COUNT(*)::int AS session_count
 			FROM learn_entries
 			WHERE user_id = $1
-			  AND studied_at >= CURRENT_DATE - INTERVAL '6 days'
+			  AND studied_at >= CURRENT_DATE - INTERVAL '13 days'
 			GROUP BY studied_at::date
 		) l ON l.study_date = d.day
 		ORDER BY d.day
@@ -291,6 +308,36 @@ func (model DashboardModel) ActivityHeatmap(ctx context.Context, userID string, 
 		items = append(items, item)
 	}
 	return items, rows.Err()
+}
+
+func (model DashboardModel) weekComparison(ctx context.Context, userID string) (DashboardWeekComparison, error) {
+	var comp DashboardWeekComparison
+	err := model.pool.QueryRow(ctx, `
+		WITH this_week AS (
+			SELECT CURRENT_DATE - INTERVAL '6 days' AS start, CURRENT_DATE AS end
+		), last_week AS (
+			SELECT CURRENT_DATE - INTERVAL '13 days' AS start, CURRENT_DATE - INTERVAL '7 days' AS end
+		)
+		SELECT
+			COALESCE((SELECT COUNT(*)::int FROM tasks WHERE user_id = $1 AND status = 'done' AND scheduled_date BETWEEN (SELECT start FROM this_week) AND (SELECT end)), 0),
+			COALESCE((SELECT COUNT(*)::int FROM tasks WHERE user_id = $1 AND status = 'done' AND scheduled_date BETWEEN (SELECT start FROM last_week) AND (SELECT end)), 0),
+			COALESCE((SELECT COUNT(*)::int FROM habit_logs hl INNER JOIN habits h ON h.id = hl.habit_id WHERE h.user_id = $1 AND h.deleted_at IS NULL AND hl.logged_date BETWEEN (SELECT start FROM this_week) AND (SELECT end)), 0),
+			COALESCE((SELECT COUNT(*)::int FROM habit_logs hl INNER JOIN habits h ON h.id = hl.habit_id WHERE h.user_id = $1 AND h.deleted_at IS NULL AND hl.logged_date BETWEEN (SELECT start FROM last_week) AND (SELECT end)), 0),
+			COALESCE((SELECT COUNT(*)::int FROM learn_entries WHERE user_id = $1 AND studied_at::date BETWEEN (SELECT start FROM this_week) AND (SELECT end)), 0),
+			COALESCE((SELECT COUNT(*)::int FROM learn_entries WHERE user_id = $1 AND studied_at::date BETWEEN (SELECT start FROM last_week) AND (SELECT end)), 0),
+			COALESCE((SELECT COALESCE(SUM(duration_minutes), 0)::int FROM focus_sessions WHERE user_id = $1 AND start_time::date BETWEEN (SELECT start FROM this_week) AND (SELECT end)), 0),
+			COALESCE((SELECT COALESCE(SUM(duration_minutes), 0)::int FROM focus_sessions WHERE user_id = $1 AND start_time::date BETWEEN (SELECT start FROM last_week) AND (SELECT end)), 0)
+	`, userID).Scan(
+		&comp.TasksDoneThisWeek,
+		&comp.TasksDoneLastWeek,
+		&comp.HabitsCheckedThisWeek,
+		&comp.HabitsCheckedLastWeek,
+		&comp.StudySessionsThisWeek,
+		&comp.StudySessionsLastWeek,
+		&comp.FocusMinutesThisWeek,
+		&comp.FocusMinutesLastWeek,
+	)
+	return comp, err
 }
 
 func (model DashboardModel) activeFocusSession(ctx context.Context, userID string) (*DashboardFocusSession, error) {
