@@ -7,15 +7,27 @@ yarn-error.log*
 .pnpm-debug.log*
 lerna-debug.log*
 
+# Dependencies
 node_modules
+
+# Build outputs
 dist
 dist-ssr
 *.local
 
-# env files (can opt-in for committing if needed)
+# env files
 .env*
 !.env.example
+
+# Terraform
 secret.yaml
+terraform.tfvars
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+*.tfplan
+tfplan
 
 # turbo
 .turbo
