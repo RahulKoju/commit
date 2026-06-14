@@ -22,3 +22,13 @@ output "worker_ip" {
   value       = aws_eip.node[1].public_ip
   description = "Public IP of worker node"
 }
+
+output "control_plane_private_ip" {
+  value       = aws_instance.node[0].private_ip
+  description = "Private IP of control plane node"
+}
+
+output "worker_private_ip" {
+  value       = aws_instance.node[1].private_ip
+  description = "Private IP of worker node"
+}

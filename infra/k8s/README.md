@@ -25,3 +25,26 @@ docker build -f Dockerfile.web \
   --build-arg VITE_WEB_URL=https://commit.rahulkoju.com.np \
   -t rahulkoju/commit-web:latest .
 ```
+
+## Redeploying After terraform destroy
+
+Before running `rke up` on fresh infrastructure always:
+
+1. Delete local RKE state files:
+
+```bash
+   rm -f infra/rke/cluster.rkestate
+   rm -f infra/rke/kube_config_cluster.yml
+```
+
+2. Clean up old certificates and etcd data on control plane node:
+
+```bash
+   ssh -i ~/.ssh/commit-key.pem ubuntu@<CONTROL_PLANE_IP>
+   sudo docker rm -f etcd etcd-rolling-snapshots 2>/dev/null; true
+   sudo rm -rf /etc/kubernetes/ssl/
+   sudo rm -rf /var/lib/etcd/
+   exit
+```
+
+3. Then run `rke up`

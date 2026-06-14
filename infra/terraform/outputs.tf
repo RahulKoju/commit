@@ -22,3 +22,13 @@ output "worker_ip" {
   description = "Worker node public IP"
   value       = module.ec2.worker_ip
 }
+
+output "control_plane_private_ip" {
+  value       = module.ec2.control_plane_private_ip
+  description = "Private IP of control plane node"
+}
+
+output "worker_private_ip" {
+  value       = module.ec2.worker_private_ip
+  description = "Private IP of worker node"
+}
