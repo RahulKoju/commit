@@ -1,0 +1,10 @@
+---
+- name: Prepare all nodes for RKE
+  hosts: all
+  become: true
+  gather_facts: true
+
+  roles:
+    - common
+    - docker
+    - rke-prereqs
