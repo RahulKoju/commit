@@ -1,0 +1,32 @@
+nodes:
+  - address: CONTROL_PLANE_IP
+    internal_address: 10.0.0.0
+    user: ubuntu
+    role:
+      - controlplane
+      - etcd
+    ssh_key_path: ~/.ssh/commit-key.pem
+
+  - address: WORKER_IP
+    internal_address: 10.0.0.0
+    user: ubuntu
+    role:
+      - worker
+    ssh_key_path: ~/.ssh/commit-key.pem
+
+services:
+  etcd:
+    backup_config:
+      enabled: true
+      interval_hours: 12
+      retention: 6
+      safe_timestamp: false
+      timeout: 300
+
+ingress:
+  provider: nginx
+
+network:
+  plugin: canal
+
+kubernetes_version: v1.28.x-rancher1-1

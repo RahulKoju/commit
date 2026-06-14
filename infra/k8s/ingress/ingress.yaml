@@ -1,0 +1,54 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+
+metadata:
+  name: commit-ingress
+  namespace: commit
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - commit.rahulkoju.com.np
+        - app.commit.rahulkoju.com.np
+      secretName: commit-tls
+  rules:
+    - host: commit.rahulkoju.com.np
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: commit-frontend-web
+                port:
+                  number: 80
+          - path: /api/
+            pathType: Prefix
+            backend:
+              service:
+                name: commit-backend
+                port:
+                  number: 8080
+
+    - host: app.commit.rahulkoju.com.np
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: commit-frontend-app
+                port:
+                  number: 80
+          - path: /api/
+            pathType: Prefix
+            backend:
+              service:
+                name: commit-backend
+                port:
+                  number: 8080

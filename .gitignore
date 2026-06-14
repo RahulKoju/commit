@@ -7,14 +7,35 @@ yarn-error.log*
 .pnpm-debug.log*
 lerna-debug.log*
 
+# Dependencies
 node_modules
+
+# Build outputs
 dist
 dist-ssr
 *.local
 
-# env files (can opt-in for committing if needed)
+# env files
 .env*
 !.env.example
+
+# Terraform
+secret.yaml
+terraform.tfvars
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+*.tfplan
+tfplan
+
+# Ansible
+infra/ansible/inventory/hosts.ini
+
+# RKE
+infra/rke/cluster.yml
+infra/rke/kube_config_cluster.yml
+infra/rke/cluster.rkestate
 
 # turbo
 .turbo

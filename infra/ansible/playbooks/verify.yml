@@ -1,0 +1,57 @@
+---
+- name: Verify RKE node prerequisities
+  hosts: all
+  become: true
+  gather_facts: true
+
+  tasks:
+    - name: Gather service facts
+      service_facts:
+
+    - name: Verify Docker service is running
+      assert:
+        that:
+          - "'docker.service' in ansible_facts.services"
+          - ansible_facts.services['docker.service'].state == "running"
+        fail_msg: "Docker service is not running."
+        success_msg: "Docker service is running."
+
+    - name: Get Docker version
+      command: docker --version
+      register: docker_version
+      changed_when: false
+
+    - name: Display Docker version
+      debug:
+        msg: "{{ docker_version.stdout }}"
+
+    - name: Verify swap is disabled
+      assert:
+        that:
+          - ansible_swaptotal_mb == 0
+        fail_msg: "Swap is enabled."
+        success_msg: "Swap is disabled."
+
+    - name: Check if br_netfilter kernel module is loaded
+      command: lsmod
+      register: lsmod_output
+      failed_when: false
+
+    - name: Verify br_netfilter module is loaded
+      assert:
+        that:
+          - "'br_netfilter' in lsmod_output.stdout"
+        fail_msg: "Kernel module br_netfilter is not loaded."
+        success_msg: "Kernel module br_netfilter is loaded."
+
+    - name: Check IP forwarding
+      command: sysctl -n net.ipv4.ip_forward
+      register: ip_forward
+      changed_when: false
+
+    - name: Verify IP forwarding is enabled
+      assert:
+        that:
+          - ip_forward.stdout == "1"
+        fail_msg: "net.ipv4.ip_forward is disabled."
+        success_msg: "net.ipv4.ip_forward is enabled."
