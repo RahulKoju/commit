@@ -20,7 +20,7 @@
       - ca-certificates
       - gnupg
       - lsb-release
-      - apt-transform-https
+      - apt-transport-https
     state: present
 
 - name: Set timezone

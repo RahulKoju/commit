@@ -9,17 +9,17 @@
     state: present
     update_cache: yes
 
-- name: Create Docker official GPG key
+- name: Create keyrings directory
   file:
     path: /etc/apt/keyrings
     state: directory
     mode: "0755"
 
-- name: Add Docker official GPG key
-  get_url:
-    url: https://download.docker.com/linux/ubuntu/gpg
-    dest: /etc/apt/keyrings/docker.gpg
-    mode: "0644"
+- name: Add Docker GPG key
+  shell: |
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+  args:
+    creates: /etc/apt/keyrings/docker.gpg
 
 - name: Add Docker repository
   apt_repository:

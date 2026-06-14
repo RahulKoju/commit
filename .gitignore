@@ -29,6 +29,12 @@ crash.log
 *.tfplan
 tfplan
 
+# Ansible
+infra/ansible/inventory/hosts.ini
+
+# RKE
+infra/rke/cluster.yml
+
 # turbo
 .turbo
 
