@@ -26,6 +26,14 @@ docker build -f Dockerfile.web \
   -t rahulkoju/commit-web:latest .
 ```
 
+```bash
+docker build -f Dockerfile.app \
+  --build-arg VITE_API_URL=https://app.commit.rahulkoju.com.np \
+  --build-arg VITE_APP_URL=https://app.commit.rahulkoju.com.np \
+  --build-arg VITE_WEB_URL=https://commit.rahulkoju.com.np \
+  -t rahulkoju/commit-app:latest .
+```
+
 ## Redeploying After terraform destroy
 
 Before running `rke up` on fresh infrastructure always:
