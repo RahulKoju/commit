@@ -34,6 +34,8 @@ infra/ansible/inventory/hosts.ini
 
 # RKE
 infra/rke/cluster.yml
+infra/rke/kube_config_cluster.yml
+infra/rke/cluster.rkestate
 
 # turbo
 .turbo

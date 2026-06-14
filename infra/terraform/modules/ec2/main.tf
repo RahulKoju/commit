@@ -60,17 +60,60 @@ resource "aws_vpc_security_group_ingress_rule" "k8s_api" {
     description = "Kubernetes API"
 }
 
-resource "aws_vpc_security_group_ingress_rule" "rke" {
-    security_group_id = aws_security_group.ec2.id
+# resource "aws_vpc_security_group_ingress_rule" "rke" {
+#     security_group_id = aws_security_group.ec2.id
 
-    ip_protocol = "tcp"
+#     ip_protocol = "tcp"
 
-    from_port = 9345
-    to_port = 9345
+#     from_port = 9345
+#     to_port = 9345
 
-    referenced_security_group_id = aws_security_group.ec2.id
+#     referenced_security_group_id = aws_security_group.ec2.id
 
-    description = "RKE node communication"
+#     description = "RKE node communication"
+# }
+
+# resource "aws_vpc_security_group_ingress_rule" "etcd" {
+#   security_group_id            = aws_security_group.ec2.id
+#   ip_protocol                  = "tcp"
+#   from_port                    = 2379
+#   to_port                      = 2380
+#   referenced_security_group_id = aws_security_group.ec2.id
+#   description                  = "etcd server client API"
+# }
+
+# resource "aws_vpc_security_group_ingress_rule" "etcd_vpc" {
+#   security_group_id = aws_security_group.ec2.id
+#   ip_protocol       = "tcp"
+#   from_port         = 2379
+#   to_port           = 2380
+#   cidr_ipv4         = var.vpc_cidr
+#   description       = "etcd from VPC"
+# }
+
+# resource "aws_vpc_security_group_ingress_rule" "kubelet" {
+#   security_group_id            = aws_security_group.ec2.id
+#   ip_protocol                  = "tcp"
+#   from_port                    = 10250
+#   to_port                      = 10250
+#   referenced_security_group_id = aws_security_group.ec2.id
+#   description                  = "Kubelet API"
+# }
+
+# resource "aws_vpc_security_group_ingress_rule" "canal" {
+#   security_group_id            = aws_security_group.ec2.id
+#   ip_protocol                  = "udp"
+#   from_port                    = 8472
+#   to_port                      = 8472
+#   referenced_security_group_id = aws_security_group.ec2.id
+#   description                  = "Canal CNI VXLAN"
+# }
+
+resource "aws_vpc_security_group_ingress_rule" "internal" {
+  security_group_id = aws_security_group.ec2.id
+  ip_protocol       = "-1"
+  cidr_ipv4         = var.vpc_cidr
+  description       = "Allow all internal VPC traffic"
 }
 
 resource "aws_vpc_security_group_egress_rule" "all" {

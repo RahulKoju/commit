@@ -30,11 +30,16 @@
     state: present
     filename: docker
 
+- name: Get available Docker versions
+  shell: apt-cache madison docker-ce | grep "27\.2\." | head -1 | awk '{print $3}'
+  register: docker_version_string
+  changed_when: false
+
 - name: Install Docker Engine and plugins
   apt:
     name:
-      - docker-ce
-      - docker-ce-cli
+      - "docker-ce={{ docker_version_string.stdout }}"
+      - "docker-ce-cli={{ docker_version_string.stdout }}"
       - containerd.io
       - docker-buildx-plugin
       - docker-compose-plugin

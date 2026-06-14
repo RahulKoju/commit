@@ -1,5 +1,6 @@
 nodes:
   - address: CONTROL_PLANE_IP
+    internal_address: 10.0.0.0
     user: ubuntu
     role:
       - controlplane
@@ -7,6 +8,7 @@ nodes:
     ssh_key_path: ~/.ssh/commit-key.pem
 
   - address: WORKER_IP
+    internal_address: 10.0.0.0
     user: ubuntu
     role:
       - worker
