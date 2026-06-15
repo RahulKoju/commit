@@ -1,0 +1,25 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+
+metadata:
+  name: commit
+  namespace: argocd
+
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/RahulKoju/commit
+    targetRevision: main
+    path: infra/k8s
+    directory:
+      recurse: true
+      exclude: "{cert-manager/cert-manager.yaml,storage/local-path-provisioner.yaml}"
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: commit
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
