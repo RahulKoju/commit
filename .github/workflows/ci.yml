@@ -8,7 +8,7 @@ on:
     paths:
       - frontend/**
       - backend/**
-      - infra/**
+      - infra/k8s/**/*.yaml
       - .github/workflows/ci.yml
   workflow_dispatch:
 
