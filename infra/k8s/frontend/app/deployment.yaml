@@ -20,7 +20,7 @@ spec:
     spec:
       containers:
         - name: frontend-app
-          image: rahulkoju/commit-app:c24badd7d59c40e9ced100f50393d54417f33248
+          image: rahulkoju/commit-app:0b0942479f63f62250ab72767425e668feee1777
 
           ports:
             - containerPort: 80
