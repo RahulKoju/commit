@@ -8,6 +8,9 @@ on:
     paths:
       - frontend/**
       - backend/**
+      - infra/**
+      - .github/workflows/ci.yml
+  workflow_dispatch:
 
 jobs:
   deploy:
