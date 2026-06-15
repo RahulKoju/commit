@@ -20,7 +20,7 @@ spec:
     spec:
       containers:
         - name: frontend-web
-          image: rahulkoju/commit-web:latest
+          image: rahulkoju/commit-web:c24badd7d59c40e9ced100f50393d54417f33248
 
           ports:
             - containerPort: 80
