@@ -12,6 +12,9 @@ on:
       - .github/workflows/ci.yml
   workflow_dispatch:
 
+permissions:
+  contents: write # Allow git push
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
