@@ -1,0 +1,209 @@
+# ── Prometheus ────────────────────────────────
+prometheus:
+  prometheusSpec:
+    retention: 15d
+    retentionSize: "7GB" # hard cap — leaves headroom on 8Gi PVC
+
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: local-path
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 8Gi
+
+    resources:
+      requests:
+        cpu: 100m
+        memory: 400Mi
+      limits:
+        cpu: 500m
+        memory: 800Mi
+
+    # scrape interval — 30s, reduces cardinality vs 15s default
+    scrapeInterval: "30s"
+    evaluationInterval: "30s"
+
+    # only scrape from the commit and monitoring namespaces
+    serviceMonitorNamespaceSelector:
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: In
+          values:
+            - commit
+            - monitoring
+
+    podMonitorNamespaceSelector:
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: In
+          values:
+            - commit
+            - monitoring
+
+  # expose Prometheus internally only — access via Grafana datasource
+  service:
+    type: ClusterIP
+
+# ── Alertmanager ──────────────────────────────
+alertmanager:
+  alertmanagerSpec:
+    resources:
+      requests:
+        cpu: 10m
+        memory: 32Mi
+      limits:
+        cpu: 100m
+        memory: 64Mi
+
+  config:
+    global:
+      resolve_timeout: 5m
+      smtp_smarthost: "smtp.gmail.com:587"
+      smtp_from: "rahulkoju69@gmail.com"
+      smtp_auth_username: "rahulkoju"
+      smtp_auth_password_file: /etc/alertmanager/secrets/alertmanager-email-secret/smtp_auth_password
+      smtp_require_tls: true
+
+    route:
+      group_by: ["alertname", "namespace"]
+      group_wait: 30s # wait 30s before sending first batch
+      group_interval: 5m
+      repeat_interval: 12h
+      receiver: "email"
+
+      routes:
+        # critical alerts — fire immediately, repeat every 1h
+        - matchers:
+            - severity="critical"
+          receiver: "email"
+          group_wait: 10s
+          repeat_interval: 1h
+
+        # watchdog — silence it (it's just a heartbeat alert)
+        - matchers:
+            - alertname="Watchdog"
+          receiver: "null"
+
+    receivers:
+      - name: "null"
+      - name: "email"
+        email_configs:
+          - to: "contact@rahulkoju.com.np"
+            send_resolved: true
+
+    inhibit_rules:
+      - source_matchers:
+          - severity="critical"
+        target_matchers:
+          - severity="warning"
+        equal: ["alertname", "namespace"]
+
+    # mount the email secret
+    secrets:
+      - alertmanager-email-secret
+
+  service:
+    type: ClusterIP
+
+# ── Grafana ───────────────────────────────────
+grafana:
+  # pull admin creds from secret
+  admin:
+    existingSecret: grafana-admin-secret
+    userKey: admin-user
+    passwordKey: admin-password
+
+  persistence:
+    enabled: true
+    storageClassName: local-path
+    accessModes: ["ReadWriteOnce"]
+    size: 2Gi
+
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+  ingress:
+    enabled: true
+    ingressClassName: nginx
+    annotations:
+      cert-manager.io/cluster-issuer: "letsencrypt-prod"
+      nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    hosts:
+      - grafana.commit.rahulkoju.com.np
+    tls:
+      - secretName: grafana-tls
+        hosts:
+          - grafana.commit.rahulkoju.com.np
+
+  # Loki datasource — connects grafana to loki
+  additionalDataSources:
+    - name: Loki
+      type: loki
+      url: http://loki.monitoring.svc.cluster.local:3100
+      access: proxy
+      isDefault: false
+
+  # useful default dashboards
+  defaultDashboardsEnabled: true
+  defaultDashboardsTimezone: "Asia/Kathmandu"
+
+  grafana.ini:
+    server:
+      domain: grafana.commit.rahulkoju.com.np
+      root_url: "https://grafana.commit.rahulkoju.com.np"
+    # disable anonymous access
+    auth.anonymous:
+      enabled: false
+
+# ── Disable scrapers RKE doesn't expose ───────
+# RKE2 runs etcd, controller-manager, scheduler on host network
+# with localhost listeners — not reachable by Prometheus in-cluster
+
+kubeEtcd:
+  enabled: false
+
+kubeControllerManager:
+  enabled: false
+
+kubeScheduler:
+  enabled: false
+
+kubeProxy:
+  enabled: false # Canal handles this differently in RKE
+
+# ── Keep enabled ──────────────────────────────
+nodeExporter:
+  enabled: true # node metrics
+
+kubelet:
+  enabled: true # pod/container metrics
+
+kubeStateMetrics:
+  enabled: true # k8s object state
+
+# ── Node exporter resources ───────────────────
+prometheus-node-exporter:
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi
+    limits:
+      cpu: 100m
+      memory: 64Mi
+
+# ── kube-state-metrics resources ─────────────
+kube-state-metrics:
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi
+    limits:
+      cpu: 100m
+      memory: 64Mi

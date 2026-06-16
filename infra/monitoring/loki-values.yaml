@@ -1,0 +1,83 @@
+loki:
+  auth_enabled: false
+
+  commonConfig:
+    replication_factor: 1 # single binary, no HA
+
+  storage:
+    type: s3
+    s3:
+      region: ap-south-1
+      # bucket name injected from secret via env — see extraEnv below
+      bucketnames: "" # overridden by LOKI_S3_BUCKET env var below
+
+  # 7-day retention — matches S3 lifecycle rule
+  limits_config:
+    retention_period: 168h
+    ingestion_rate_mb: 4
+    ingestion_burst_size_mb: 8
+    max_query_series: 500
+    max_query_lookback: 168h
+
+  compactor:
+    retention_enabled: true
+    delete_request_store: s3
+
+  schemaConfig:
+    configs:
+      - from: "2024-01-01"
+        store: tsdb
+        object_store: s3
+        schema: v13
+        index:
+          prefix: loki_index_
+          period: 24h
+
+# single binary deployment — no distributed components
+deploymentMode: SingleBinary
+
+singleBinary:
+  replicas: 1
+
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 300m
+      memory: 384Mi
+
+  # inject S3 credentials from Kubernetes secret
+  extraEnv:
+    - name: AWS_ACCESS_KEY_ID
+      valueFrom:
+        secretKeyRef:
+          name: loki-s3-secret
+          key: AWS_ACCESS_KEY_ID
+    - name: AWS_SECRET_ACCESS_KEY
+      valueFrom:
+        secretKeyRef:
+          name: loki-s3-secret
+          key: AWS_SECRET_ACCESS_KEY
+    - name: LOKI_S3_BUCKET
+      valueFrom:
+        secretKeyRef:
+          name: loki-s3-secret
+          key: S3_BUCKET_NAME
+
+# disable components not used in single binary mode
+read:
+  replicas: 0
+write:
+  replicas: 0
+backend:
+  replicas: 0
+
+# no PVC — storage is S3
+persistence:
+  enabled: false
+
+# service — ClusterIP, Promtail and Grafana reach it internally
+service:
+  type: ClusterIP
+  port: 3100
