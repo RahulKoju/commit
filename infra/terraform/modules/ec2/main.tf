@@ -148,7 +148,6 @@ resource "aws_instance" "node" {
   ami           = data.aws_ami.ubuntu.id
   instance_type = var.instance_type
   key_name = var.key_name
-  iam_instance_profile = var.iam_instance_profile_name
 
   subnet_id = var.subnet_ids[count.index]
   vpc_security_group_ids = [aws_security_group.ec2.id]
