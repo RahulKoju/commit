@@ -1,8 +1,8 @@
 # ── Prometheus ────────────────────────────────
 prometheus:
   prometheusSpec:
-    retention: 15d
-    retentionSize: "7GB" # hard cap — leaves headroom on 8Gi PVC
+    retention: 3d
+    retentionSize: "2GB" # hard cap — leaves headroom on 8Gi PVC
 
     securityContext:
       runAsUser: 65534
@@ -21,15 +21,15 @@ prometheus:
 
     resources:
       requests:
-        cpu: 100m
-        memory: 400Mi
+        cpu: 50m
+        memory: 200Mi
       limits:
-        cpu: 500m
-        memory: 800Mi
+        cpu: 300m
+        memory: 400Mi
 
     # scrape interval — 30s, reduces cardinality vs 15s default
-    scrapeInterval: "30s"
-    evaluationInterval: "30s"
+    scrapeInterval: "60s"
+    evaluationInterval: "60s"
 
     # only scrape from the commit and monitoring namespaces
     serviceMonitorNamespaceSelector:
@@ -54,6 +54,7 @@ prometheus:
 
 # ── Alertmanager ──────────────────────────────
 alertmanager:
+  enabled: false
   alertmanagerSpec:
     resources:
       requests:
@@ -122,10 +123,10 @@ grafana:
     passwordKey: admin-password
 
   persistence:
-    enabled: true
+    enabled: false
     storageClassName: local-path
     accessModes: ["ReadWriteOnce"]
-    size: 2Gi
+    size: 500Mi
 
   resources:
     requests:

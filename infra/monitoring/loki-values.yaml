@@ -13,9 +13,9 @@ loki:
 
   # 7-day retention — matches S3 lifecycle rule
   limits_config:
-    retention_period: 168h
-    ingestion_rate_mb: 4
-    ingestion_burst_size_mb: 8
+    retention_period: 72h
+    ingestion_rate_mb: 2
+    ingestion_burst_size_mb: 4
     max_query_series: 500
     max_query_lookback: 168h
 
@@ -37,15 +37,13 @@ loki:
 deploymentMode: SingleBinary
 
 singleBinary:
-  replicas: 1
-
   resources:
     requests:
       cpu: 50m
       memory: 128Mi
     limits:
-      cpu: 300m
-      memory: 384Mi
+      cpu: 200m
+      memory: 300Mi
 
   # inject S3 credentials from Kubernetes secret
   extraEnv:
