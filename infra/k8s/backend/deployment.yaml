@@ -20,7 +20,7 @@ spec:
     spec:
       containers:
         - name: backend
-          image: rahulkoju/commit-backend:8b99a0b976df5ad3ca759ee69cf455a3063472d5
+          image: rahulkoju/commit-backend:5458a5d16e6192e6ebd542f22f27a393cb8e4756
 
           ports:
             - containerPort: 8080
