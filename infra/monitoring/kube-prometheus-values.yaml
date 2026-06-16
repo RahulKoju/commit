@@ -4,6 +4,12 @@ prometheus:
     retention: 15d
     retentionSize: "7GB" # hard cap — leaves headroom on 8Gi PVC
 
+    securityContext:
+      runAsUser: 65534
+      runAsGroup: 65534
+      fsGroup: 65534
+      fsGroupChangePolicy: OnRootMismatch
+
     storageSpec:
       volumeClaimTemplate:
         spec:
