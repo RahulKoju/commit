@@ -8,6 +8,10 @@ nodeSelector: &workerNodeSelector
 # Prometheus
 prometheus:
   prometheusSpec:
+    securityContext:
+      runAsNonRoot: false
+      runAsUser: 0
+      fsGroup: 0
     nodeSelector: *workerNodeSelector
     retention: 15d
     retentionSize: "8GB"
