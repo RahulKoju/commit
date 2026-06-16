@@ -18,8 +18,6 @@ module "ec2" {
   allowed_ssh_cidr = var.allowed_ssh_cidr
   vpc_cidr         = var.vpc_cidr
 
-  iam_instance_profile_name = aws_iam_instance_profile.node.name
-
   vpc_id     = module.vpc.vpc_id
   subnet_ids = module.vpc.public_subnet_ids
 }

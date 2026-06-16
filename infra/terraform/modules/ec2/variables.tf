@@ -37,7 +37,3 @@ variable "vpc_cidr" {
   description = "VPC CIDR block"
   type        = string
 }
-
-variable "iam_instance_profile_name" {
-  type = string
-}

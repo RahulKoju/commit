@@ -1,4 +1,4 @@
-# Kubernetes Manifests
+# Commit App — Deployment Guide
 
 ## Apply Order (Fresh Infrastructure)
 
@@ -11,7 +11,14 @@ cd infra/rke && rm -f cluster.rkestate kube_config_cluster.yml && rke up
 export KUBECONFIG=/path/to/infra/rke/kube_config_cluster.yml
 ```
 
-### 2. One-time cluster setup (manual)
+### 2. Label worker node
+
+```bash
+kubectl get nodes  # get worker node name
+kubectl label node <worker-node-name> node-role.kubernetes.io/worker=true
+```
+
+### 3. One-time cluster setup (manual)
 
 ```bash
 kubectl apply -f infra/k8s/namespaces/
@@ -19,18 +26,18 @@ kubectl apply -f infra/k8s/storage/
 kubectl apply -f infra/k8s/cert-manager/cert-manager.yaml
 # wait ~30s
 kubectl apply -f infra/k8s/cert-manager/clusterissuer.yaml
-kubectl apply -f infra/k8s/config/secret.yaml  # sensitive, never in git
+kubectl apply -f infra/k8s/config/secret.yaml          # sensitive, never in git
 ```
 
-### 3. Install ArgoCD
+### 4. Install ArgoCD
 
 ```bash
 kubectl create namespace argocd
-kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+kubectl apply -n argocd --server-side --force-conflicts -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
 # wait ~60s for pods to be ready
 ```
 
-### 4. Access ArgoCD UI (optional — for debugging and monitoring)
+### 5. Access ArgoCD UI (optional — for debugging and monitoring)
 
 ```bash
 kubectl port-forward svc/argocd-server -n argocd 8080:443
@@ -40,12 +47,43 @@ kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.pas
 # Settings → Repositories → Connect Repo → add GitHub repo with PAT
 ```
 
-### 5. Deploy app via ArgoCD
+### 6. Deploy app via ArgoCD
 
 ```bash
 kubectl apply -f infra/argocd/application.yaml
 # ArgoCD automatically syncs all manifests from infra/k8s/
 ```
+
+### 7. Monitoring setup
+
+```bash
+# Add Helm repos
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm repo add grafana https://grafana.github.io/helm-charts
+helm repo update
+
+# Create namespace
+kubectl create namespace monitoring
+
+# Apply secrets manually (never in git)
+kubectl apply -f infra/monitoring/alertmanager-secret.yaml
+kubectl apply -f infra/monitoring/grafana-admin-secret.yaml
+
+# Install kube-prometheus-stack
+helm install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
+  --namespace monitoring \
+  --values infra/monitoring/kube-prometheus-stack-values.yaml
+
+# Install Loki
+helm install loki grafana/loki \
+  --namespace monitoring \
+  --values infra/monitoring/loki-values.yaml
+
+# Deploy monitoring ArgoCD application
+kubectl apply -f infra/argocd/monitoring-application.yaml
+```
+
+---
 
 ## ArgoCD manages (automatic)
 
@@ -54,12 +92,18 @@ kubectl apply -f infra/argocd/application.yaml
 - backend (Deployment, Service)
 - frontend web + app (Deployments, Services)
 - ingress
+- monitoring values changes (via monitoring-application.yaml)
 
 ## You manage manually
 
-- `infra/k8s/config/secret.yaml` — never in git, apply after fresh infrastructure
-- `infra/k8s/storage/` — one-time install
-- `infra/k8s/cert-manager/` — one-time install
+- `infra/k8s/config/secret.yaml` — app secrets, never in git
+- `infra/monitoring/alertmanager-secret.yaml` — Gmail app password, never in git
+- `infra/monitoring/grafana-admin-secret.yaml` — Grafana admin password, never in git
+- `infra/k8s/storage/` — one-time cluster install
+- `infra/k8s/cert-manager/` — one-time cluster install
+- Helm installs for kube-prometheus-stack and Loki — one-time per cluster
+
+---
 
 ## Redeployment After terraform destroy
 
@@ -84,9 +128,22 @@ exit
 
 3. Then run `rke up`
 
+---
+
+## DNS Records (Cloudflare)
+
+Point all to worker node Elastic IP (DNS only, grey cloud):
+
+- `commit.rahulkoju.com.np` → worker public IP
+- `app.commit.rahulkoju.com.np` → worker public IP
+- `grafana.commit.rahulkoju.com.np` → worker public IP
+
+---
+
 ## Frontend Images
 
-Must be rebuilt with production VITE env vars:
+Handled automatically by GitHub Actions CI on push to main.
+Manual rebuild if needed:
 
 ```bash
 # web
@@ -103,10 +160,3 @@ docker build -f Dockerfile.app \
   --build-arg VITE_WEB_URL=https://commit.rahulkoju.com.np \
   -t rahulkoju/commit-app:latest .
 ```
-
-## DNS Records (Cloudflare)
-
-Point to worker node Elastic IP:
-
-- `commit.rahulkoju.com.np` → worker public IP
-- `app.commit.rahulkoju.com.np` → worker public IP
