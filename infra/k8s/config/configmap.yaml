@@ -11,6 +11,7 @@ data:
   PORT: "8080"
   APP_ENV: production
   ALLOWED_ORIGINS: https://commit.rahulkoju.com.np,https://app.commit.rahulkoju.com.np
+  COOKIE_DOMAIN: .rahulkoju.com.np
   JWT_EXPIRY_HOURS: "168"
   JWT_EXPIRY_MINUTES: "15"
   DB_MAX_CONNS: "10"

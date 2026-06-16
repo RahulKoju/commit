@@ -86,6 +86,7 @@ func main() {
 		ReviewService:             reviewService,
 		DashboardService:          dashboardService,
 		FlashcardService:          flashcardService,
+		CookieDomain:              cfg.CookieDomain,
 		FocusDailyMinimumMinute:   cfg.FocusDailyMinimumMinute,
 	})
 

@@ -17,6 +17,7 @@ type Config struct {
 	Port                string
 	AppEnv              string
 	AllowedOrigins      []string
+	CookieDomain        string
 	FocusDailyMinimumMinute int
 	JWTExpiryHours          int
 	JWTExpiryMinutes        int
@@ -53,6 +54,7 @@ func Load() (Config, error) {
 		Port:                    os.Getenv("PORT"),
 		AppEnv:                  os.Getenv("APP_ENV"),
 		AllowedOrigins:          allowedOrigins,
+		CookieDomain:            os.Getenv("COOKIE_DOMAIN"),
 		FocusDailyMinimumMinute: focusDailyMinimum,
 		JWTExpiryHours:          jwtExpiryHours,
 		JWTExpiryMinutes:        jwtExpiryMinutes,

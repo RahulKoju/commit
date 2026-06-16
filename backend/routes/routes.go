@@ -22,12 +22,13 @@ type Dependencies struct {
 	ReviewService             services.ReviewService
 	DashboardService          services.DashboardService
 	FlashcardService          services.FlashcardService
+	CookieDomain              string
 	FocusDailyMinimumMinute   int
 }
 
 func Register(router *gin.Engine, deps Dependencies) {
 	healthHandler := handlers.NewHealthHandler()
-	authHandler := handlers.NewAuthHandler(deps.AuthService)
+	authHandler := handlers.NewAuthHandler(deps.AuthService, deps.CookieDomain)
 	adminHandler := handlers.NewAdminHandler(deps.AdminService)
 	taskHandler := handlers.NewTaskHandler(deps.TaskService)
 	focusHandler := handlers.NewFocusHandler(deps.FocusService, deps.FocusDailyMinimumMinute)

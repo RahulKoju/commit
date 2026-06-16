@@ -17,7 +17,8 @@ const (
 )
 
 type AuthHandler struct {
-	auth services.AuthService
+	auth         services.AuthService
+	cookieDomain string
 }
 
 type registerRequest struct {
@@ -35,8 +36,8 @@ type authResponse struct {
 	User models.User `json:"user"`
 }
 
-func NewAuthHandler(auth services.AuthService) AuthHandler {
-	return AuthHandler{auth: auth}
+func NewAuthHandler(auth services.AuthService, cookieDomain string) AuthHandler {
+	return AuthHandler{auth: auth, cookieDomain: cookieDomain}
 }
 
 func (handler AuthHandler) Register(c *gin.Context) {
@@ -56,7 +57,7 @@ func (handler AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
-	setAuthCookies(c, result.Token, result.RefreshToken)
+	setAuthCookies(c, result.Token, result.RefreshToken, handler.cookieDomain)
 	c.JSON(http.StatusCreated, authResponse{User: result.User})
 }
 
@@ -82,7 +83,7 @@ func (handler AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	setAuthCookies(c, result.Token, result.RefreshToken)
+	setAuthCookies(c, result.Token, result.RefreshToken, handler.cookieDomain)
 	c.JSON(http.StatusOK, authResponse{User: result.User})
 }
 
@@ -99,7 +100,7 @@ func (handler AuthHandler) Refresh(c *gin.Context) {
 		return
 	}
 
-	setAuthCookies(c, newToken, newRefreshToken)
+	setAuthCookies(c, newToken, newRefreshToken, handler.cookieDomain)
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
@@ -110,7 +111,7 @@ func (handler AuthHandler) Logout(c *gin.Context) {
 	} else if ok {
 		handler.auth.RevokeRefreshTokens(c.Request.Context(), userID)
 	}
-	clearAuthCookies(c)
+	clearAuthCookies(c, handler.cookieDomain)
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
@@ -173,10 +174,11 @@ func (handler AuthHandler) ResetPassword(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "password has been reset successfully"})
 }
 
-func setAuthCookies(c *gin.Context, accessToken string, refreshToken string) {
+func setAuthCookies(c *gin.Context, accessToken string, refreshToken string, domain string) {
 	http.SetCookie(c.Writer, &http.Cookie{
 		Name:     accessCookieName,
 		Value:    accessToken,
+		Domain:   domain,
 		Path:     "/",
 		MaxAge:   86400, // 1 day
 		HttpOnly: true,
@@ -186,6 +188,7 @@ func setAuthCookies(c *gin.Context, accessToken string, refreshToken string) {
 	http.SetCookie(c.Writer, &http.Cookie{
 		Name:     refreshCookieName,
 		Value:    refreshToken,
+		Domain:   domain,
 		Path:     "/api/v1/auth/refresh",
 		MaxAge:   7 * 24 * 3600, // 7 days
 		HttpOnly: true,
@@ -194,10 +197,11 @@ func setAuthCookies(c *gin.Context, accessToken string, refreshToken string) {
 	})
 }
 
-func clearAuthCookies(c *gin.Context) {
+func clearAuthCookies(c *gin.Context, domain string) {
 	http.SetCookie(c.Writer, &http.Cookie{
 		Name:     accessCookieName,
 		Value:    "",
+		Domain:   domain,
 		Path:     "/",
 		MaxAge:   -1,
 		HttpOnly: true,
@@ -207,6 +211,7 @@ func clearAuthCookies(c *gin.Context) {
 	http.SetCookie(c.Writer, &http.Cookie{
 		Name:     refreshCookieName,
 		Value:    "",
+		Domain:   domain,
 		Path:     "/api/v1/auth/refresh",
 		MaxAge:   -1,
 		HttpOnly: true,
