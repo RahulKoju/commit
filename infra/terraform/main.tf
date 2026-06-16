@@ -16,7 +16,7 @@ module "ec2" {
   instance_type    = var.instance_type
   key_name         = var.key_name
   allowed_ssh_cidr = var.allowed_ssh_cidr
-  vpc_cidr = var.vpc_cidr
+  vpc_cidr         = var.vpc_cidr
 
   vpc_id     = module.vpc.vpc_id
   subnet_ids = module.vpc.public_subnet_ids

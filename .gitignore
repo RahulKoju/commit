@@ -37,6 +37,11 @@ infra/rke/cluster.yml
 infra/rke/kube_config_cluster.yml
 infra/rke/cluster.rkestate
 
+# Secret files 
+grafana-secret.yaml
+loki-s3-secret.yaml
+alertmanager-secret.yaml
+
 # turbo
 .turbo
 
