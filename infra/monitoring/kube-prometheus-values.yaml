@@ -2,30 +2,12 @@
 prometheus:
   prometheusSpec:
     retention: 3d
-    retentionSize: "2GB" # hard cap — leaves headroom on 8Gi PVC
-
-    securityContext:
-      runAsUser: 65534
-      runAsGroup: 65534
-      fsGroup: 65534
-      fsGroupChangePolicy: OnRootMismatch
-
-    initContainers:
-      - name: fix-permissions
-        image: busybox:1.36
-        command:
-          - sh
-          - -c
-          - |
-            chown -R 65534:65534 /prometheus
-        volumeMounts:
-          - name: prometheus-kube-prometheus-stack-prometheus-db
-            mountPath: /prometheus
+    retentionSize: "7GB"
 
     storageSpec:
       volumeClaimTemplate:
         spec:
-          storageClassName: local-path
+          storageClassName: gp3 # EBS gp3 — no permission issues
           accessModes: ["ReadWriteOnce"]
           resources:
             requests:
@@ -39,11 +21,9 @@ prometheus:
         cpu: 300m
         memory: 400Mi
 
-    # scrape interval — 30s, reduces cardinality vs 15s default
     scrapeInterval: "60s"
     evaluationInterval: "60s"
 
-    # only scrape from the commit and monitoring namespaces
     serviceMonitorNamespaceSelector:
       matchExpressions:
         - key: kubernetes.io/metadata.name
@@ -60,13 +40,11 @@ prometheus:
             - commit
             - monitoring
 
-  # expose Prometheus internally only — access via Grafana datasource
   service:
     type: ClusterIP
 
 # ── Alertmanager ──────────────────────────────
 alertmanager:
-  enabled: false
   alertmanagerSpec:
     resources:
       requests:
@@ -76,31 +54,31 @@ alertmanager:
         cpu: 100m
         memory: 64Mi
 
+    secrets:
+      - alertmanager-email-secret
+
   config:
     global:
       resolve_timeout: 5m
       smtp_smarthost: "smtp.gmail.com:587"
-      smtp_from: "rahulkoju69@gmail.com"
-      smtp_auth_username: "rahulkoju"
+      smtp_from: "REPLACE_WITH_FROM_EMAIL"
+      smtp_auth_username: "REPLACE_WITH_FROM_EMAIL"
       smtp_auth_password_file: /etc/alertmanager/secrets/alertmanager-email-secret/smtp_auth_password
       smtp_require_tls: true
 
     route:
       group_by: ["alertname", "namespace"]
-      group_wait: 30s # wait 30s before sending first batch
+      group_wait: 30s
       group_interval: 5m
       repeat_interval: 12h
       receiver: "email"
 
       routes:
-        # critical alerts — fire immediately, repeat every 1h
         - matchers:
             - severity="critical"
           receiver: "email"
           group_wait: 10s
           repeat_interval: 1h
-
-        # watchdog — silence it (it's just a heartbeat alert)
         - matchers:
             - alertname="Watchdog"
           receiver: "null"
@@ -109,7 +87,7 @@ alertmanager:
       - name: "null"
       - name: "email"
         email_configs:
-          - to: "contact@rahulkoju.com.np"
+          - to: "REPLACE_WITH_TO_EMAIL"
             send_resolved: true
 
     inhibit_rules:
@@ -119,26 +97,21 @@ alertmanager:
           - severity="warning"
         equal: ["alertname", "namespace"]
 
-    # mount the email secret
-    secrets:
-      - alertmanager-email-secret
-
   service:
     type: ClusterIP
 
 # ── Grafana ───────────────────────────────────
 grafana:
-  # pull admin creds from secret
   admin:
     existingSecret: grafana-admin-secret
     userKey: admin-user
     passwordKey: admin-password
 
   persistence:
-    enabled: false
-    storageClassName: local-path
+    enabled: true
+    storageClassName: gp3 # EBS gp3
     accessModes: ["ReadWriteOnce"]
-    size: 500Mi
+    size: 2Gi
 
   resources:
     requests:
@@ -161,7 +134,6 @@ grafana:
         hosts:
           - grafana.commit.rahulkoju.com.np
 
-  # Loki datasource — connects grafana to loki
   additionalDataSources:
     - name: Loki
       type: loki
@@ -169,7 +141,6 @@ grafana:
       access: proxy
       isDefault: false
 
-  # useful default dashboards
   defaultDashboardsEnabled: true
   defaultDashboardsTimezone: "Asia/Kathmandu"
 
@@ -177,14 +148,10 @@ grafana:
     server:
       domain: grafana.commit.rahulkoju.com.np
       root_url: "https://grafana.commit.rahulkoju.com.np"
-    # disable anonymous access
     auth.anonymous:
       enabled: false
 
 # ── Disable scrapers RKE doesn't expose ───────
-# RKE2 runs etcd, controller-manager, scheduler on host network
-# with localhost listeners — not reachable by Prometheus in-cluster
-
 kubeEtcd:
   enabled: false
 
@@ -195,19 +162,19 @@ kubeScheduler:
   enabled: false
 
 kubeProxy:
-  enabled: false # Canal handles this differently in RKE
+  enabled: false
 
 # ── Keep enabled ──────────────────────────────
 nodeExporter:
-  enabled: true # node metrics
+  enabled: true
 
 kubelet:
-  enabled: true # pod/container metrics
+  enabled: true
 
 kubeStateMetrics:
-  enabled: true # k8s object state
+  enabled: true
 
-# ── Node exporter resources ───────────────────
+# ── Resource limits ───────────────────────────
 prometheus-node-exporter:
   resources:
     requests:
@@ -217,7 +184,6 @@ prometheus-node-exporter:
       cpu: 100m
       memory: 64Mi
 
-# ── kube-state-metrics resources ─────────────
 kube-state-metrics:
   resources:
     requests:
