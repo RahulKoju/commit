@@ -5,7 +5,7 @@ config:
   snippets:
     # add namespace + app labels to every log line
     pipelineStages:
-      - cri: {}
+      - docker: {}
       - labeldrop:
           - filename
       - labels:
@@ -32,7 +32,7 @@ config:
           # only ship logs from commit and monitoring namespaces
           - source_labels: [__meta_kubernetes_namespace]
             action: keep
-            regex: "commit"
+            regex: "(commit|monitoring)"
           - source_labels: [__meta_kubernetes_pod_annotation_promtail_io_scrape]
             action: drop
             regex: "false"
