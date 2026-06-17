@@ -10,7 +10,7 @@ Auth uses an HttpOnly cookie named `commit_token` containing a signed JWT (acces
 
 | Cookie | Type | Expiry | Description |
 |--------|------|--------|-------------|
-| `commit_token` | HttpOnly | 15 minutes | Access token JWT |
+| `commit_token` | HttpOnly | 24 hours | Access token JWT |
 | `refresh_token` | HttpOnly | 7 days | Refresh token (rotated on use) |
 
 On `401`, the frontend automatically calls `POST /auth/refresh` to rotate tokens and retry the request.

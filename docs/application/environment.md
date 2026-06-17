@@ -17,7 +17,15 @@ All backend variables are loaded in `backend/config/config.go`. The server fails
 | `FOCUS_DAILY_MINIMUM_MINUTES` | no | Auto-log "Focused study" habit when daily focus >= this (default: `120`) | `120` |
 | `RESEND_API_KEY` | no | Resend API key for email delivery (falls back to logging to stdout) | `re_123456...` |
 | `EMAIL_FROM` | no | From-address for outgoing emails | `noreply@example.com` |
-| `FRONTEND_URL` | no | Frontend URL for password reset links in emails | `http://localhost:5173` |
+| `VITE_WEB_URL` | no | Frontend URL for password reset links in emails | `http://localhost:5173` |
+| `ALLOWED_ORIGINS` | no | Comma-separated CORS origins (required in production, defaults to empty in dev) | `http://localhost:5173,http://localhost:5174` |
+| `COOKIE_DOMAIN` | no | Domain attribute for auth cookies (set to `.yourdomain.com` for cross-subdomain auth) | `.rahulkoju.com.np` |
+| `JWT_EXPIRY_HOURS` | no | Refresh token expiry in hours (default: `168` = 7 days) | `168` |
+| `JWT_EXPIRY_MINUTES` | no | Access token expiry in minutes (default: `1440` = 24 hours) | `1440` |
+| `DB_MAX_CONNS` | no | Max database connections in pool (default: `10`) | `10` |
+| `DB_MIN_CONNS` | no | Min database connections in pool (default: `1`) | `1` |
+| `DB_MAX_CONN_LIFETIME_MINUTES` | no | Max connection lifetime before recycling (default: `60`) | `60` |
+| `DB_MAX_CONN_IDLE_MINUTES` | no | Max connection idle time before closing (default: `30`) | `30` |
 
 The backend does **not** load `.env` files automatically. Environment variables must be set in the shell or via your process manager.
 
@@ -30,6 +38,12 @@ Frontend variables are declared in `vite-env.d.ts` and accessed via `import.meta
 | `VITE_API_URL` | yes | Backend API base URL (used as Axios `baseURL`) | `http://localhost:8080` | app, web |
 | `VITE_APP_URL` | no | Frontend app URL (for redirects) | `http://localhost:5174` | app, web |
 | `VITE_DEV` | no | Built-in Vite flag — used for debug logging | — | app, web |
+
+## Reference Files
+
+For the canonical production configuration, see:
+- **ConfigMap:** `infra/k8s/config/configmap.yaml` (non-sensitive production values)
+- **Secret template:** `infra/k8s/config/secret.yaml.example` (sensitive value structure)
 
 ## Setup
 
@@ -54,7 +68,7 @@ The password reset flow uses [Resend](https://resend.com). Configuration is opti
 ```bash
 RESEND_API_KEY=re_123456789...
 EMAIL_FROM=noreply@your-domain.com
-FRONTEND_URL=https://your-frontend.com
+VITE_WEB_URL=https://your-frontend.com
 ```
 
 ### Security Notes

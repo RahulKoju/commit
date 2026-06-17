@@ -100,6 +100,23 @@ Running commands from the root:
 - `pnpm lint`: Lint all packages.
 - `pnpm typecheck`: Type check all packages.
 
+## Docker Compose (Alternative)
+
+For a fully containerized local environment without installing Go/Node.js locally:
+
+```bash
+# From the repo root
+docker compose up --build
+```
+
+This starts:
+- PostgreSQL on the default port
+- Backend at `http://localhost:8080`
+- Web frontend at `http://localhost:5173`
+- App frontend at `http://localhost:5174`
+
+Environment variables are read from the root `.env` file. See [Environment Variables](environment.md) for configuration.
+
 ## Verify
 
 1. Open `http://localhost:5173` — you should see the landing page

@@ -61,7 +61,7 @@ POST /api/v1/auth/register
   → bcrypt hash password
   → Insert user
   → Seed 8 default habits across 3 categories
-  → Generate access_token (15 min) + refresh_token (7 days)
+  → Generate access_token (24h) + refresh_token (7 days)
   → Set commit_token cookie (access_token)
   → Set refresh_token cookie
   → Return user object

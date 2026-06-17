@@ -43,4 +43,4 @@ Migrations are run automatically on startup. They are located in the `migrations
 
 ## API Documentation
 
-See the central [API Reference](../docs/api.md) for endpoint details.
+See the central [API Reference](../docs/application/api.md) for endpoint details.
