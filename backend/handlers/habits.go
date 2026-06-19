@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"commit/backend/metrics"
 	"commit/backend/models"
 	"commit/backend/services"
 
@@ -273,6 +274,7 @@ func (handler HabitHandler) LogHabit(c *gin.Context) {
 		writeHabitError(c, err)
 		return
 	}
+	metrics.HabitsLoggedTotal.Inc()
 	c.JSON(http.StatusOK, gin.H{"log": log})
 }
 

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 
+	"commit/backend/metrics"
 	"commit/backend/middleware"
 	"commit/backend/models"
 	"commit/backend/services"
@@ -96,6 +97,7 @@ func (handler FocusHandler) Create(c *gin.Context) {
 		return
 	}
 
+	metrics.FocusSessionsTotal.Inc()
 	c.JSON(http.StatusCreated, gin.H{"session": session})
 }
 

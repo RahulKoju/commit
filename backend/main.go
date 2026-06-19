@@ -7,6 +7,7 @@ import (
 
 	"commit/backend/config"
 	"commit/backend/db"
+	"commit/backend/metrics"
 	"commit/backend/middleware"
 	"commit/backend/models"
 	"commit/backend/routes"
@@ -74,7 +75,7 @@ func main() {
 	authService := services.NewAuthService(userModel, refreshTokenModel, passwordResetTokenModel, emailSender, cfg.AppURL, habitService, cfg.JWTSecret, cfg.JWTExpiryHours, cfg.JWTExpiryMinutes)
 
 	router := gin.New()
-	router.Use(middleware.Logger(), gin.Recovery(), middleware.CORS(cfg.AllowedOrigins))
+	router.Use(middleware.Logger(), gin.Recovery(), middleware.CORS(cfg.AllowedOrigins), metrics.Middleware())
 	routes.Register(router, routes.Dependencies{
 		AuthService:               authService,
 		AdminService:              adminService,
@@ -89,6 +90,8 @@ func main() {
 		CookieDomain:              cfg.CookieDomain,
 		FocusDailyMinimumMinute:   cfg.FocusDailyMinimumMinute,
 	})
+
+	metrics.StartDBStatsCollector(pool)
 
 	if err := router.Run(":" + cfg.Port); err != nil {
 		log.Fatalf("run server: %v", err)
