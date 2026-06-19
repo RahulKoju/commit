@@ -175,10 +175,10 @@ export function TaskForm({ onDone }: { onDone: () => void }) {
           required
         />
       </div>
-      <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
+      <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
         <label className="grid gap-2 text-sm">
-          <span className="font-medium">Priority</span>
-          <select name="priority" defaultValue="medium" className="h-9 rounded-md border bg-background px-3">
+          <span className="font-medium whitespace-nowrap">Priority</span>
+          <select name="priority" defaultValue="medium" className="h-9 w-full rounded-md border bg-background px-3">
             {priorities.map((item) => (
               <option key={item.value} value={item.value}>
                 {item.label}
@@ -187,8 +187,8 @@ export function TaskForm({ onDone }: { onDone: () => void }) {
           </select>
         </label>
         <label className="grid gap-2 text-sm">
-          <span className="font-medium">Status</span>
-          <select name="status" defaultValue="todo" className="h-9 rounded-md border bg-background px-3">
+          <span className="font-medium whitespace-nowrap">Status</span>
+          <select name="status" defaultValue="todo" className="h-9 w-full rounded-md border bg-background px-3">
             {statuses.map((item) => (
               <option key={item.value} value={item.value}>
                 {item.label}
@@ -197,12 +197,12 @@ export function TaskForm({ onDone }: { onDone: () => void }) {
           </select>
         </label>
         <label className="grid gap-2 text-sm">
-          <span className="font-medium">Due date</span>
-          <input name="scheduled_date" type="date" className="h-9 rounded-md border bg-background px-3" />
+          <span className="font-medium whitespace-nowrap">Due date</span>
+          <input name="scheduled_date" type="date" className="h-9 w-full rounded-md border bg-background px-3" />
         </label>
         <label className="grid gap-2 text-sm">
-          <span className="font-medium">Repeat</span>
-          <select name="recurrence_rule" className="h-9 rounded-md border bg-background px-3">
+          <span className="font-medium whitespace-nowrap">Repeat</span>
+          <select name="recurrence_rule" className="h-9 w-full rounded-md border bg-background px-3">
             <option value="">Never</option>
             {Object.entries(recurrenceLabels).map(([value, label]) => (
               <option key={value} value={value}>{label}</option>
@@ -210,8 +210,8 @@ export function TaskForm({ onDone }: { onDone: () => void }) {
           </select>
         </label>
         <label className="grid gap-2 text-sm">
-          <span className="font-medium">Est. time (min)</span>
-          <input name="estimated_minutes" type="number" min={1} className="h-9 rounded-md border bg-background px-3" />
+          <span className="font-medium whitespace-nowrap">Est. time (min)</span>
+          <input name="estimated_minutes" type="number" min={1} className="h-9 w-full rounded-md border bg-background px-3" />
         </label>
       </div>
       <RichTextEditor
