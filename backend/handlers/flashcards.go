@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"commit/backend/metrics"
 	"commit/backend/models"
 	"commit/backend/services"
 
@@ -173,5 +174,6 @@ func (handler FlashcardHandler) Review(c *gin.Context) {
 		return
 	}
 
+	metrics.FlashcardsReviewedTotal.WithLabelValues(strconv.Itoa(request.Quality)).Inc()
 	c.JSON(http.StatusOK, gin.H{"card": card})
 }

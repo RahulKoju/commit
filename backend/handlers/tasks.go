@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 
+	"commit/backend/metrics"
 	"commit/backend/middleware"
 	"commit/backend/models"
 	"commit/backend/services"
@@ -104,6 +105,7 @@ func (handler TaskHandler) Create(c *gin.Context) {
 		return
 	}
 
+	metrics.TasksCreatedTotal.Inc()
 	c.JSON(http.StatusCreated, gin.H{"task": task})
 }
 

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 
+	"commit/backend/metrics"
 	"commit/backend/middleware"
 	"commit/backend/models"
 	"commit/backend/services"
@@ -93,6 +94,7 @@ func (handler NoteHandler) Create(c *gin.Context) {
 		return
 	}
 
+	metrics.NotesCreatedTotal.Inc()
 	c.JSON(http.StatusCreated, gin.H{"note": note})
 }
 

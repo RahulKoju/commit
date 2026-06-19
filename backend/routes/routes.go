@@ -9,6 +9,7 @@ import (
 	"commit/backend/services"
 
 	"github.com/gin-gonic/gin"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 type Dependencies struct {
@@ -40,6 +41,7 @@ func Register(router *gin.Engine, deps Dependencies) {
 	flashcardHandler := handlers.NewFlashcardHandler(deps.FlashcardService)
 
 	router.GET("/healthz", healthHandler.Health)
+	router.GET("/metrics", gin.WrapH(promhttp.Handler()))
 
 	api := router.Group("/api/v1")
 	loginLimiter := middleware.NewRateLimiter(5, 1*time.Minute)
