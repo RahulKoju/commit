@@ -90,6 +90,8 @@ alertmanager:
 
 # Grafana
 grafana:
+  image:
+    tag: "10.4.3"
   nodeSelector: *workerNodeSelector
   resources:
     requests:
