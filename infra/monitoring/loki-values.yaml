@@ -55,6 +55,38 @@ promtail:
   config:
     clients:
       - url: http://loki.monitoring.svc.cluster.local:3100/loki/api/v1/push
+    snippets:
+      pipelineStages:
+        - docker: {}
+      scrapeConfigs: |
+        - job_name: kubernetes-pods
+          kubernetes_sd_configs:
+            - role: pod
+          pipeline_stages:
+            - docker: {}
+          relabel_configs:
+            - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+              action: drop
+              regex: 'false'
+            - source_labels: [__meta_kubernetes_pod_phase]
+              action: drop
+              regex: 'Succeeded|Failed'
+            - source_labels: [__meta_kubernetes_namespace]
+              target_label: namespace
+            - source_labels: [__meta_kubernetes_pod_name]
+              target_label: pod
+            - source_labels: [__meta_kubernetes_pod_container_name]
+              target_label: container
+            - source_labels: [__meta_kubernetes_node_name]
+              target_label: node
+            - source_labels: [__meta_kubernetes_pod_label_app]
+              target_label: app
+            - replacement: /var/log/pods/*$1/*.log
+              separator: /
+              source_labels:
+                - __meta_kubernetes_pod_uid
+                - __meta_kubernetes_pod_container_name
+              target_label: __path__
 
 # Disable components not needed for single binary
 backend:
