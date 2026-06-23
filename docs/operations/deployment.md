@@ -161,6 +161,11 @@ helm install loki grafana/loki \
   --namespace monitoring \
   --values infra/monitoring/loki-values.yaml
 
+# Install Promtail (log shipper)
+helm install promtail grafana/promtail \
+  --namespace monitoring \
+  --set "config.clients[0].url=http://loki.monitoring.svc.cluster.local:3100/loki/api/v1/push"
+
 # Deploy monitoring ArgoCD application
 kubectl apply -f infra/argocd/monitoring-application.yaml
 ```

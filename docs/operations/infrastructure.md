@@ -12,7 +12,7 @@ Commit runs as a three-tier application on a 2-node Kubernetes cluster provision
 graph TB
     Dev[Developer] -->|git push| GH[GitHub]
     GH -->|triggers| GHA[GitHub Actions CI]
-    GHA -->|build + push images| DH[Docker Hub]
+    GHA -->|build and push images| DH[Docker Hub]
     GHA -->|update image SHA in manifests| GH
     GH -->|watches repo| ACD[ArgoCD]
     ACD -->|syncs manifests| K8S[Kubernetes Cluster]
@@ -26,10 +26,10 @@ graph TB
     subgraph AWS ap-south-1
         EIP
         subgraph VPC 10.0.0.0/16
-            subgraph Subnet A — 10.0.1.0/24
+            subgraph SubnetA
                 CP[Control Plane EC2]
             end
-            subgraph Subnet B — 10.0.2.0/24
+            subgraph SubnetB
                 WK[Worker EC2]
             end
         end
@@ -42,22 +42,22 @@ graph TB
 
 ```mermaid
 graph TB
-    subgraph AWS VPC — 10.0.0.0/16
+    subgraph VPC 10.0.0.0/16
         IGW[Internet Gateway]
 
-        subgraph Public Subnet A — ap-south-1a
-            CP[EC2 c7i-flex.large\nControl Plane + etcd\n2 vCPU 4GB RAM]
+        subgraph SubnetA ap-south-1a
+            CP[EC2 c7i-flex.large Control Plane and etcd]
             EIP_CP[Elastic IP]
         end
 
-        subgraph Public Subnet B — ap-south-1b
-            WK[EC2 c7i-flex.large\nWorker Node\n2 vCPU 4GB RAM]
+        subgraph SubnetB ap-south-1b
+            WK[EC2 c7i-flex.large Worker Node]
             EIP_WK[Elastic IP]
         end
 
-        SG[Security Group\ncommit-production-sg]
-        RT[Route Table\n0.0.0.0/0 → IGW]
-        S3[S3 Bucket\ncommit-tf-state\nTerraform remote state]
+        SG[Security Group commit-production-sg]
+        RT[Route Table 0.0.0.0/0 to IGW]
+        S3[S3 Bucket commit-tf-state Terraform remote state]
     end
 
     IGW --> RT
@@ -85,14 +85,14 @@ graph TB
 
 ```mermaid
 graph TB
-    subgraph Control Plane Node — 10.0.1.x
-        API[kube-apiserver\nport 6443]
-        ETCD[etcd\nports 2379-2380]
+    subgraph ControlPlane 10.0.1.x
+        API[kube-apiserver port 6443]
+        ETCD[etcd ports 2379-2380]
         SCH[kube-scheduler]
         CM[controller-manager]
-        KBL_CP[kubelet\nport 10250]
+        KBL_CP[kubelet port 10250]
         KP_CP[kube-proxy]
-        SNAP[etcd-rolling-snapshots\nevery 12h retain 6]
+        SNAP[etcd-rolling-snapshots every 12h retain 6]
         CANAL_CP[canal CNI]
 
         API --> ETCD
@@ -100,24 +100,24 @@ graph TB
         API --> CM
     end
 
-    subgraph Worker Node — 10.0.2.x
-        KBL[kubelet\nport 10250]
+    subgraph WorkerNode 10.0.2.x
+        KBL[kubelet port 10250]
         KP[kube-proxy]
-        CANAL[canal CNI\nVXLAN UDP 8472]
-        NG[nginx ingress\nports 80/443]
+        CANAL[canal CNI VXLAN UDP 8472]
+        NG[nginx ingress ports 80/443]
         CM_W[cert-manager]
 
-        subgraph commit namespace
-            FW[frontend-web\nx2 pods]
-            FA[frontend-app\nx2 pods]
-            BE[backend\nx2 pods]
-            PG[postgres\nStatefulSet x1]
-            PVC[PVC 5Gi\nlocal-path]
+        subgraph CommitNamespace
+            FW[frontend-web x2 pods]
+            FA[frontend-app x2 pods]
+            BE[backend x2 pods]
+            PG[postgres StatefulSet]
+            PVC[PVC 5Gi local-path]
             CFG[ConfigMap]
             SEC[Secret]
         end
 
-        subgraph monitoring namespace
+        subgraph MonitoringNamespace
             PROM[Prometheus]
             GRAF[Grafana]
             ALERT[Alertmanager]
@@ -141,7 +141,7 @@ graph TB
 
 ---
 
-## Network & Traffic Flow
+## Network and Traffic Flow
 
 ```mermaid
 sequenceDiagram
@@ -154,45 +154,45 @@ sequenceDiagram
     participant PG as PostgreSQL
 
     U->>CF: DNS lookup commit.rahulkoju.com.np
-    CF->>U: A record → worker Elastic IP
-    U->>EIP: HTTPS request (port 443)
+    CF->>U: A record to worker Elastic IP
+    U->>EIP: HTTPS request port 443
     EIP->>NG: forward to nginx ingress
-    NG->>NG: TLS termination (Let's Encrypt cert)
-    NG->>FE: route / → commit-frontend-web:80
+    NG->>NG: TLS termination via Let's Encrypt cert
+    NG->>FE: route / to commit-frontend-web:80
     FE->>U: serve React bundle
 
     U->>EIP: POST /api/v1/auth/login
     EIP->>NG: forward
-    NG->>BE: route /api/ → commit-backend:8080
+    NG->>BE: route /api/ to commit-backend:8080
     BE->>PG: query users table
     PG->>BE: user record
-    BE->>U: JWT + set cookie Domain=.rahulkoju.com.np
+    BE->>U: JWT and set cookie Domain=.rahulkoju.com.np
 ```
 
 ---
 
-## GitOps & CI/CD Flow
+## GitOps and CI/CD Flow
 
 ```mermaid
 flowchart LR
-    DEV[Developer\npushes code] --> GH[GitHub\nmain branch]
+    DEV[Developer pushes code] --> GH[GitHub main branch]
 
-    GH --> GHA{GitHub Actions\nCI Pipeline}
+    GH --> GHA{GitHub Actions CI Pipeline}
 
-    GHA --> B1[Build commit-web\nwith VITE args]
-    GHA --> B2[Build commit-app\nwith VITE args]
+    GHA --> B1[Build commit-web with VITE args]
+    GHA --> B2[Build commit-app with VITE args]
     GHA --> B3[Build commit-backend]
 
-    B1 --> DH[Docker Hub\nrahulkoju/commit-web:sha]
-    B2 --> DH[Docker Hub\nrahulkoju/commit-app:sha]
-    B3 --> DH[Docker Hub\nrahulkoju/commit-backend:sha]
+    B1 --> DH[Docker Hub rahulkoju/commit-web:sha]
+    B2 --> DH
+    B3 --> DH
 
-    GHA --> UP[Update image SHA\nin k8s manifests]
-    UP --> COMMIT[git commit\nci: update image tags]
+    GHA --> UP[Update image SHA in k8s manifests]
+    UP --> COMMIT[git commit ci: update image tags]
     COMMIT --> GH
 
-    GH -->|manifest changed| ACD[ArgoCD\nwatching main branch]
-    ACD -->|kubectl apply| K8S[Kubernetes\nRolling update]
+    GH -->|manifest changed| ACD[ArgoCD watching main branch]
+    ACD -->|kubectl apply| K8S[Kubernetes Rolling update]
     K8S -->|pull new image| DH
 ```
 
@@ -202,30 +202,32 @@ flowchart LR
 
 ```mermaid
 graph TB
-    subgraph Data Collection
-        NE[node-exporter\nnode metrics]
-        KSM[kube-state-metrics\nk8s object metrics]
-        PT[Promtail\nlog collection]
-        KBL[kubelet\ncontainer metrics]
+    subgraph Collection
+        NE[node-exporter node metrics]
+        KSM[kube-state-metrics k8s object metrics]
+        PT[Promtail log collection]
+        KBL[kubelet container metrics]
+        APP[Go backend /metrics endpoint]
     end
 
     subgraph Storage
-        PROM[Prometheus\n15d retention 10Gi]
-        LOKI[Loki\n7d retention 10Gi]
+        PROM[Prometheus 15d retention 10Gi]
+        LOKI[Loki 7d retention 10Gi]
     end
 
     subgraph Visualization
-        GRAF[Grafana\ngrafana.commit.rahulkoju.com.np]
+        GRAF[Grafana grafana.commit.rahulkoju.com.np]
     end
 
     subgraph Alerting
         ALERT[Alertmanager]
-        EMAIL[Gmail\nrahulkoju69@gmail.com]
+        EMAIL[Gmail rahulkoju69@gmail.com]
     end
 
     NE --> PROM
     KSM --> PROM
     KBL --> PROM
+    APP --> PROM
     PT --> LOKI
     PROM --> GRAF
     LOKI --> GRAF
@@ -251,25 +253,25 @@ graph TB
 ## Container Architecture
 
 ```mermaid
-graph TB
-    subgraph frontend/Dockerfile.web — 5 stages
-        B1[base\nnode:26-alpine\ncorepack + pnpm] --> B2[pruner\nturbo prune web]
-        B2 --> B3[installer\npnpm install frozen]
-        B3 --> B4[builder\npnpm turbo build\nVITE args baked in]
-        B4 --> B5[server\nnginx:alpine\nserve dist/]
+graph LR
+    subgraph WebDockerfile
+        W1[base node:26-alpine corepack pnpm] --> W2[pruner turbo prune web]
+        W2 --> W3[installer pnpm install frozen]
+        W3 --> W4[builder pnpm turbo build VITE args baked in]
+        W4 --> W5[server nginx:alpine serve dist]
     end
 
-    subgraph frontend/Dockerfile.app — 5 stages
-        A1[base] --> A2[pruner\nturbo prune app]
-        A2 --> A3[installer] --> A4[builder] --> A5[server\nnginx:alpine]
+    subgraph AppDockerfile
+        A1[base] --> A2[pruner turbo prune app]
+        A2 --> A3[installer] --> A4[builder] --> A5[server nginx:alpine]
     end
 
-    subgraph backend/Dockerfile — 2 stages
-        G1[golang:1.26-alpine\nCGO_ENABLED=0\ngo build -o app] --> G2[alpine:latest\n13.6MB binary]
+    subgraph BackendDockerfile
+        G1[golang:1.26-alpine CGO_ENABLED=0 go build] --> G2[alpine:latest 14MB binary]
     end
 ```
 
-**Image sizes:** commit-web ~29MB · commit-app ~27MB · commit-backend ~14MB
+Image sizes: commit-web ~29MB, commit-app ~27MB, commit-backend ~14MB
 
 ---
 
@@ -287,6 +289,7 @@ graph TB
 | nginx ingress | Route external HTTPS traffic to correct backend services based on hostname and path |
 | Canal CNI | Create VXLAN overlay network enabling pod-to-pod communication across nodes |
 | Prometheus | Scrape and store metrics from all cluster components and application pods |
-| Grafana | Visualize metrics and logs, pre-loaded with Kubernetes dashboards |
+| Grafana | Visualize metrics and logs, pre-loaded with Kubernetes and custom app dashboards |
 | Loki | Aggregate and index logs from all pods via Promtail |
+| Promtail | Tail container logs from node filesystem and ship to Loki with Kubernetes metadata labels |
 | Alertmanager | Route alerts from Prometheus rules to Gmail |
