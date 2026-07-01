@@ -1,6 +1,12 @@
 nameOverride: ""
 fullnameOverride: ""
 
+defaultRules:
+  rules:
+    kubeControllerManager: false
+    kubeScheduler: false
+    kubeProxy: false
+
 # Run on worker node only
 nodeSelector: &workerNodeSelector
   node-role.kubernetes.io/worker: "true"
