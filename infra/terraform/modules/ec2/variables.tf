@@ -8,9 +8,9 @@ variable "environment" {
   type        = string
 }
 
-variable "instance_type" {
-  description = "EC2 instance type"
-  type        = string
+variable "instance_types" {
+  description = "EC2 instance types, indexed by node: [0]=control-plane, [1]=worker"
+  type        = list(string)
 }
 
 variable "key_name" {

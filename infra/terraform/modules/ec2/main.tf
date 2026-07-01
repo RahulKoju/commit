@@ -146,7 +146,7 @@ resource "aws_instance" "node" {
   count = 2
 
   ami           = data.aws_ami.ubuntu.id
-  instance_type = var.instance_type
+  instance_type = var.instance_types[count.index]
   key_name = var.key_name
 
   subnet_id = var.subnet_ids[count.index]

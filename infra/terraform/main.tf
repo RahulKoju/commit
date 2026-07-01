@@ -13,7 +13,7 @@ module "ec2" {
 
   project_name     = var.project_name
   environment      = var.environment
-  instance_type    = var.instance_type
+  instance_types    = var.instance_types
   key_name         = var.key_name
   allowed_ssh_cidr = var.allowed_ssh_cidr
   vpc_cidr         = var.vpc_cidr

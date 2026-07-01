@@ -28,10 +28,10 @@ variable "public_subnet_cidrs" {
   default     = ["10.0.1.0/24", "10.0.2.0/24"]
 }
 
-variable "instance_type" {
-  description = "EC2 instance type"
-  type        = string
-  default     = "c7i-flex.large"
+variable "instance_types" {
+  description = "EC2 instance types, indexed by node: [0]=control-plane, [1]=worker"
+  type        = list(string)
+  default     = ["t3.small", "c7i-flex.large"]
 }
 
 variable "key_name" {
