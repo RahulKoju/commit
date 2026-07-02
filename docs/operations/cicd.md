@@ -66,6 +66,37 @@ flowchart TD
 
 ---
 
+## Cluster Schedule Workflow
+
+**File:** `.github/workflows/cluster-schedule.yaml`
+
+A separate workflow manages EC2 cluster stop/start independent of the CI pipeline:
+
+```yaml
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'start or stop'
+        required: true
+        type: choice
+        options:
+          - start
+          - stop
+```
+
+**Function:**
+- Starts control-plane first, waits for `instance-status-ok`, then starts worker
+- Stops worker first, then control-plane (cleaner shutdown)
+- Scoped via `configure-aws-credentials` using `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` secrets
+
+**Schedule transition:**
+- Previously used `schedule:` cron triggers in this workflow (commented out)
+- Replaced by **AWS EventBridge Scheduler** for reliability — see below
+- `workflow_dispatch` is retained as a manual fallback for on-demand demos outside the scheduled window
+
+---
+
 ## Image Tagging Strategy
 
 Every image is pushed with two tags:
@@ -110,6 +141,25 @@ directory:
 ```
 
 cert-manager and local-path-provisioner are one-time cluster bootstrap manifests, not part of the application lifecycle — they're applied manually once per cluster and excluded from ArgoCD's management to avoid large, noisy diffs on every sync.
+
+---
+
+## AWS EventBridge Scheduler
+
+The scheduled cluster start/stop is managed natively on AWS rather than via GitHub Actions cron, eliminating reliance on GitHub's shared runner queue.
+
+**Source:** `infra/terraform/modules/scheduler/`
+
+**Components:**
+- **Lambda function** (`ec2_scheduler.py`, Python 3.12) — accepts an `action` event (`start`/`stop`), starts control-plane first (waits for `instance_status_ok`), then worker; stops in reverse order
+- **EventBridge schedules:**
+  - Start: `cron(50 7 * * ? *)` — 7:50am Asia/Kathmandu
+  - Stop: `cron(0 0 * * ? *)` — midnight Asia/Kathmandu
+- **IAM:** Lambda execution role scoped to `ec2:StartInstances` / `ec2:StopInstances` on only the two managed instance ARNs; `DescribeInstances` / `DescribeInstanceStatus` on `"*"` for the waiter
+
+**Key decisions:**
+- GHA `schedule:` triggers were removed because confirmed platform-level delays and dropped runs occurred during high-load UTC windows, causing the morning start to silently not fire
+- Timezone is evaluated natively by EventBridge in `Asia/Kathmandu` — no UTC offset math needed
 
 ---
 
