@@ -1,9 +1,9 @@
 name: Commit Cluster Start/Stop
 
 on:
-  schedule:
-    - cron: '15 2 * * *'   # 02:15 UTC = 8:00 AM NPT
-    - cron: '15 18 * * *'  # 18:15 UTC = 12:00 AM NPT (next day)
+  # schedule:
+    # - cron: '15 2 * * *'   # 02:15 UTC = 8:00 AM NPT
+    # - cron: '15 18 * * *'  # 18:15 UTC = 12:00 AM NPT (next day)
   workflow_dispatch:
     inputs:
       action:
@@ -28,13 +28,14 @@ jobs:
       - name: Determine action
         id: action
         run: |
-          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             echo "cmd=${{ github.event.inputs.action }}" >> "$GITHUB_OUTPUT"
-          elif [ "${{ github.event.schedule }}" == "15 2 * * *" ]; then
-            echo "cmd=start" >> "$GITHUB_OUTPUT"
-          else 
-            echo "cmd=stop" >> "$GITHUB_OUTPUT"
-          fi
+          # if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+          #   echo "cmd=${{ github.event.inputs.action }}" >> "$GITHUB_OUTPUT"
+          # elif [ "${{ github.event.schedule }}" == "15 2 * * *" ]; then
+          #   echo "cmd=start" >> "$GITHUB_OUTPUT"
+          # else 
+          #   echo "cmd=stop" >> "$GITHUB_OUTPUT"
+          # fi
 
       - name: Start control-plane, then worker
         if: steps.action.outputs.cmd == 'start'

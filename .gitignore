@@ -28,6 +28,7 @@ terraform.tfvars
 crash.log
 *.tfplan
 tfplan
+modules/scheduler/lambda/*.zip
 
 # Ansible
 infra/ansible/inventory/hosts.ini

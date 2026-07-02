@@ -21,3 +21,15 @@ module "ec2" {
   vpc_id     = module.vpc.vpc_id
   subnet_ids = module.vpc.public_subnet_ids
 }
+
+module "scheduler" {
+  source = "./modules/scheduler"
+
+  project_name = var.project_name
+  environment  = var.environment
+  instance_ids = module.ec2.instance_ids
+
+  start_cron        = "cron(50 7 * * ? *)"
+  stop_cron         = "cron(0 0 * * ? *)"
+  schedule_timezone = "Asia/Kathmandu"
+}
