@@ -46,7 +46,7 @@ graph TB
         IGW[Internet Gateway]
 
         subgraph SubnetA ap-south-1a
-            CP[EC2 c7i-flex.large Control Plane and etcd]
+            CP[EC2 t3.small Control Plane and etcd]
             EIP_CP[Elastic IP]
         end
 
@@ -250,6 +250,39 @@ graph TB
 
 ---
 
+## Cluster Schedule
+
+The cluster automatically stops overnight and starts each morning to reduce EC2 running costs from 24/7 to ~16 hours/day.
+
+```mermaid
+sequenceDiagram
+    participant ES as EventBridge Scheduler
+    participant LA as Lambda ec2_scheduler
+    participant CP as Control Plane t3.small
+    participant WK as Worker c7i-flex.large
+
+    Note over ES: 7:50am Asia/Kathmandu
+    ES->>LA: invoke { action: "start" }
+    LA->>CP: StartInstances
+    LA->>LA: Wait instance_status_ok
+    LA->>WK: StartInstances
+
+    Note over ES: Midnight Asia/Kathmandu
+    ES->>LA: invoke { action: "stop" }
+    LA->>WK: StopInstances
+    LA->>CP: StopInstances
+```
+
+- **Start:** `cron(50 7 * * ? *)` — control-plane first, then worker
+- **Stop:** `cron(0 0 * * ? *)` — worker first, then control-plane
+- **Timezone:** Asia/Kathmandu, evaluated natively by EventBridge
+- **IAM:** Lambda role scoped to only the two managed instance ARNs
+- **Manual override:** `workflow_dispatch` in `.github/workflows/cluster-schedule.yaml` (kept as fallback for demos outside the window)
+
+The GHA scheduled cron triggers were removed and replaced by EventBridge because GitHub's shared runner queue had confirmed platform-level delays and dropped runs during high-load UTC windows, causing the morning start to silently not fire.
+
+---
+
 ## Container Architecture
 
 ```mermaid
@@ -279,7 +312,7 @@ Image sizes: commit-web ~29MB, commit-app ~27MB, commit-backend ~14MB
 
 | Component | Responsibility |
 |-----------|---------------|
-| Terraform | Provision VPC, subnets, EC2, Elastic IPs, security groups, S3 state backend |
+| Terraform | Provision VPC, subnets, EC2, Elastic IPs, security groups, S3 state backend, EventBridge Scheduler + Lambda for cluster start/stop |
 | Ansible | Install Docker 27.2.x, disable swap, load kernel modules, configure sysctl, disable UFW |
 | RKE | Bootstrap Kubernetes v1.28.15, deploy Canal CNI, nginx ingress, CoreDNS, Metrics Server |
 | cert-manager | Issue and renew Let's Encrypt TLS certificates automatically |
@@ -293,3 +326,5 @@ Image sizes: commit-web ~29MB, commit-app ~27MB, commit-backend ~14MB
 | Loki | Aggregate and index logs from all pods via Promtail |
 | Promtail | Tail container logs from node filesystem and ship to Loki with Kubernetes metadata labels |
 | Alertmanager | Route alerts from Prometheus rules to Gmail |
+| EventBridge Scheduler | Trigger EC2 start at 7:50am and stop at midnight (Asia/Kathmandu) via Lambda |
+| Lambda (`ec2_scheduler`) | Start control-plane first (wait for status-ok), then worker; stop worker first, then control-plane |

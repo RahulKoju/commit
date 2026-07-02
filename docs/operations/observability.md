@@ -33,6 +33,7 @@ kubectl label node <worker-node-name> node-role.kubernetes.io/worker=true
 - **Resources:** 100m–500m CPU, 512Mi–1Gi memory
 - **Security context:** runs as `root` (`runAsUser: 0`) — required because `local-path-provisioner` volumes don't support the non-root user Prometheus defaults to; without this the pod crash loops with a permission error on `/prometheus/queries.active`
 - **Additional scrape target:** the Go backend at `commit-backend.commit.svc.cluster.local:8080`
+- **RKE-specific rules disabled:** Default rules for `kubeControllerManager`, `kubeScheduler`, and `kubeProxy` are disabled in `defaultRules.rules` — RKE v1.28.x doesn't expose those metrics, so the rules would always fire as false positives
 
 ---
 
@@ -62,6 +63,10 @@ Plus the charts ship their own out-of-the-box dashboards for Alertmanager, CoreD
 - **Retention:** 7 days (168h)
 - **Storage:** 10Gi PVC via `local-path-provisioner`, filesystem backend
 - **Cache components disabled:** `chunksCache` and `resultsCache` (memcached-based) were disabled — they require more memory than the cluster could spare and aren't necessary at this log volume
+- **Resources:**
+  - Requests: 150m CPU, 256Mi memory
+  - Limits: 500m CPU, 768Mi memory
+  - Limits were bumped from 200m CPU / 512Mi memory after Loki repeatedly OOMKilled during post-WAL-recovery flush bursts on startup (`KubePodCrashLooping` and `CPUThrottlingHigh` alerts)
 - **Promtail:** runs as a DaemonSet, ships logs from every pod on every node to `http://loki.monitoring.svc.cluster.local:3100`
 
 ### Querying Logs
@@ -93,6 +98,8 @@ Search for errors (case-insensitive):
 - **Authentication:** Gmail App Password (requires 2FA enabled on the account), stored in `alertmanager-secret` (gitignored)
 - **Grouping:** alerts grouped by `alertname` and `namespace`, 30s initial wait, 5m group interval, 12h repeat interval
 - **Inhibition rule:** a `critical` alert suppresses matching `warning` alerts for the same `alertname`/`namespace` to reduce noise
+- **Secrets mount:** `alertmanagerSpec.secrets` mounts `alertmanager-secret` at runtime, making the SMTP password file available to the Alertmanager pod
+- **Empty routes override:** An explicit `routes: []` is set in the Helm values to clear the chart's default `null` receiver — without this, ArgoCD's `selfHeal` would constantly fight the default route value injected by the chart, causing a perpetual OutOfSync
 
 ### Alert Rules
 
@@ -108,6 +115,8 @@ Defined in `additionalPrometheusRulesMap` within the Helm values:
 | `NodeCPUHigh` | node CPU usage > 85% | 5m | warning |
 | `PVCUsageHigh` | PVC usage > 80% of capacity | 5m | warning |
 | `HighErrorRate` | nginx ingress 5xx rate > 5% of total requests | 5m | warning |
+
+> Default kube-prometheus-stack rules for `kubeControllerManager`, `kubeScheduler`, and `kubeProxy` are disabled — RKE doesn't expose those metrics (see Prometheus Configuration).
 
 ---
 

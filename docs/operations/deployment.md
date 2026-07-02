@@ -30,7 +30,7 @@ export KUBECONFIG=/path/to/infra/rke/kube_config_cluster.yml
 
 ### Step Details
 
-**Terraform** — creates a VPC with 2 public subnets across 2 AZs, 2x EC2 `c7i-flex.large` instances (control plane + worker), Elastic IPs, and a security group with SSH (22), HTTP (80), HTTPS (443), K8s API (6443), and full internal VPC traffic.
+**Terraform** — creates a VPC with 2 public subnets across 2 AZs, 2 EC2 instances (control-plane: `t3.small`, worker: `c7i-flex.large`), Elastic IPs, a security group with SSH (22), HTTP (80), HTTPS (443), K8s API (6443), and full internal VPC traffic. Also provisions an EventBridge Scheduler + Lambda function to automatically stop the cluster at midnight and start it at 7:50am (Asia/Kathmandu).
 
 Note the `control_plane_ip`, `worker_ip`, `control_plane_private_ip`, and `worker_private_ip` outputs from Terraform.
 
@@ -197,9 +197,19 @@ Add A records pointing to the worker node's Elastic IP (DNS only — grey cloud,
 
 ---
 
-## Redeployment After `terraform destroy`
+## Day-to-Day Operation: EC2 Stop/Start
 
-Since `terraform apply` creates entirely new EC2 instances with new private IPs, RKE's local state and TLS certificates from the previous cluster must be cleared first:
+The cluster runs on a schedule (start 7:50am, stop midnight Asia/Kathmandu) managed by AWS EventBridge Scheduler and a Lambda function. This stop/start cycle preserves the cluster state because AWS retains the private IPs and EBS volumes:
+
+- **Cluster state:** Kubernetes, etcd, and all PVC data survive the stop/start cycle intact
+- **No re-provisioning needed:** no `rke up`, no Ansible, no `terraform apply` — the cluster resumes as-is
+- **Manual override:** use `workflow_dispatch` in `.github/workflows/cluster-schedule.yaml` with `action: start` or `action: stop` for unscheduled restarts or on-demand demos
+
+See [CI/CD & GitOps](cicd.md#aws-eventbridge-scheduler) for implementation details.
+
+## Full Redeployment After `terraform destroy`
+
+Only necessary when re-provisioning from scratch (new VPC, new instances). Since `terraform apply` creates entirely new EC2 instances with new private IPs, RKE's local state and TLS certificates from the previous cluster must be cleared first:
 
 ```bash
 # 1. Delete local RKE state files
@@ -215,8 +225,6 @@ exit
 
 # 3. Update cluster.yml and hosts.ini with new IPs, then rke up
 ```
-
-> **Tip:** to avoid this entirely, stop/start EC2 instances instead of destroying them — AWS preserves the private IP across stop/start, so the cluster state stays valid.
 
 ---
 
