@@ -38,6 +38,13 @@ spec:
     - host: app.commit.rahulkoju.com.np
       http:
         paths:
+          - path: /healthz
+            pathType: Exact
+            backend:
+              service:
+                name: commit-backend
+                port:
+                  number: 8080
           - path: /
             pathType: Prefix
             backend:
