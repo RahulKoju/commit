@@ -37,3 +37,8 @@ variable "vpc_cidr" {
   description = "VPC CIDR block"
   type        = string
 }
+
+variable "ubuntu_ami" {
+  description = "Ubuntu 22.04 AMI"
+  type        = string
+}

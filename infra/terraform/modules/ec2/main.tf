@@ -126,26 +126,26 @@ resource "aws_vpc_security_group_egress_rule" "all" {
     description = "Allow all outbound traffic"
 }
 
-data "aws_ami" "ubuntu" {
-  most_recent      = true
+# data "aws_ami" "ubuntu" {
+#   most_recent      = true
 
-  owners = ["099720109477"]
+#   owners = ["099720109477"]
 
-  filter {
-    name   = "name"
-    values = ["ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*"]
-  }
+#   filter {
+#     name   = "name"
+#     values = ["ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*"]
+#   }
 
-  filter {
-    name   = "virtualization-type"
-    values = ["hvm"]
-  }
-}
+#   filter {
+#     name   = "virtualization-type"
+#     values = ["hvm"]
+#   }
+# }
 
 resource "aws_instance" "node" {
   count = 2
 
-  ami           = data.aws_ami.ubuntu.id
+  ami           = var.ubuntu_ami
   instance_type = var.instance_types[count.index]
   key_name = var.key_name
 
