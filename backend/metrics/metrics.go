@@ -27,11 +27,12 @@ var (
 		[]string{"method", "path"},
 	)
 
-	HttpRequestsInFlight = promauto.NewGauge(
+	HttpRequestsInFlight = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "commit_http_requests_in_flight",
 			Help: "Number of HTTP requests currently being processed",
 		},
+		[]string{"path"},
 	)
 
 	DbPoolAcquiredConns = promauto.NewGauge(
@@ -100,9 +101,9 @@ func Middleware() gin.HandlerFunc {
 			path = "unmatched"
 		}
 
-		HttpRequestsInFlight.Inc()
+		HttpRequestsInFlight.WithLabelValues(path).Inc()
 		c.Next()
-		HttpRequestsInFlight.Dec()
+		HttpRequestsInFlight.WithLabelValues(path).Dec()
 
 		duration := time.Since(start).Seconds()
 		status := strconv.Itoa(c.Writer.Status())
