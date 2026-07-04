@@ -43,3 +43,8 @@ variable "allowed_ssh_cidr" {
   description = "Allowed SSH CIDR"
   type        = string
 }
+
+variable "ubuntu_ami" {
+  description = "Ubuntu 22.04 AMI"
+  type        = string
+}
