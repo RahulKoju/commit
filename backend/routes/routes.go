@@ -1,6 +1,8 @@
 package routes
 
 import (
+	"os"
+	"strconv"
 	"time"
 
 	"commit/backend/handlers"
@@ -44,7 +46,13 @@ func Register(router *gin.Engine, deps Dependencies) {
 	router.GET("/metrics", gin.WrapH(promhttp.Handler()))
 
 	api := router.Group("/api/v1")
-	loginLimiter := middleware.NewRateLimiter(5, 1*time.Minute)
+	loginLimit := 5
+	if v := os.Getenv("LOGIN_RATE_LIMIT"); v != "" {
+		if parsed, err := strconv.Atoi(v); err == nil {
+			loginLimit = parsed
+		}
+	}
+	loginLimiter := middleware.NewRateLimiter(loginLimit, 1*time.Minute)
 	registerLimiter := middleware.NewRateLimiter(3, 1*time.Minute)
 	forgotLimiter := middleware.NewRateLimiter(3, 1*time.Minute)
 	api.POST("/auth/register", registerLimiter.Middleware(), authHandler.Register)

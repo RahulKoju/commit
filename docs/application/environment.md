@@ -15,6 +15,7 @@ All backend variables are loaded in `backend/config/config.go`. The server fails
 | `PORT` | yes | HTTP server listen port (numeric) | `8080` |
 | `APP_ENV` | yes | Sets Gin to release mode when `production` | `development` |
 | `FOCUS_DAILY_MINIMUM_MINUTES` | no | Auto-log "Focused study" habit when daily focus >= this (default: `120`) | `120` |
+| `LOGIN_RATE_LIMIT` | no | Login attempts allowed per IP per minute (default: `5`). For load testing, override imperatively on the deployment — do **not** raise this in committed config. | `5` |
 | `RESEND_API_KEY` | no | Resend API key for email delivery (falls back to logging to stdout) | `re_123456...` |
 | `EMAIL_FROM` | no | From-address for outgoing emails | `noreply@example.com` |
 | `VITE_WEB_URL` | no | Frontend URL for password reset links in emails | `http://localhost:5173` |
