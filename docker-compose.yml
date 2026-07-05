@@ -46,7 +46,8 @@ services:
       - LOGIN_RATE_LIMIT=${LOGIN_RATE_LIMIT}
       - RESEND_API_KEY=${RESEND_API_KEY}
       - EMAIL_FROM=${EMAIL_FROM}
-      - VITE_WEB_URL=http://localhost:5173
+      - COOKIE_DOMAIN=${COOKIE_DOMAIN}
+      - VITE_WEB_URL=${VITE_WEB_URL}
     depends_on:
       db:
         condition: service_healthy
