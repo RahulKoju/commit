@@ -3,7 +3,7 @@ FROM node:26-alpine AS base
 
 RUN npm install -g corepack \
     && corepack enable \
-    && corepack prepare pnpm@11.1.3 --activate
+    && corepack prepare pnpm@10.33.4 --activate
 
 ENV PNPM_HOME="/root/.local/share/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
