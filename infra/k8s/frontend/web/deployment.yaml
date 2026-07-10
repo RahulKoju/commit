@@ -20,7 +20,7 @@ spec:
     spec:
       containers:
         - name: frontend-web
-          image: rahulkoju/commit-web:5c9ad25881ed027836eb97cfd70847c6391b6d2b
+          image: rahulkoju/commit-web:adcda6a5f7d234754161a4c08311bd8477d88058
 
           securityContext:
             runAsNonRoot: true
