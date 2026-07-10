@@ -22,8 +22,30 @@ spec:
         - name: frontend-app
           image: rahulkoju/commit-app:5c9ad25881ed027836eb97cfd70847c6391b6d2b
 
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+              add:
+                - NET_BIND_SERVICE
+            seccompProfile:
+              type: RuntimeDefault
+
           ports:
             - containerPort: 80
+
+          volumeMounts:
+            - name: nginx-cache
+              mountPath: /var/cache/nginx
+            - name: nginx-run
+              mountPath: /var/run
+            - name: tmp
+              mountPath: /tmp
 
           readinessProbe:
             httpGet:
@@ -48,3 +70,11 @@ spec:
             limits:
               cpu: "100m"
               memory: "128Mi"
+
+      volumes:
+        - name: nginx-cache
+          emptyDir: {}
+        - name: nginx-run
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
