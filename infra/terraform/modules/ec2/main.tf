@@ -47,6 +47,33 @@ resource "aws_vpc_security_group_ingress_rule" "https" {
     description = "HTTPS"
 }
 
+resource "aws_vpc_security_group_egress_rule" "dns_tcp" {
+  security_group_id = aws_security_group.ec2.id
+  ip_protocol        = "tcp"
+  from_port          = 53
+  to_port            = 53
+  cidr_ipv4          = "0.0.0.0/0"
+  description        = "DNS"
+}
+
+resource "aws_vpc_security_group_egress_rule" "dns_udp" {
+  security_group_id = aws_security_group.ec2.id
+  ip_protocol        = "udp"
+  from_port          = 53
+  to_port            = 53
+  cidr_ipv4          = "0.0.0.0/0"
+  description        = "DNS"
+}
+
+resource "aws_vpc_security_group_egress_rule" "https" {
+  security_group_id = aws_security_group.ec2.id
+  ip_protocol        = "tcp"
+  from_port          = 443
+  to_port            = 443
+  cidr_ipv4          = "0.0.0.0/0"
+  description        = "HTTPS - image pulls, package installs, API calls"
+}
+
 resource "aws_vpc_security_group_ingress_rule" "k8s_api" {
     security_group_id = aws_security_group.ec2.id
 
@@ -116,15 +143,15 @@ resource "aws_vpc_security_group_ingress_rule" "internal" {
   description       = "Allow all internal VPC traffic"
 }
 
-resource "aws_vpc_security_group_egress_rule" "all" {
-    security_group_id = aws_security_group.ec2.id
+# resource "aws_vpc_security_group_egress_rule" "all" {
+#     security_group_id = aws_security_group.ec2.id
 
-    ip_protocol = "-1"
+#     ip_protocol = "-1"
 
-    cidr_ipv4 = "0.0.0.0/0"
+#     cidr_ipv4 = "0.0.0.0/0"
 
-    description = "Allow all outbound traffic"
-}
+#     description = "Allow all outbound traffic"
+# }
 
 # data "aws_ami" "ubuntu" {
 #   most_recent      = true
@@ -151,6 +178,10 @@ resource "aws_instance" "node" {
 
   subnet_id = var.subnet_ids[count.index]
   vpc_security_group_ids = [aws_security_group.ec2.id]
+
+  metadata_options {
+    http_tokens = "required"
+  }
 
   root_block_device {
     volume_size = 20
