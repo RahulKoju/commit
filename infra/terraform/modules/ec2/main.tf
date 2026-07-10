@@ -47,33 +47,6 @@ resource "aws_vpc_security_group_ingress_rule" "https" {
     description = "HTTPS"
 }
 
-resource "aws_vpc_security_group_egress_rule" "dns_tcp" {
-  security_group_id = aws_security_group.ec2.id
-  ip_protocol        = "tcp"
-  from_port          = 53
-  to_port            = 53
-  cidr_ipv4          = "0.0.0.0/0"
-  description        = "DNS"
-}
-
-resource "aws_vpc_security_group_egress_rule" "dns_udp" {
-  security_group_id = aws_security_group.ec2.id
-  ip_protocol        = "udp"
-  from_port          = 53
-  to_port            = 53
-  cidr_ipv4          = "0.0.0.0/0"
-  description        = "DNS"
-}
-
-resource "aws_vpc_security_group_egress_rule" "https" {
-  security_group_id = aws_security_group.ec2.id
-  ip_protocol        = "tcp"
-  from_port          = 443
-  to_port            = 443
-  cidr_ipv4          = "0.0.0.0/0"
-  description        = "HTTPS - image pulls, package installs, API calls"
-}
-
 resource "aws_vpc_security_group_ingress_rule" "k8s_api" {
     security_group_id = aws_security_group.ec2.id
 
@@ -141,6 +114,41 @@ resource "aws_vpc_security_group_ingress_rule" "internal" {
   ip_protocol       = "-1"
   cidr_ipv4         = var.vpc_cidr
   description       = "Allow all internal VPC traffic"
+}
+
+resource "aws_vpc_security_group_egress_rule" "internal" {
+  security_group_id = aws_security_group.ec2.id
+  ip_protocol       = "-1"
+  cidr_ipv4         = var.vpc_cidr
+
+  description = "Allow all internal cluster communication"
+}
+
+resource "aws_vpc_security_group_egress_rule" "https" {
+  security_group_id = aws_security_group.ec2.id
+  ip_protocol       = "tcp"
+  from_port         = 443
+  to_port           = 443
+  cidr_ipv4         = "0.0.0.0/0"
+  description = "External HTTPS traffic"
+}
+
+resource "aws_vpc_security_group_egress_rule" "dns_tcp" {
+  security_group_id = aws_security_group.ec2.id
+  ip_protocol        = "tcp"
+  from_port          = 53
+  to_port            = 53
+  cidr_ipv4          = "0.0.0.0/0"
+  description        = "DNS"
+}
+
+resource "aws_vpc_security_group_egress_rule" "dns_udp" {
+  security_group_id = aws_security_group.ec2.id
+  ip_protocol        = "udp"
+  from_port          = 53
+  to_port            = 53
+  cidr_ipv4          = "0.0.0.0/0"
+  description        = "DNS"
 }
 
 # resource "aws_vpc_security_group_egress_rule" "all" {
