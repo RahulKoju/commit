@@ -21,6 +21,17 @@ spec:
       containers:
         - name: backend
           image: rahulkoju/commit-backend:2febab948b954be8927f42546c7bc6aca091563b
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
 
           ports:
             - containerPort: 8080
