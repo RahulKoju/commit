@@ -20,7 +20,7 @@ spec:
     spec:
       containers:
         - name: backend
-          image: rahulkoju/commit-backend:17303c2edc8867361a67033e76279e9e1db4467e
+          image: rahulkoju/commit-backend:55ea4419f41615ec06b8262ba617aa3a3737f690
           securityContext:
             runAsNonRoot: true
             runAsUser: 10001
