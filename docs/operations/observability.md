@@ -55,6 +55,23 @@ Plus the charts ship their own out-of-the-box dashboards for Alertmanager, CoreD
 
 - **Data sources:** Prometheus (default) and Loki, both wired automatically via `additionalDataSources` in the Helm values
 
+### Custom "Commit App" Dashboard
+
+A custom dashboard is deployed via `infra/monitoring/grafana-dashboards.yaml` (managed by ArgoCD). It provides live visibility into application traffic with 6 stat panels at the top:
+
+| Panel | Query | Purpose |
+|-------|-------|---------|
+| Live Req/s | `sum(rate(http_requests_total{path!~"/healthz|/metrics"}[1m]))` | Current requests per second |
+| Requests (Last 5m) | `sum(increase(http_requests_total{path!~"/healthz|/metrics"}[5m]))` | Request count in the last 5 minutes |
+| Requests (Last 1h) | `sum(increase(http_requests_total{path!~"/healthz|/metrics"}[1h]))` | Request count in the last hour |
+| Requests (Last 24h) | `sum(increase(http_requests_total{path!~"/healthz|/metrics"}[24h]))` | Request count in the last 24 hours |
+| Live Requests (In-Flight) | `sum(http_requests_in_flight{path!~"/healthz|/metrics"})` | Currently processing requests |
+| Requests Over Time (by Endpoint) | Per-endpoint stacked bar chart | Traffic breakdown by route |
+
+**Filtering:** All queries exclude `/healthz` and `/metrics` endpoints to avoid noise from Kubernetes liveness probes and Prometheus scrape requests. This ensures the dashboard shows real user traffic only.
+
+**Per-endpoint in-flight tracking:** The backend's `HttpRequestsInFlight` metric was upgraded from a simple Gauge to a GaugeVec with a `path` label, enabling per-endpoint concurrency visibility (the "Live Requests" panel can show which specific endpoints are busy).
+
 ---
 
 ## Loki Configuration

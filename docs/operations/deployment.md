@@ -30,7 +30,7 @@ export KUBECONFIG=/path/to/infra/rke/kube_config_cluster.yml
 
 ### Step Details
 
-**Terraform** — creates a VPC with 2 public subnets across 2 AZs, 2 EC2 instances (control-plane: `t3.small`, worker: `c7i-flex.large`), Elastic IPs, a security group with SSH (22), HTTP (80), HTTPS (443), K8s API (6443), and full internal VPC traffic. Also provisions an EventBridge Scheduler + Lambda function to automatically stop the cluster at midnight and start it at 7:50am (Asia/Kathmandu).
+**Terraform** — creates a VPC with 2 public subnets across 2 AZs, 2 EC2 instances (control-plane: `t3.small`, worker: `c7i-flex.large`), Elastic IPs, a security group with SSH (22), HTTP (80), HTTPS (443), K8s API (6443), and internal VPC traffic. Egress is restricted to DNS (53), HTTPS (443), and internal VPC traffic only — no wide-open `0.0.0.0/0` all-protocol rule. EC2 instances enforce IMDSv2 (session token required for metadata access). Also provisions an EventBridge Scheduler + Lambda function to automatically stop the cluster at midnight and start it at 7:50am (Asia/Kathmandu).
 
 Note the `control_plane_ip`, `worker_ip`, `control_plane_private_ip`, and `worker_private_ip` outputs from Terraform.
 
@@ -182,6 +182,7 @@ kubectl apply -f infra/argocd/monitoring-application.yaml
 | Frontend web + app Deployments + Services | `infra/k8s/storage/` — one-time cluster install |
 | Ingress | `infra/k8s/cert-manager/` — one-time cluster install |
 | Monitoring Helm values changes | Helm installs for kube-prometheus-stack and Loki — one-time per cluster |
+| Grafana dashboards (via ConfigMap) | `.trivyignore` and `trivy.yaml` — managed in git, consumed by CI |
 
 ---
 
@@ -250,3 +251,9 @@ docker build -f Dockerfile.app \
 docker push rahulkoju/commit-web:latest
 docker push rahulkoju/commit-app:latest
 ```
+
+### Build Hardening
+
+Both frontend Dockerfiles (web and app) apply `apk update && apk upgrade --no-cache` in the final nginx:alpine stage to pull in security patches for the base image at build time. This ensures deployed images don't carry known Alpine CVEs.
+
+The `docker-compose.yml` for local development uses environment variable substitution for `COOKIE_DOMAIN` and `VITE_WEB_URL` instead of hardcoding values, making local configuration more flexible.
