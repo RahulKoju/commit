@@ -69,7 +69,7 @@ graph TB
     SG --> WK
 ```
 
-**Security Group Rules:**
+**Security Group Rules — Ingress:**
 
 | Rule | Port | Source | Purpose |
 |------|------|--------|---------|
@@ -78,6 +78,21 @@ graph TB
 | HTTPS | 443 | 0.0.0.0/0 | Web traffic |
 | K8s API | 6443 | Your IP | kubectl access |
 | Internal | All | VPC CIDR | Node-to-node communication (etcd, kubelet, Canal VXLAN) |
+
+**Security Group Rules — Egress:**
+
+Egress is restricted to only what the cluster needs — DNS resolution, outbound HTTPS, and intra-cluster traffic. The previous wide-open `0.0.0.0/0` all-protocol rule was replaced with granular rules to reduce the blast radius of a compromised container.
+
+| Rule | Protocol | Port | Destination | Purpose |
+|------|----------|------|-------------|---------|
+| internal | all (-1) | all | VPC CIDR | Intra-cluster communication (etcd, kubelet, pod-to-pod) |
+| https | TCP | 443 | 0.0.0.0/0 | Container registry pulls, Let's Encrypt ACME, API calls |
+| dns_tcp | TCP | 53 | 0.0.0.0/0 | DNS resolution |
+| dns_udp | UDP | 53 | 0.0.0.0/0 | DNS resolution |
+
+**EC2 Instance Metadata — IMDSv2:**
+
+EC2 instances enforce IMDSv2 by requiring a session token for metadata access (`http_tokens = "required"`). This prevents SSRF-based credential theft from the instance metadata endpoint (the `169.254.169.254` attack vector).
 
 ---
 
@@ -138,6 +153,25 @@ graph TB
     BE --> CFG
     BE --> SEC
 ```
+
+### Container Security Context
+
+All application containers are hardened to follow Kubernetes security best practices and CIS benchmark compliance:
+
+| Property | Value | Purpose |
+|----------|-------|---------|
+| `runAsNonRoot` | `true` | Prevents containers from running as root |
+| `runAsUser` / `runAsGroup` | `10001` (app/frontend), `70` (postgres) | Least-privilege UIDs |
+| `readOnlyRootFilesystem` | `true` | Prevents runtime modification of the container image |
+| `allowPrivilegeEscalation` | `false` | Blocks SUID/SGID bit escalation |
+| `capabilities.drop` | `ALL` | Drops all Linux capabilities |
+| `seccompProfile` | `RuntimeDefault` | Applies the container runtime's seccomp filter |
+
+**Frontend containers (app + web):** Since nginx needs to bind port 80 as non-root, the `NET_BIND_SERVICE` capability is added. EmptyDir volumes are mounted at `/var/cache/nginx`, `/var/run`, and `/tmp` to allow nginx to write temp/cache files on a read-only rootfs.
+
+**Backend container:** Full read-only rootfs, non-root, all capabilities dropped — no exceptions needed.
+
+**Postgres StatefulSet:** Runs as UID 70 (the `postgres` user) with read-only rootfs and all capabilities dropped. An `initContainer` (`busybox:1.36`) runs as root to `chown -R 70:70` the data directory before postgres starts — this works around `hostPath`/`fsGroup` limitations where Kubernetes cannot recursively change ownership of an existing host directory. EmptyDir volumes are mounted for `/tmp` and `/var/run/postgresql`.
 
 ---
 
@@ -305,6 +339,8 @@ graph LR
 ```
 
 Image sizes: commit-web ~29MB, commit-app ~27MB, commit-backend ~14MB
+
+Both frontend Dockerfiles (web and app) apply `apk update && apk upgrade --no-cache` in the final nginx:alpine stage to pull in security patches for the base image at build time.
 
 ---
 

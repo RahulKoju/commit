@@ -84,7 +84,7 @@ Commit is a full-stack personal productivity application that helps you manage y
 |-----|----------|
 | [Infrastructure](docs/operations/infrastructure.md) | AWS, K8s cluster, network flow, Dockerfiles, component responsibilities |
 | [Deployment](docs/operations/deployment.md) | Step-by-step provisioning and deployment from scratch |
-| [CI/CD & GitOps](docs/operations/cicd.md) | GitHub Actions pipeline and ArgoCD GitOps workflow |
+| [CI/CD & GitOps](docs/operations/cicd.md) | GitHub Actions pipeline, Trivy vulnerability scanning, and ArgoCD GitOps workflow |
 | [Observability](docs/operations/observability.md) | Monitoring, logging, alerting (Prometheus, Grafana, Loki) |
 | [Runbook](docs/operations/runbook.md) | Operational procedures, troubleshooting, common fixes |
 
