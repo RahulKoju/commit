@@ -18,14 +18,17 @@ spec:
         app: frontend-app
 
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+
       containers:
         - name: frontend-app
           image: rahulkoju/commit-app:55ea4419f41615ec06b8262ba617aa3a3737f690
 
           securityContext:
-            runAsNonRoot: true
-            runAsUser: 10001
-            runAsGroup: 10001
             readOnlyRootFilesystem: true
             allowPrivilegeEscalation: false
             capabilities:

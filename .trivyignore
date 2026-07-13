@@ -21,3 +21,32 @@ AVD-KSV-0125
 # Public IP accepted: ingress restricted to SSH from allowed_ssh_cidr only,
 # no NAT gateway budget for this project. Re-evaluate if instance count/exposure grows.
 AVD-AWS-0164
+
+# --- Terraform (modules/ec2/main.tf) ---
+# These findings are accepted for the current self-managed learning cluster design.
+
+# EC2 nodes require outbound HTTPS access for:
+# - pulling container images from registries
+# - OS package updates
+# - Let's Encrypt ACME validation
+# - Kubernetes component communication with external services
+# Restrict further if NAT gateways, VPC endpoints, or egress proxies are introduced.
+AVD-AWS-0104
+
+# Root EBS encryption omitted intentionally for the existing learning cluster.
+# Enabling encryption would require EC2 instance replacement and migration of
+# local-path-provisioner volumes and PostgreSQL data.
+# Enable for future cluster rebuilds or production environments.
+AVD-AWS-0131
+
+# --- local-path-provisioner (Rancher upstream manifest, k8s/storage/local-path-provisioner.yaml) ---
+# These findings are accepted because local-path-provisioner requires host filesystem access
+# to create and manage PersistentVolume directories on cluster nodes.
+
+# local-path-provisioner writes directories on the host filesystem for PV provisioning,
+# so an immutable root filesystem is not practical.
+AVD-KSV-0014
+
+# local-path-provisioner runs with upstream defaults and requires elevated filesystem access
+# to manage host-backed storage paths.
+AVD-KSV-0118
