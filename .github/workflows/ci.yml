@@ -125,22 +125,31 @@ jobs:
         run: docker push rahulkoju/commit-backend:${{ github.sha }}
       - run: docker tag rahulkoju/commit-backend:${{ github.sha }} rahulkoju/commit-backend:latest && docker push rahulkoju/commit-backend:latest
 
-      - name: Scan Terraform + kubernetes manifests
-        uses: aquasecurity/trivy-action@v0.36.0
-        with:
-          scan-type: "config"
-          scan-ref: "./infra"
-          skip-setup-trivy: true
-          severity: "HIGH,CRITICAL"
-          exit-code: "1"
-          trivyignores: ".trivyignore"
-          format: "sarif"
-          output: "trivy-iac-results.sarif"
+      - name: Generate SARIF report
+        run: |
+          trivy fs \
+            --scanners misconfig,secret \
+            --severity HIGH,CRITICAL \
+            --ignorefile .trivyignore \
+            --format sarif \
+            --output trivy-results.sarif \
+            --exit-code 0 \
+            ./infra
 
-      - name: Upload IaC scan to Security tab
+      - name: Upload SARIF report
+        if: always()
         uses: github/codeql-action/upload-sarif@v4
         with:
-          sarif_file: "trivy_iac_results.sarif"
+          sarif_file: trivy-results.sarif
+
+      - name: Fail on findings
+        run: |
+          trivy fs \
+            --scanners misconfig,secret \
+            --severity HIGH,CRITICAL \
+            --ignorefile .trivyignore \
+            --exit-code 1 \
+            ./infra
 
       - name: Update Kubernetes manifest
         run: |
