@@ -14,6 +14,7 @@ on:
 
 permissions:
   contents: write # Allow git push
+  security-events: write # needed to upload SARIF to the Security tab
 
 jobs:
   deploy:
@@ -21,6 +22,12 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Setup Trivy
+        uses: aquasecurity/setup-trivy@v0.2.0
+        with:
+          cache: true
+          version: v0.72.0
 
       - name: Login to Docker Hub
         uses: docker/login-action@v3
@@ -31,12 +38,13 @@ jobs:
       - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build and Push commit-web
+      - name: Build commit-web
         uses: docker/build-push-action@v6
         with:
           context: ./frontend
           file: frontend/Dockerfile.web
-          push: true
+          push: false
+          load: true
           tags: |
             rahulkoju/commit-web:${{ github.sha }}
             rahulkoju/commit-web:latest
@@ -46,12 +54,28 @@ jobs:
             VITE_WEB_URL=https://commit.rahulkoju.com.np
             VITE_APP_URL=https://app.commit.rahulkoju.com.np
 
-      - name: Build and Push commit-app
+      - name: Scan commit-web
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: "image"
+          image-ref: "rahulkoju/commit-web:${{ github.sha }}"
+          skip-setup-trivy: true
+          severity: "HIGH,CRITICAL"
+          ignore-unfixed: true
+          exit-code: "1" # Fails the step (and the whole job) if anything HIGH/CRITICAL and unfixed-per-ignore-file shows up.
+          trivyignores: ".trivyignore"
+
+      - name: Push commit-web
+        run: docker push rahulkoju/commit-web:${{ github.sha }}
+      - run: docker tag rahulkoju/commit-web:${{ github.sha }} rahulkoju/commit-web:latest && docker push rahulkoju/commit-web:latest
+
+      - name: Build commit-app
         uses: docker/build-push-action@v6
         with:
           context: ./frontend
           file: frontend/Dockerfile.app
-          push: true
+          push: false
+          load: true
           tags: |
             rahulkoju/commit-app:${{ github.sha }}
             rahulkoju/commit-app:latest
@@ -61,14 +85,62 @@ jobs:
             VITE_WEB_URL=https://commit.rahulkoju.com.np
             VITE_APP_URL=https://app.commit.rahulkoju.com.np
 
-      - name: Build and Push commit-backend
+      - name: Scan commit-app
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: "image"
+          image-ref: "rahulkoju/commit-app:${{ github.sha }}"
+          skip-setup-trivy: true
+          severity: "HIGH,CRITICAL"
+          ignore-unfixed: true
+          exit-code: "1"
+          trivyignores: ".trivyignore"
+
+      - name: Push commit-app
+        run: docker push rahulkoju/commit-app:${{ github.sha }}
+      - run: docker tag rahulkoju/commit-app:${{ github.sha }} rahulkoju/commit-app:latest && docker push rahulkoju/commit-app:latest
+
+      - name: Build commit-backend
         uses: docker/build-push-action@v6
         with:
           context: ./backend
-          push: true
+          push: false
+          load: true
           tags: |
             rahulkoju/commit-backend:${{ github.sha }}
             rahulkoju/commit-backend:latest
+
+      - name: Scan commit-backend
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: "image"
+          image-ref: "rahulkoju/commit-backend:${{ github.sha }}"
+          skip-setup-trivy: true
+          severity: "HIGH,CRITICAL"
+          ignore-unfixed: true
+          exit-code: "1"
+          trivyignores: ".trivyignore"
+
+      - name: Push commit-backend
+        run: docker push rahulkoju/commit-backend:${{ github.sha }}
+      - run: docker tag rahulkoju/commit-backend:${{ github.sha }} rahulkoju/commit-backend:latest && docker push rahulkoju/commit-backend:latest
+
+      - name: Scan Terraform + kubernetes manifests
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: "config"
+          scan-ref: "./infra"
+          skip-setup-trivy: true
+          severity: "HIGH,CRITICAL"
+          exit-code: "1"
+          trivyignores: ".trivyignore"
+          format: "sarif"
+          output: "trivy-iac-results.sarif"
+
+      - name: Upload IaC scan to Security tab
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: "trivy_iac_results.sarif"
 
       - name: Update Kubernetes manifest
         run: |
@@ -80,9 +152,6 @@ jobs:
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
-
           git add infra/k8s
-
           git diff --cached --quiet || git commit -m "ci: update image tags to ${GITHUB_SHA}"
-
           git push

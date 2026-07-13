@@ -1,0 +1,23 @@
+# .trivyignore
+
+# --- cert-manager (Jetstack upstream manifest, k8s/cert-manager/cert-manager.yaml) ---
+# These are cert-manager's required-by-design permissions, not misconfigurations.
+# Do not remove these permissions in the manifest itself — cert-manager will break.
+
+# cert-manager needs cluster-scoped Secret access: it stores every issued TLS cert as a Secret
+AVD-KSV-0041
+
+# cainjector needs to modify webhook configs to inject CA bundles (core CA injection function)
+AVD-KSV-0114
+
+# ACME HTTP-01 challenge solver needs to manage Services/Ingresses to serve challenge responses
+AVD-KSV-0056
+
+# cert-manager images are pulled from quay.io (Jetstack's registry) — legitimate, just not
+# in Trivy's default trusted-registry allowlist
+AVD-KSV-0125
+
+# --- Terraform (modules/vpc/main.tf) ---
+# Public IP accepted: ingress restricted to SSH from allowed_ssh_cidr only,
+# no NAT gateway budget for this project. Re-evaluate if instance count/exposure grows.
+AVD-AWS-0164
