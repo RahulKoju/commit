@@ -44,6 +44,8 @@ RUN pnpm turbo run build --filter=app
 # Stage 5: Serve
 FROM nginx:alpine AS server
 
+RUN apk update && apk upgrade --no-cache
+
 COPY --from=builder /app/apps/app/dist /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
