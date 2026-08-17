@@ -20,6 +20,7 @@ type Dependencies struct {
 	TaskService               services.TaskService
 	FocusService              services.FocusService
 	NoteService               services.NoteService
+	ReminderService           services.ReminderService
 	HabitService              services.HabitService
 	DashboardService          services.DashboardService
 	CookieDomain              string
@@ -33,6 +34,7 @@ func Register(router *gin.Engine, deps Dependencies) {
 	taskHandler := handlers.NewTaskHandler(deps.TaskService)
 	focusHandler := handlers.NewFocusHandler(deps.FocusService, deps.FocusDailyMinimumMinute)
 	noteHandler := handlers.NewNoteHandler(deps.NoteService)
+	reminderHandler := handlers.NewReminderHandler(deps.ReminderService)
 	habitHandler := handlers.NewHabitHandler(deps.HabitService)
 	dashboardHandler := handlers.NewDashboardHandler(deps.DashboardService)
 
@@ -75,6 +77,11 @@ func Register(router *gin.Engine, deps Dependencies) {
 	protected.PATCH("/notes/:id", noteHandler.Update)
 	protected.GET("/notes/:id/backlinks", noteHandler.GetBacklinks)
 	protected.DELETE("/notes/:id", noteHandler.Delete)
+	protected.GET("/notes/:id/reminders", reminderHandler.ListByNote)
+	protected.POST("/notes/:id/reminders", reminderHandler.Create)
+	protected.PATCH("/notes/:id/reminders/:reminderId", reminderHandler.Update)
+	protected.DELETE("/notes/:id/reminders/:reminderId", reminderHandler.Delete)
+	protected.GET("/reminders/due", reminderHandler.Due)
 	protected.GET("/habit-categories", habitHandler.ListCategories)
 	protected.POST("/habit-categories", habitHandler.CreateCategory)
 	protected.PATCH("/habit-categories/:id", habitHandler.UpdateCategory)

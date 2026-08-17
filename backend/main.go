@@ -48,6 +48,7 @@ func main() {
 	taskModel := models.NewTaskModel(pool)
 	focusModel := models.NewFocusModel(pool)
 	noteModel := models.NewNoteModel(pool)
+	reminderModel := models.NewReminderModel(pool)
 	habitModel := models.NewHabitModel(pool)
 	refreshTokenModel := models.NewRefreshTokenModel(pool)
 	passwordResetTokenModel := models.NewPasswordResetTokenModel(pool)
@@ -66,23 +67,27 @@ func main() {
 		emailSender = services.NewLogSender()
 	}
 
+	reminderService := services.NewReminderService(reminderModel, emailSender, cfg.AppURL)
+
 	authService := services.NewAuthService(userModel, refreshTokenModel, passwordResetTokenModel, emailSender, cfg.AppURL, habitService, cfg.JWTSecret, cfg.JWTExpiryHours, cfg.JWTExpiryMinutes)
 
 	router := gin.New()
 	router.Use(middleware.Logger(), gin.Recovery(), middleware.CORS(cfg.AllowedOrigins), metrics.Middleware())
 	routes.Register(router, routes.Dependencies{
-		AuthService:               authService,
-		AdminService:              adminService,
-		TaskService:               taskService,
-		FocusService:              focusService,
-		NoteService:               noteService,
-		HabitService:              habitService,
-		DashboardService:          dashboardService,
-		CookieDomain:              cfg.CookieDomain,
-		FocusDailyMinimumMinute:   cfg.FocusDailyMinimumMinute,
+		AuthService:             authService,
+		AdminService:            adminService,
+		TaskService:             taskService,
+		FocusService:            focusService,
+		NoteService:             noteService,
+		ReminderService:         reminderService,
+		HabitService:            habitService,
+		DashboardService:        dashboardService,
+		CookieDomain:            cfg.CookieDomain,
+		FocusDailyMinimumMinute: cfg.FocusDailyMinimumMinute,
 	})
 
 	metrics.StartDBStatsCollector(pool)
+	services.StartReminderScheduler(reminderService)
 
 	if err := router.Run(":" + cfg.Port); err != nil {
 		log.Fatalf("run server: %v", err)

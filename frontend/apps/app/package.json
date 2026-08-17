@@ -19,6 +19,8 @@
     "@tiptap/starter-kit": "^3.26.0",
     "@workspace/ui": "workspace:*",
     "axios": "^1.17.0",
+    "cron-parser": "^5.10.0",
+    "cronstrue": "^3.24.0",
     "dompurify": "^3.4.8",
     "fuse.js": "^7.4.2",
     "lucide-react": "^1.17.0",

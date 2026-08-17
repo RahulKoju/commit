@@ -10,6 +10,7 @@ import (
 
 type EmailSender interface {
 	SendPasswordReset(toEmail string, resetURL string) error
+	SendReminder(toEmail string, subject string, html string) error
 }
 
 type ResendSender struct {
@@ -32,6 +33,21 @@ func (s ResendSender) SendPasswordReset(toEmail string, resetURL string) error {
 <p>If you did not request this, you can safely ignore this email.</p>`, resetURL, resetURL),
 	})
 
+	return s.post(body)
+}
+
+func (s ResendSender) SendReminder(toEmail string, subject string, html string) error {
+	body, _ := json.Marshal(map[string]string{
+		"from":    s.from,
+		"to":      toEmail,
+		"subject": subject,
+		"html":    html,
+	})
+
+	return s.post(body)
+}
+
+func (s ResendSender) post(body []byte) error {
 	req, err := http.NewRequest("POST", "https://api.resend.com/emails", bytes.NewReader(body))
 	if err != nil {
 		return fmt.Errorf("create request: %w", err)
@@ -60,5 +76,10 @@ func NewLogSender() LogSender {
 
 func (s LogSender) SendPasswordReset(toEmail string, resetURL string) error {
 	log.Printf("[EMAIL] To: %s | Reset link: %s", toEmail, resetURL)
+	return nil
+}
+
+func (s LogSender) SendReminder(toEmail string, subject string, html string) error {
+	log.Printf("[EMAIL] To: %s | Subject: %s | Body: %s", toEmail, subject, html)
 	return nil
 }

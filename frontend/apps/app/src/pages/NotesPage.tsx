@@ -5,6 +5,7 @@ import { Button } from "@workspace/ui/components/button"
 import { RichTextEditor } from "@workspace/ui/components/rich-text-editor"
 
 import { useCreateNote, useDeleteNote, useNoteBacklinks, useNotes, useUpdateNote } from "@/hooks/useNotes"
+import { RemindersSection } from "@/components/RemindersSection"
 import type { CreateNoteInput, Note } from "@/types/note.types"
 
 export function NotesPage() {
@@ -279,6 +280,7 @@ function NotePreview({ note, onEdit }: { note: Note; onEdit: () => void }) {
           </div>
         </div>
       ) : null}
+      <RemindersSection noteId={note.id} />
     </article>
   )
 }

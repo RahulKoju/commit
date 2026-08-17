@@ -7,11 +7,13 @@ import { CommandPalette } from "@/components/CommandPalette"
 import { Sidebar } from "@/components/Sidebar"
 import { TopBar } from "@/components/TopBar"
 import { useCurrentUser } from "@/hooks/useAuth"
+import { useReminderNotifications } from "@/hooks/useReminderNotifications"
 import { TaskForm } from "@/pages/TasksPage"
 
 export function AppShell() {
   const { isLoading, isError } = useCurrentUser()
   const [quickAddOpen, setQuickAddOpen] = useState(false)
+  useReminderNotifications(!isLoading && !isError)
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {

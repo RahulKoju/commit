@@ -83,6 +83,13 @@ var (
 			Help: "Total number of notes created",
 		},
 	)
+
+	RemindersCreatedTotal = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "commit_reminders_created_total",
+			Help: "Total number of reminders created",
+		},
+	)
 )
 
 func Middleware() gin.HandlerFunc {
