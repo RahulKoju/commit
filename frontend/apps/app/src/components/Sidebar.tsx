@@ -1,9 +1,6 @@
 import {
   BarChart3,
-  BookCopy,
-  BookOpen,
   CheckSquare,
-  History,
   LayoutDashboard,
   NotebookPen,
   Shield,
@@ -20,9 +17,6 @@ const links = [
   { to: "/tasks", label: "Tasks", icon: CheckSquare },
   { to: "/habits", label: "Habits", icon: BarChart3 },
   { to: "/notes", label: "Notes", icon: NotebookPen },
-  { to: "/learn", label: "Learn", icon: BookOpen },
-  { to: "/learn/flashcards", label: "Flashcards", icon: BookCopy },
-  { to: "/reviews", label: "Reviews", icon: History },
 ]
 
 export function Sidebar() {

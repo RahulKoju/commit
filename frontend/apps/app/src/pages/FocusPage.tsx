@@ -20,7 +20,6 @@ export function FocusPage() {
   const [longBreakMinutes, setLongBreakMinutes] = useState(defaultDurations.longBreak)
   const [dateFrom, setDateFrom] = useState("")
   const [dateTo, setDateTo] = useState("")
-  const [topicId, setTopicId] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [stopwatchMinutes, setStopwatchMinutes] = useState<number | null>(null)
   const location = useLocation()
@@ -43,10 +42,7 @@ export function FocusPage() {
   const tick = useFocusStore((state) => state.tick)
   const createSession = useCreateFocusSession()
   const tasksQuery = useTasks({ view: "all", status: "" })
-  const filters = useMemo<FocusSessionFilters>(
-    () => ({ dateFrom, dateTo, topicId }),
-    [dateFrom, dateTo, topicId]
-  )
+  const filters = useMemo<FocusSessionFilters>(() => ({ dateFrom, dateTo }), [dateFrom, dateTo])
   const sessionsQuery = useFocusSessions(filters)
   const statsQuery = useFocusStats()
   const selectedTask = tasksQuery.data?.data.find((task) => task.id === selectedTaskId)
@@ -77,7 +73,6 @@ export function FocusPage() {
     createSession
       .mutateAsync({
         task_id: selectedTaskId,
-        topic_id: selectedTask?.topic_id ?? "",
         start_time: new Date(startedAt).toISOString(),
         duration_minutes: timerMode === "stopwatch" && stopwatchMinutes !== null ? stopwatchMinutes : workMinutes,
       })
@@ -96,7 +91,6 @@ export function FocusPage() {
     mode,
     remainingSeconds,
     resetTimer,
-    selectedTask?.topic_id,
     selectedTaskId,
     shortBreakMinutes,
     startBreak,
@@ -128,7 +122,6 @@ export function FocusPage() {
     createSession
       .mutateAsync({
         task_id: selectedTaskId,
-        topic_id: selectedTask?.topic_id ?? "",
         start_time: new Date(startedAt).toISOString(),
         duration_minutes: mins || 1,
       })
@@ -147,7 +140,6 @@ export function FocusPage() {
     const formData = new FormData(event.currentTarget)
     setDateFrom(String(formData.get("dateFrom") ?? ""))
     setDateTo(String(formData.get("dateTo") ?? ""))
-    setTopicId(String(formData.get("topicId") ?? ""))
   }
 
   const content = (
@@ -310,7 +302,6 @@ export function FocusPage() {
             <form className="flex flex-wrap gap-2" onSubmit={onHistorySubmit}>
               <input name="dateFrom" type="date" className="h-9 rounded-md border bg-background px-3 text-sm" />
               <input name="dateTo" type="date" className="h-9 rounded-md border bg-background px-3 text-sm" />
-              <input name="topicId" placeholder="Topic ID" className="h-9 rounded-md border bg-background px-3 text-sm" />
               <Button type="submit" variant="outline">Filter</Button>
             </form>
           </div>

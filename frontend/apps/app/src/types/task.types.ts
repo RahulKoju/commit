@@ -9,7 +9,6 @@ export const recurrenceRuleSchema = z.enum(["daily", "weekdays", "weekly", "mont
 export const taskSchema = z.object({
   id: z.string().uuid(),
   user_id: z.string().uuid(),
-  topic_id: z.string().uuid().nullable(),
   title: z.string(),
   description: z.string(),
   priority: taskPrioritySchema,
@@ -38,13 +37,11 @@ export type TaskResponse = z.infer<typeof taskResponseSchema>
 
 export type TaskFilters = {
   view: TaskView
-  topicId?: string
   priority?: TaskPriority | ""
   status?: TaskStatus | ""
 }
 
 export type CreateTaskInput = {
-  topic_id?: string
   title: string
   description: string
   priority: TaskPriority

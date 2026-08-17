@@ -77,14 +77,6 @@ var (
 		},
 	)
 
-	FlashcardsReviewedTotal = promauto.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "commit_flashcards_reviewed_total",
-			Help: "Total number of flashcard reviews by rating",
-		},
-		[]string{"rating"},
-	)
-
 	NotesCreatedTotal = promauto.NewCounter(
 		prometheus.CounterOpts{
 			Name: "commit_notes_created_total",

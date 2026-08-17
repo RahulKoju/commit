@@ -17,7 +17,6 @@ type ListFocusSessionsInput struct {
 	UserID   string
 	DateFrom string
 	DateTo   string
-	TopicID  string
 	Limit    int
 	Offset   int
 }
@@ -25,7 +24,6 @@ type ListFocusSessionsInput struct {
 type CreateFocusSessionInput struct {
 	UserID                  string
 	TaskID                  string
-	TopicID                 string
 	Tags                    []string
 	StartTime               string
 	DurationMinutes         int
@@ -41,7 +39,6 @@ func (service FocusService) Count(ctx context.Context, input ListFocusSessionsIn
 		UserID:   input.UserID,
 		DateFrom: strings.TrimSpace(input.DateFrom),
 		DateTo:   strings.TrimSpace(input.DateTo),
-		TopicID:  strings.TrimSpace(input.TopicID),
 	})
 }
 
@@ -57,7 +54,6 @@ func (service FocusService) List(ctx context.Context, input ListFocusSessionsInp
 		UserID:   input.UserID,
 		DateFrom: strings.TrimSpace(input.DateFrom),
 		DateTo:   strings.TrimSpace(input.DateTo),
-		TopicID:  strings.TrimSpace(input.TopicID),
 		Limit:    input.Limit,
 		Offset:   input.Offset,
 	})
@@ -80,7 +76,6 @@ func (service FocusService) Create(ctx context.Context, input CreateFocusSession
 	return service.focus.Create(ctx, models.CreateFocusSessionParams{
 		UserID:                  input.UserID,
 		TaskID:                  taskID,
-		TopicID:                 strings.TrimSpace(input.TopicID),
 		Tags:                    normalizeTags(input.Tags),
 		StartTime:               startTime,
 		DurationMinutes:         input.DurationMinutes,

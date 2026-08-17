@@ -6,7 +6,6 @@ export const focusSessionSchema = z.object({
   user_id: z.string().uuid(),
   task_id: z.string().uuid(),
   task_title: z.string(),
-  topic_id: z.string().uuid().nullable(),
   tags: z.array(z.string()),
   start_time: z.string(),
   duration_minutes: z.number().int().positive(),
@@ -42,12 +41,10 @@ export type FocusStatsResponse = z.infer<typeof focusStatsResponseSchema>
 export type FocusSessionFilters = {
   dateFrom?: string
   dateTo?: string
-  topicId?: string
 }
 
 export type CreateFocusSessionInput = {
   task_id: string
-  topic_id?: string
   tags?: string[]
   start_time: string
   duration_minutes: number

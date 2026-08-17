@@ -17,7 +17,6 @@ type TaskHandler struct {
 }
 
 type taskRequest struct {
-	TopicID       string `json:"topic_id"`
 	Title         string `json:"title" binding:"required"`
 	Description   string `json:"description"`
 	Priority      string `json:"priority"`
@@ -26,7 +25,6 @@ type taskRequest struct {
 }
 
 type updateTaskRequest struct {
-	TopicID          *string `json:"topic_id"`
 	Title            *string `json:"title"`
 	Description      *string `json:"description"`
 	Priority         *string `json:"priority"`
@@ -51,7 +49,6 @@ func (handler TaskHandler) List(c *gin.Context) {
 	input := services.ListTasksInput{
 		UserID:   userID,
 		View:     c.DefaultQuery("view", string(models.TaskViewToday)),
-		TopicID:  c.Query("topic_id"),
 		Priority: c.Query("priority"),
 		Status:   c.Query("status"),
 		Limit:    limit,
@@ -93,7 +90,6 @@ func (handler TaskHandler) Create(c *gin.Context) {
 
 	task, err := handler.tasks.Create(c.Request.Context(), services.CreateTaskInput{
 		UserID:        userID,
-		TopicID:       request.TopicID,
 		Title:         request.Title,
 		Description:   request.Description,
 		Priority:      request.Priority,
@@ -125,7 +121,6 @@ func (handler TaskHandler) Update(c *gin.Context) {
 	task, err := handler.tasks.Update(c.Request.Context(), services.UpdateTaskInput{
 		UserID:           userID,
 		ID:               c.Param("id"),
-		TopicID:          request.TopicID,
 		Title:            request.Title,
 		Description:      request.Description,
 		Priority:         request.Priority,

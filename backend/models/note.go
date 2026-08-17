@@ -12,20 +12,14 @@ import (
 
 var wikiLinkPattern = regexp.MustCompile(`\[\[([^\]]+)\]\]`)
 
-type NoteTopic struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
-}
-
 type Note struct {
-	ID        string      `json:"id"`
-	UserID    string      `json:"user_id"`
-	Title     string      `json:"title"`
-	Body      string      `json:"body"`
-	Topics    []NoteTopic `json:"topics"`
-	Tags      []string    `json:"tags"`
-	CreatedAt time.Time   `json:"created_at"`
-	UpdatedAt time.Time   `json:"updated_at"`
+	ID        string    `json:"id"`
+	UserID    string    `json:"user_id"`
+	Title     string    `json:"title"`
+	Body      string    `json:"body"`
+	Tags      []string  `json:"tags"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 type ListNotesParams struct {
@@ -36,20 +30,18 @@ type ListNotesParams struct {
 }
 
 type CreateNoteParams struct {
-	UserID   string
-	Title    string
-	Body     string
-	TopicIDs []string
-	Tags     []string
+	UserID string
+	Title  string
+	Body   string
+	Tags   []string
 }
 
 type UpdateNoteParams struct {
-	UserID   string
-	ID       string
-	Title    string
-	Body     string
-	TopicIDs []string
-	Tags     []string
+	UserID string
+	ID     string
+	Title  string
+	Body   string
+	Tags   []string
 }
 
 type NoteModel struct {
@@ -76,7 +68,7 @@ func (model NoteModel) List(ctx context.Context, params ListNotesParams) ([]Note
 
 	notes := make([]Note, 0)
 	for rows.Next() {
-		note, err := scanNoteWithoutTopics(rows)
+		note, err := scanNote(rows)
 		if err != nil {
 			return nil, err
 		}
@@ -86,10 +78,6 @@ func (model NoteModel) List(ctx context.Context, params ListNotesParams) ([]Note
 		return nil, err
 	}
 
-	notes, err = model.attachTopics(ctx, notes)
-	if err != nil {
-		return nil, err
-	}
 	return model.attachTags(ctx, notes)
 }
 
@@ -114,7 +102,7 @@ func (model NoteModel) GetByID(ctx context.Context, userID string, id string) (N
 		WHERE user_id = $1 AND id = $2
 	`, userID, id)
 
-	note, err := scanNoteWithoutTopics(row)
+	note, err := scanNote(row)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Note{}, ErrNotFound
 	}
@@ -122,16 +110,12 @@ func (model NoteModel) GetByID(ctx context.Context, userID string, id string) (N
 		return Note{}, err
 	}
 
-	notes, err := model.attachTopics(ctx, []Note{note})
+	notes, err := model.attachTags(ctx, []Note{note})
 	if err != nil {
 		return Note{}, err
 	}
 	if len(notes) == 0 {
 		return Note{}, ErrNotFound
-	}
-	notes, err = model.attachTags(ctx, notes)
-	if err != nil {
-		return Note{}, err
 	}
 	return notes[0], nil
 }
@@ -149,11 +133,8 @@ func (model NoteModel) Create(ctx context.Context, params CreateNoteParams) (Not
 		RETURNING id, user_id, title, body, created_at, updated_at
 	`, params.UserID, params.Title, params.Body)
 
-	note, err := scanNoteWithoutTopics(row)
+	note, err := scanNote(row)
 	if err != nil {
-		return Note{}, err
-	}
-	if err := replaceNoteTopics(ctx, tx, params.UserID, note.ID, params.TopicIDs); err != nil {
 		return Note{}, err
 	}
 	if err := replaceNoteTags(ctx, tx, note.ID, params.Tags); err != nil {
@@ -183,14 +164,11 @@ func (model NoteModel) Update(ctx context.Context, params UpdateNoteParams) (Not
 		RETURNING id, user_id, title, body, created_at, updated_at
 	`, params.UserID, params.ID, params.Title, params.Body)
 
-	note, err := scanNoteWithoutTopics(row)
+	note, err := scanNote(row)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Note{}, ErrNotFound
 	}
 	if err != nil {
-		return Note{}, err
-	}
-	if err := replaceNoteTopics(ctx, tx, params.UserID, note.ID, params.TopicIDs); err != nil {
 		return Note{}, err
 	}
 	if err := replaceNoteTags(ctx, tx, note.ID, params.Tags); err != nil {
@@ -235,46 +213,6 @@ func replaceNoteTags(ctx context.Context, tx pgx.Tx, noteID string, tags []strin
 
 	return nil
 }
-func (model NoteModel) attachTopics(ctx context.Context, notes []Note) ([]Note, error) {
-	if len(notes) == 0 {
-		return notes, nil
-	}
-
-	noteIDs := make([]string, 0, len(notes))
-	noteIndex := make(map[string]int)
-	for index, note := range notes {
-		noteIDs = append(noteIDs, note.ID)
-		noteIndex[note.ID] = index
-		notes[index].Topics = make([]NoteTopic, 0)
-	}
-
-	rows, err := model.pool.Query(ctx, `
-		SELECT nt.note_id, t.id, t.name
-		FROM note_topics nt
-		INNER JOIN topics t ON t.id = nt.topic_id
-		WHERE nt.note_id = ANY($1)
-		ORDER BY lower(t.name)
-	`, noteIDs)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var noteID string
-		var topic NoteTopic
-		if err := rows.Scan(&noteID, &topic.ID, &topic.Name); err != nil {
-			return nil, err
-		}
-		index, ok := noteIndex[noteID]
-		if ok {
-			notes[index].Topics = append(notes[index].Topics, topic)
-		}
-	}
-
-	return notes, rows.Err()
-}
-
 func (model NoteModel) attachTags(ctx context.Context, notes []Note) ([]Note, error) {
 	if len(notes) == 0 {
 		return notes, nil
@@ -318,7 +256,7 @@ type noteScanner interface {
 	Scan(dest ...interface{}) error
 }
 
-func scanNoteWithoutTopics(scanner noteScanner) (Note, error) {
+func scanNote(scanner noteScanner) (Note, error) {
 	var note Note
 	err := scanner.Scan(&note.ID, &note.UserID, &note.Title, &note.Body, &note.CreatedAt, &note.UpdatedAt)
 	if err != nil {
@@ -410,30 +348,6 @@ func replaceNoteLinks(ctx context.Context, tx pgx.Tx, userID string, noteID stri
 			ON CONFLICT DO NOTHING
 		`, noteID, t.id); err != nil {
 			return err
-		}
-	}
-
-	return nil
-}
-
-func replaceNoteTopics(ctx context.Context, tx pgx.Tx, userID string, noteID string, topicIDs []string) error {
-	if _, err := tx.Exec(ctx, "DELETE FROM note_topics WHERE note_id = $1", noteID); err != nil {
-		return err
-	}
-
-	for _, topicID := range topicIDs {
-		commandTag, err := tx.Exec(ctx, `
-			INSERT INTO note_topics (note_id, topic_id)
-			SELECT $1, t.id
-			FROM topics t
-			WHERE t.user_id = $2 AND t.id = $3
-			ON CONFLICT DO NOTHING
-		`, noteID, userID, topicID)
-		if err != nil {
-			return err
-		}
-		if commandTag.RowsAffected() == 0 {
-			return ErrNotFound
 		}
 	}
 

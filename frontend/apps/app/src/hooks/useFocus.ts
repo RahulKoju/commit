@@ -56,7 +56,6 @@ function focusQueryString(filters: FocusSessionFilters, pagination?: PaginationP
   const params = new URLSearchParams()
   if (filters.dateFrom) params.set("date_from", filters.dateFrom)
   if (filters.dateTo) params.set("date_to", filters.dateTo)
-  if (filters.topicId) params.set("topic_id", filters.topicId)
   const query = appendPagination(params, pagination).toString()
   return query ? `?${query}` : ""
 }
@@ -64,6 +63,5 @@ function focusQueryString(filters: FocusSessionFilters, pagination?: PaginationP
 function normalizeCreateFocusSessionInput(input: CreateFocusSessionInput): CreateFocusSessionInput {
   return {
     ...input,
-    topic_id: input.topic_id ?? "",
   }
 }

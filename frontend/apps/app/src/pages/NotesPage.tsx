@@ -4,14 +4,12 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from "react"
 import { Button } from "@workspace/ui/components/button"
 import { RichTextEditor } from "@workspace/ui/components/rich-text-editor"
 
-import { useLearningTopics } from "@/hooks/useLearn"
 import { useCreateNote, useDeleteNote, useNoteBacklinks, useNotes, useUpdateNote } from "@/hooks/useNotes"
 import type { CreateNoteInput, Note } from "@/types/note.types"
 
 export function NotesPage() {
   const [search, setSearch] = useState("")
   const notesQuery = useNotes(search)
-  const topicsQuery = useLearningTopics()
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null)
   const [editingNoteId, setEditingNoteId] = useState<string | null>("new")
   const [preview, setPreview] = useState(true)
@@ -61,11 +59,6 @@ export function NotesPage() {
                 <p className="font-medium">{note.title}</p>
                 <p className="text-xs text-muted-foreground">{new Date(note.updated_at).toLocaleString()}</p>
                 <div className="mt-2 flex flex-wrap gap-1">
-                  {note.topics.map((topic) => (
-                    <span key={topic.id} className="rounded-full border px-2 py-0.5 text-xs">
-                      {topic.name}
-                    </span>
-                  ))}
                   {note.tags.map((tag) => (
                     <span key={tag} className="rounded-full border bg-muted/50 px-2 py-0.5 text-xs text-muted-foreground">
                       #{tag}
@@ -96,7 +89,6 @@ export function NotesPage() {
               <div className={activeNote && preview ? "xl:col-span-1" : "xl:col-span-2"}>
                 <NoteForm
                   note={editingNoteId === "new" ? null : activeNote}
-                  topics={topicsQuery.data?.topics ?? []}
                   onSaved={(note) => {
                     setSelectedNoteId(note.id)
                     setEditingNoteId(note.id)
@@ -138,11 +130,9 @@ function DebouncedSearch({ value, onChange }: { value: string; onChange: (value:
 
 function NoteForm({
   note,
-  topics,
   onSaved,
 }: {
   note: Note | null
-  topics: Array<{ id: string; name: string }>
   onSaved: (note: Note) => void
 }) {
   const createNote = useCreateNote()
@@ -191,22 +181,6 @@ function NoteForm({
           className="h-10 rounded-md border bg-background px-3"
         />
       </label>
-      <div className="grid gap-2 text-sm">
-        <span className="font-medium">Topics</span>
-        <div className="flex flex-wrap gap-2">
-          {topics.map((topic) => (
-            <label key={topic.id} className="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs">
-              <input
-                type="checkbox"
-                name="topic_ids"
-                value={topic.id}
-                defaultChecked={note?.topics.some((item) => item.id === topic.id) ?? false}
-              />
-              {topic.name}
-            </label>
-          ))}
-        </div>
-      </div>
       <div className="grid gap-2 text-sm">
         <span className="font-medium">Tags</span>
         <div className="flex flex-wrap gap-2">
@@ -272,11 +246,6 @@ function NotePreview({ note, onEdit }: { note: Note; onEdit: () => void }) {
         </div>
       </div>
       <div className="flex flex-wrap gap-2">
-        {note.topics.map((topic) => (
-          <span key={topic.id} className="rounded-full border px-2 py-1 text-xs">
-            {topic.name}
-          </span>
-        ))}
         {note.tags.map((tag) => (
           <span key={tag} className="rounded-full border bg-muted/50 px-2 py-1 text-xs text-muted-foreground">
             #{tag}
@@ -318,7 +287,6 @@ function noteInputFromFormData(formData: FormData, tags: string[]): CreateNoteIn
   return {
     title: String(formData.get("title") ?? ""),
     body: String(formData.get("body") ?? ""),
-    topic_ids: formData.getAll("topic_ids").map((value) => String(value)),
     tags,
   }
 }

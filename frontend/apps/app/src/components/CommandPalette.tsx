@@ -9,8 +9,6 @@ const pages = [
   { to: "/tasks", label: "Tasks", keywords: "todo checklist" },
   { to: "/habits", label: "Habits", keywords: "routine tracker" },
   { to: "/notes", label: "Notes", keywords: "writing docs" },
-  { to: "/learn", label: "Learn", keywords: "study topics" },
-  { to: "/reviews", label: "Reviews", keywords: "retrospective week" },
   { to: "/admin/users", label: "Admin", keywords: "users manage" },
 ]
 

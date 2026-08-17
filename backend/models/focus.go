@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -15,7 +14,6 @@ type FocusSession struct {
 	UserID          string    `json:"user_id"`
 	TaskID          string    `json:"task_id"`
 	TaskTitle       string    `json:"task_title"`
-	TopicID         *string   `json:"topic_id"`
 	Tags            []string  `json:"tags"`
 	StartTime       time.Time `json:"start_time"`
 	DurationMinutes int       `json:"duration_minutes"`
@@ -36,7 +34,6 @@ type ListFocusSessionsParams struct {
 	UserID   string
 	DateFrom string
 	DateTo   string
-	TopicID  string
 	Limit    int
 	Offset   int
 }
@@ -44,7 +41,6 @@ type ListFocusSessionsParams struct {
 type CreateFocusSessionParams struct {
 	UserID                  string
 	TaskID                  string
-	TopicID                 string
 	Tags                    []string
 	StartTime               time.Time
 	DurationMinutes         int
@@ -61,16 +57,15 @@ func NewFocusModel(pool *pgxpool.Pool) FocusModel {
 
 func (model FocusModel) List(ctx context.Context, params ListFocusSessionsParams) ([]FocusSession, error) {
 	rows, err := model.pool.Query(ctx, `
-		SELECT fs.id, fs.user_id, fs.task_id, t.title, fs.topic_id, fs.start_time, fs.duration_minutes, fs.created_at
+		SELECT fs.id, fs.user_id, fs.task_id, t.title, fs.start_time, fs.duration_minutes, fs.created_at
 		FROM focus_sessions fs
 		INNER JOIN tasks t ON t.id = fs.task_id AND t.user_id = fs.user_id
 		WHERE fs.user_id = $1
 		  AND ($2 = '' OR fs.start_time >= $2::date)
 		  AND ($3 = '' OR fs.start_time < ($3::date + INTERVAL '1 day'))
-		  AND ($4 = '' OR fs.topic_id = $4::uuid)
 		ORDER BY fs.start_time DESC
-		LIMIT $5 OFFSET $6
-	`, params.UserID, params.DateFrom, params.DateTo, params.TopicID, params.Limit, params.Offset)
+		LIMIT $4 OFFSET $5
+	`, params.UserID, params.DateFrom, params.DateTo, params.Limit, params.Offset)
 	if err != nil {
 		return nil, err
 	}
@@ -101,8 +96,7 @@ func (model FocusModel) CountFocusSessions(ctx context.Context, params ListFocus
 		WHERE fs.user_id = $1
 		  AND ($2 = '' OR fs.start_time >= $2::date)
 		  AND ($3 = '' OR fs.start_time < ($3::date + INTERVAL '1 day'))
-		  AND ($4 = '' OR fs.topic_id = $4::uuid)
-	`, params.UserID, params.DateFrom, params.DateTo, params.TopicID).Scan(&count)
+	`, params.UserID, params.DateFrom, params.DateTo).Scan(&count)
 	if err != nil {
 		return 0, err
 	}
@@ -117,12 +111,12 @@ func (model FocusModel) Create(ctx context.Context, params CreateFocusSessionPar
 	defer tx.Rollback(ctx)
 
 	row := tx.QueryRow(ctx, `
-		INSERT INTO focus_sessions (user_id, task_id, topic_id, start_time, duration_minutes)
-		SELECT $1, t.id, COALESCE(NULLIF($3, '')::uuid, t.topic_id), $4, $5
+		INSERT INTO focus_sessions (user_id, task_id, start_time, duration_minutes)
+		SELECT $1, t.id, $3, $4
 		FROM tasks t
 		WHERE t.user_id = $1 AND t.id = $2
-		RETURNING id, user_id, task_id, (SELECT title FROM tasks WHERE id = $2), topic_id, start_time, duration_minutes, created_at
-	`, params.UserID, params.TaskID, params.TopicID, params.StartTime, params.DurationMinutes)
+		RETURNING id, user_id, task_id, (SELECT title FROM tasks WHERE id = $2), start_time, duration_minutes, created_at
+	`, params.UserID, params.TaskID, params.StartTime, params.DurationMinutes)
 
 	session, err := scanFocusSession(row)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -182,25 +176,18 @@ func (model FocusModel) autoCheckFocusedStudy(ctx context.Context, tx pgx.Tx, us
 
 func scanFocusSession(scanner focusScanner) (FocusSession, error) {
 	var session FocusSession
-	var topicID pgtype.UUID
 
 	err := scanner.Scan(
 		&session.ID,
 		&session.UserID,
 		&session.TaskID,
 		&session.TaskTitle,
-		&topicID,
 		&session.StartTime,
 		&session.DurationMinutes,
 		&session.CreatedAt,
 	)
 	if err != nil {
 		return FocusSession{}, err
-	}
-
-	if topicID.Valid {
-		value := formatUUID(topicID.Bytes)
-		session.TopicID = &value
 	}
 
 	return session, nil

@@ -8,21 +8,18 @@ import (
 )
 
 type DashboardWeekComparison struct {
-	TasksDoneThisWeek       int `json:"tasks_done_this_week"`
-	TasksDoneLastWeek       int `json:"tasks_done_last_week"`
-	HabitsCheckedThisWeek   int `json:"habits_checked_this_week"`
-	HabitsCheckedLastWeek   int `json:"habits_checked_last_week"`
-	StudySessionsThisWeek   int `json:"study_sessions_this_week"`
-	StudySessionsLastWeek   int `json:"study_sessions_last_week"`
-	FocusMinutesThisWeek    int `json:"focus_minutes_this_week"`
-	FocusMinutesLastWeek    int `json:"focus_minutes_last_week"`
+	TasksDoneThisWeek     int `json:"tasks_done_this_week"`
+	TasksDoneLastWeek     int `json:"tasks_done_last_week"`
+	HabitsCheckedThisWeek int `json:"habits_checked_this_week"`
+	HabitsCheckedLastWeek int `json:"habits_checked_last_week"`
+	FocusMinutesThisWeek  int `json:"focus_minutes_this_week"`
+	FocusMinutesLastWeek  int `json:"focus_minutes_last_week"`
 }
 
 type DashboardSummary struct {
 	Today              string                           `json:"today"`
 	TaskSummary        DashboardTaskSummary             `json:"task_summary"`
 	HabitSummary       DashboardHabitSummary            `json:"habit_summary"`
-	LearningStreak     int                              `json:"learning_streak"`
 	RecentNotes        []DashboardNote                  `json:"recent_notes"`
 	WeeklyHabitChart   []DashboardHabitChartItem        `json:"weekly_habit_chart"`
 	WeeklyProductivity []DashboardProductivityChartItem `json:"weekly_productivity"`
@@ -31,10 +28,9 @@ type DashboardSummary struct {
 }
 
 type DashboardProductivityChartItem struct {
-	Date             string `json:"date"`
-	TasksDone        int    `json:"tasks_done"`
-	HabitsChecked    int    `json:"habits_checked"`
-	LearningSessions int    `json:"learning_sessions"`
+	Date          string `json:"date"`
+	TasksDone     int    `json:"tasks_done"`
+	HabitsChecked int    `json:"habits_checked"`
 }
 
 type DashboardTaskSummary struct {
@@ -68,12 +64,11 @@ type DashboardFocusSession struct {
 }
 
 type DashboardModel struct {
-	pool  *pgxpool.Pool
-	learn LearnModel
+	pool *pgxpool.Pool
 }
 
-func NewDashboardModel(pool *pgxpool.Pool, learn LearnModel) DashboardModel {
-	return DashboardModel{pool: pool, learn: learn}
+func NewDashboardModel(pool *pgxpool.Pool) DashboardModel {
+	return DashboardModel{pool: pool}
 }
 
 func (model DashboardModel) Summary(ctx context.Context, userID string) (DashboardSummary, error) {
@@ -82,10 +77,6 @@ func (model DashboardModel) Summary(ctx context.Context, userID string) (Dashboa
 		return DashboardSummary{}, err
 	}
 	habitSummary, err := model.habitSummary(ctx, userID)
-	if err != nil {
-		return DashboardSummary{}, err
-	}
-	streak, err := model.learn.StudyStreak(ctx, userID)
 	if err != nil {
 		return DashboardSummary{}, err
 	}
@@ -114,7 +105,6 @@ func (model DashboardModel) Summary(ctx context.Context, userID string) (Dashboa
 		Today:              time.Now().Format("2006-01-02"),
 		TaskSummary:        taskSummary,
 		HabitSummary:       habitSummary,
-		LearningStreak:     streak,
 		RecentNotes:        recentNotes,
 		WeeklyHabitChart:   habitChart,
 		WeeklyProductivity: productivityChart,
@@ -228,8 +218,7 @@ func (model DashboardModel) weeklyProductivity(ctx context.Context, userID strin
 		)
 		SELECT d.day::text,
 		       COALESCE(t.done_count, 0)::int,
-		       COALESCE(h.checked_count, 0)::int,
-		       COALESCE(l.session_count, 0)::int
+		       COALESCE(h.checked_count, 0)::int
 		FROM days d
 		LEFT JOIN (
 			SELECT scheduled_date, COUNT(*)::int AS done_count
@@ -246,13 +235,6 @@ func (model DashboardModel) weeklyProductivity(ctx context.Context, userID strin
 			  AND hl.logged_date >= CURRENT_DATE - INTERVAL '13 days'
 			GROUP BY hl.logged_date
 		) h ON h.logged_date = d.day
-		LEFT JOIN (
-			SELECT studied_at::date AS study_date, COUNT(*)::int AS session_count
-			FROM learn_entries
-			WHERE user_id = $1
-			  AND studied_at >= CURRENT_DATE - INTERVAL '13 days'
-			GROUP BY studied_at::date
-		) l ON l.study_date = d.day
 		ORDER BY d.day
 	`, userID)
 	if err != nil {
@@ -263,7 +245,7 @@ func (model DashboardModel) weeklyProductivity(ctx context.Context, userID strin
 	items := make([]DashboardProductivityChartItem, 0)
 	for rows.Next() {
 		var item DashboardProductivityChartItem
-		if err := rows.Scan(&item.Date, &item.TasksDone, &item.HabitsChecked, &item.LearningSessions); err != nil {
+		if err := rows.Scan(&item.Date, &item.TasksDone, &item.HabitsChecked); err != nil {
 			return nil, err
 		}
 		items = append(items, item)
@@ -323,8 +305,6 @@ func (model DashboardModel) weekComparison(ctx context.Context, userID string) (
 			COALESCE((SELECT COUNT(*)::int FROM tasks WHERE user_id = $1 AND status = 'done' AND scheduled_date BETWEEN (SELECT start_date FROM last_week) AND (SELECT end_date FROM last_week)), 0),
 			COALESCE((SELECT COUNT(*)::int FROM habit_logs hl INNER JOIN habits h ON h.id = hl.habit_id WHERE h.user_id = $1 AND h.deleted_at IS NULL AND hl.logged_date BETWEEN (SELECT start_date FROM this_week) AND (SELECT end_date FROM this_week)), 0),
 			COALESCE((SELECT COUNT(*)::int FROM habit_logs hl INNER JOIN habits h ON h.id = hl.habit_id WHERE h.user_id = $1 AND h.deleted_at IS NULL AND hl.logged_date BETWEEN (SELECT start_date FROM last_week) AND (SELECT end_date FROM last_week)), 0),
-			COALESCE((SELECT COUNT(*)::int FROM learn_entries WHERE user_id = $1 AND studied_at::date BETWEEN (SELECT start_date FROM this_week) AND (SELECT end_date FROM this_week)), 0),
-			COALESCE((SELECT COUNT(*)::int FROM learn_entries WHERE user_id = $1 AND studied_at::date BETWEEN (SELECT start_date FROM last_week) AND (SELECT end_date FROM last_week)), 0),
 			COALESCE((SELECT COALESCE(SUM(duration_minutes), 0)::int FROM focus_sessions WHERE user_id = $1 AND start_time::date BETWEEN (SELECT start_date FROM this_week) AND (SELECT end_date FROM this_week)), 0),
 			COALESCE((SELECT COALESCE(SUM(duration_minutes), 0)::int FROM focus_sessions WHERE user_id = $1 AND start_time::date BETWEEN (SELECT start_date FROM last_week) AND (SELECT end_date FROM last_week)), 0)
 	`, userID).Scan(
@@ -332,8 +312,6 @@ func (model DashboardModel) weekComparison(ctx context.Context, userID string) (
 		&comp.TasksDoneLastWeek,
 		&comp.HabitsCheckedThisWeek,
 		&comp.HabitsCheckedLastWeek,
-		&comp.StudySessionsThisWeek,
-		&comp.StudySessionsLastWeek,
 		&comp.FocusMinutesThisWeek,
 		&comp.FocusMinutesLastWeek,
 	)

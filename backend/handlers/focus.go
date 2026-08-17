@@ -19,7 +19,6 @@ type FocusHandler struct {
 
 type createFocusSessionRequest struct {
 	TaskID          string   `json:"task_id" binding:"required"`
-	TopicID         string   `json:"topic_id"`
 	Tags            []string `json:"tags"`
 	StartTime       string   `json:"start_time"`
 	DurationMinutes int      `json:"duration_minutes" binding:"required"`
@@ -41,7 +40,6 @@ func (handler FocusHandler) List(c *gin.Context) {
 		UserID:   userID,
 		DateFrom: c.Query("date_from"),
 		DateTo:   c.Query("date_to"),
-		TopicID:  c.Query("topic_id"),
 		Limit:    limit,
 		Offset:   offset,
 	}
@@ -82,7 +80,6 @@ func (handler FocusHandler) Create(c *gin.Context) {
 	session, err := handler.focus.Create(c.Request.Context(), services.CreateFocusSessionInput{
 		UserID:                  userID,
 		TaskID:                  request.TaskID,
-		TopicID:                 request.TopicID,
 		Tags:                    request.Tags,
 		StartTime:               request.StartTime,
 		DurationMinutes:         request.DurationMinutes,

@@ -1,5 +1,4 @@
 import {
-  BookOpen,
   CheckCircle2,
   Clock,
   Flame,
@@ -274,13 +273,6 @@ function MetricCardsWidget({
         trend={trend(wc.habits_checked_this_week, wc.habits_checked_last_week)}
       />
       <MetricCard
-        icon={BookOpen}
-        label="Learning streak"
-        value={`${summary.learning_streak}`}
-        detail="consecutive study days"
-        href="/learn"
-      />
-      <MetricCard
         icon={Clock}
         label="Focus"
         value={
@@ -399,15 +391,6 @@ function ProductivityChartWidget({
               stroke="#22c55e"
               fill="#22c55e"
               fillOpacity={0.4}
-            />
-            <Area
-              type="monotone"
-              dataKey="learning"
-              name="Learning"
-              stackId="a"
-              stroke="#a855f7"
-              fill="#a855f7"
-              fillOpacity={0.3}
             />
             {separatorIndex > 0 ? (
               <ReferenceLine
@@ -563,6 +546,5 @@ function productivityData(items: DashboardSummary["weekly_productivity"]) {
     day: shortDay(item.date),
     tasks: item.tasks_done,
     habits: item.habits_checked,
-    learning: item.learning_sessions,
   }))
 }

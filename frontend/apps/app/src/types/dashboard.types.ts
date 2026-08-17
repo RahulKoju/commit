@@ -26,7 +26,6 @@ export const dashboardProductivityChartItemSchema = z.object({
   date: z.string(),
   tasks_done: z.number().int(),
   habits_checked: z.number().int(),
-  learning_sessions: z.number().int(),
 })
 
 export const dashboardWeekComparisonSchema = z.object({
@@ -34,8 +33,6 @@ export const dashboardWeekComparisonSchema = z.object({
   tasks_done_last_week: z.number().int(),
   habits_checked_this_week: z.number().int(),
   habits_checked_last_week: z.number().int(),
-  study_sessions_this_week: z.number().int(),
-  study_sessions_last_week: z.number().int(),
   focus_minutes_this_week: z.number().int(),
   focus_minutes_last_week: z.number().int(),
 })
@@ -52,7 +49,6 @@ export const dashboardSummarySchema = z.object({
   today: z.string(),
   task_summary: dashboardTaskSummarySchema,
   habit_summary: dashboardHabitSummarySchema,
-  learning_streak: z.number().int(),
   recent_notes: z.array(dashboardNoteSchema),
   weekly_habit_chart: z.array(dashboardHabitChartItemSchema),
   weekly_productivity: z.array(dashboardProductivityChartItemSchema),

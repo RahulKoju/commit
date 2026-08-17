@@ -65,7 +65,6 @@ export function useDeleteTask() {
 function taskQueryString(filters: TaskFilters, pagination?: PaginationParams): string {
   const params = new URLSearchParams()
   params.set("view", filters.view)
-  if (filters.topicId) params.set("topic_id", filters.topicId)
   if (filters.priority) params.set("priority", filters.priority)
   if (filters.status) params.set("status", filters.status)
   return `?${appendPagination(params, pagination).toString()}`
@@ -74,7 +73,6 @@ function taskQueryString(filters: TaskFilters, pagination?: PaginationParams): s
 function normalizeCreateTaskInput(input: CreateTaskInput): CreateTaskInput {
   return {
     ...input,
-    topic_id: input.topic_id ?? "",
     scheduled_date: input.scheduled_date ?? "",
     recurrence_rule: input.recurrence_rule ?? "",
     estimated_minutes: input.estimated_minutes ?? null,
@@ -84,7 +82,6 @@ function normalizeCreateTaskInput(input: CreateTaskInput): CreateTaskInput {
 function normalizeUpdateTaskInput(input: UpdateTaskInput): UpdateTaskInput {
   return {
     ...input,
-    topic_id: input.topic_id ?? "",
     scheduled_date: input.scheduled_date ?? "",
     recurrence_rule: input.recurrence_rule ?? "",
     estimated_minutes: input.estimated_minutes ?? null,

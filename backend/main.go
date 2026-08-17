@@ -47,23 +47,17 @@ func main() {
 	userModel := models.NewUserModel(pool)
 	taskModel := models.NewTaskModel(pool)
 	focusModel := models.NewFocusModel(pool)
-	learnModel := models.NewLearnModel(pool)
 	noteModel := models.NewNoteModel(pool)
 	habitModel := models.NewHabitModel(pool)
-	reviewModel := models.NewReviewModel(pool)
-	flashcardModel := models.NewFlashcardModel(pool)
 	refreshTokenModel := models.NewRefreshTokenModel(pool)
 	passwordResetTokenModel := models.NewPasswordResetTokenModel(pool)
-	dashboardModel := models.NewDashboardModel(pool, learnModel)
+	dashboardModel := models.NewDashboardModel(pool)
 	adminService := services.NewAdminService(userModel)
 	taskService := services.NewTaskService(taskModel)
 	focusService := services.NewFocusService(focusModel)
-	learnService := services.NewLearnService(learnModel)
 	noteService := services.NewNoteService(noteModel)
 	habitService := services.NewHabitService(habitModel)
-	reviewService := services.NewReviewService(reviewModel)
 	dashboardService := services.NewDashboardService(dashboardModel, userModel)
-	flashcardService := services.NewFlashcardService(flashcardModel)
 
 	var emailSender services.EmailSender
 	if cfg.ResendAPIKey != "" {
@@ -81,12 +75,9 @@ func main() {
 		AdminService:              adminService,
 		TaskService:               taskService,
 		FocusService:              focusService,
-		LearnService:              learnService,
 		NoteService:               noteService,
 		HabitService:              habitService,
-		ReviewService:             reviewService,
 		DashboardService:          dashboardService,
-		FlashcardService:          flashcardService,
 		CookieDomain:              cfg.CookieDomain,
 		FocusDailyMinimumMinute:   cfg.FocusDailyMinimumMinute,
 	})

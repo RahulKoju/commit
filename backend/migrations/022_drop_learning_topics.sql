@@ -1,0 +1,13 @@
+DROP TABLE IF EXISTS flashcards;
+
+DROP TABLE IF EXISTS reviews;
+
+DROP TABLE IF EXISTS learn_entries;
+
+DROP TABLE IF EXISTS note_topics;
+
+ALTER TABLE tasks DROP COLUMN IF EXISTS topic_id;
+
+ALTER TABLE focus_sessions DROP COLUMN IF EXISTS topic_id;
+
+DROP TABLE IF EXISTS topics;
