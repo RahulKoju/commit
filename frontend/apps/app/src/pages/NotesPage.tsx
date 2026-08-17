@@ -1,5 +1,5 @@
 import DOMPurify from "dompurify"
-import { Edit3, Eye, Link2, Plus, Trash2, X } from "lucide-react"
+import { Edit3, Eye, Link2, Plus, Trash2 } from "lucide-react"
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react"
 import { Button } from "@workspace/ui/components/button"
 import { RichTextEditor } from "@workspace/ui/components/rich-text-editor"
@@ -27,7 +27,7 @@ export function NotesPage() {
         <div>
           <h1 className="text-2xl font-semibold">Notes</h1>
           <p className="text-sm text-muted-foreground">
-            Search, tag, edit, and preview developer notes.
+            Search, edit, and preview developer notes.
           </p>
         </div>
         <Button type="button" onClick={() => { setEditingNoteId("new"); setPreview(false) }}>
@@ -59,13 +59,6 @@ export function NotesPage() {
               >
                 <p className="font-medium">{note.title}</p>
                 <p className="text-xs text-muted-foreground">{new Date(note.updated_at).toLocaleString()}</p>
-                <div className="mt-2 flex flex-wrap gap-1">
-                  {note.tags.map((tag) => (
-                    <span key={tag} className="rounded-full border bg-muted/50 px-2 py-0.5 text-xs text-muted-foreground">
-                      #{tag}
-                    </span>
-                  ))}
-                </div>
               </button>
             ))}
           </div>
@@ -139,27 +132,13 @@ function NoteForm({
   const createNote = useCreateNote()
   const updateNote = useUpdateNote()
   const [error, setError] = useState<string | null>(null)
-  const [tags, setTags] = useState<string[]>(note?.tags ?? [])
-  const [tagInput, setTagInput] = useState("")
   const resetToken = note?.id ?? "new"
-
-  function addTag() {
-    const tag = tagInput.trim().toLowerCase()
-    if (tag && !tags.includes(tag)) {
-      setTags([...tags, tag])
-    }
-    setTagInput("")
-  }
-
-  function removeTag(tag: string) {
-    setTags(tags.filter((t) => t !== tag))
-  }
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setError(null)
     const formData = new FormData(event.currentTarget)
-    const input = noteInputFromFormData(formData, tags)
+    const input = noteInputFromFormData(formData)
 
     try {
       const response = note
@@ -182,26 +161,6 @@ function NoteForm({
           className="h-10 rounded-md border bg-background px-3"
         />
       </label>
-      <div className="grid gap-2 text-sm">
-        <span className="font-medium">Tags</span>
-        <div className="flex flex-wrap gap-2">
-          {tags.map((tag) => (
-            <span key={tag} className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs">
-              {tag}
-              <button type="button" onClick={() => removeTag(tag)} className="text-muted-foreground hover:text-foreground">
-                <X className="size-3" />
-              </button>
-            </span>
-          ))}
-          <input
-            value={tagInput}
-            onChange={(e) => setTagInput(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addTag(); } }}
-            placeholder="Add a tag..."
-            className="h-7 min-w-24 rounded-md border bg-background px-2 text-xs"
-          />
-        </div>
-      </div>
       <RichTextEditor
         id="note-body"
         name="body"
@@ -246,13 +205,6 @@ function NotePreview({ note, onEdit }: { note: Note; onEdit: () => void }) {
           </Button>
         </div>
       </div>
-      <div className="flex flex-wrap gap-2">
-        {note.tags.map((tag) => (
-          <span key={tag} className="rounded-full border bg-muted/50 px-2 py-1 text-xs text-muted-foreground">
-            #{tag}
-          </span>
-        ))}
-      </div>
       <div
         className="prose prose-sm max-w-none rounded-lg border bg-muted/30 p-4"
         dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(note.body) }}
@@ -285,10 +237,9 @@ function NotePreview({ note, onEdit }: { note: Note; onEdit: () => void }) {
   )
 }
 
-function noteInputFromFormData(formData: FormData, tags: string[]): CreateNoteInput {
+function noteInputFromFormData(formData: FormData): CreateNoteInput {
   return {
     title: String(formData.get("title") ?? ""),
     body: String(formData.get("body") ?? ""),
-    tags,
   }
 }

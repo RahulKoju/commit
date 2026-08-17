@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"time"
+	_ "time/tzdata"
 
 	"commit/backend/config"
 	"commit/backend/db"

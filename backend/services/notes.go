@@ -27,7 +27,6 @@ type CreateNoteInput struct {
 	UserID string
 	Title  string
 	Body   string
-	Tags   []string
 }
 
 type UpdateNoteInput struct {
@@ -35,7 +34,6 @@ type UpdateNoteInput struct {
 	ID     string
 	Title  *string
 	Body   *string
-	Tags   *[]string
 }
 
 func NewNoteService(notes models.NoteModel) NoteService {
@@ -69,7 +67,6 @@ func (service NoteService) Create(ctx context.Context, input CreateNoteInput) (m
 		UserID: input.UserID,
 		Title:  title,
 		Body:   body,
-		Tags:   normalizeTags(input.Tags),
 	})
 }
 
@@ -84,16 +81,12 @@ func (service NoteService) Update(ctx context.Context, input UpdateNoteInput) (m
 		ID:     input.ID,
 		Title:  current.Title,
 		Body:   current.Body,
-		Tags:   current.Tags,
 	}
 	if input.Title != nil {
 		params.Title = strings.TrimSpace(*input.Title)
 	}
 	if input.Body != nil {
 		params.Body = sanitizer.Sanitize(*input.Body)
-	}
-	if input.Tags != nil {
-		params.Tags = normalizeTags(*input.Tags)
 	}
 	if params.Title == "" {
 		return models.Note{}, fmt.Errorf("title is required")

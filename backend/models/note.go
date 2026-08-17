@@ -17,7 +17,6 @@ type Note struct {
 	UserID    string    `json:"user_id"`
 	Title     string    `json:"title"`
 	Body      string    `json:"body"`
-	Tags      []string  `json:"tags"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
@@ -33,7 +32,6 @@ type CreateNoteParams struct {
 	UserID string
 	Title  string
 	Body   string
-	Tags   []string
 }
 
 type UpdateNoteParams struct {
@@ -41,7 +39,6 @@ type UpdateNoteParams struct {
 	ID     string
 	Title  string
 	Body   string
-	Tags   []string
 }
 
 type NoteModel struct {
@@ -78,7 +75,7 @@ func (model NoteModel) List(ctx context.Context, params ListNotesParams) ([]Note
 		return nil, err
 	}
 
-	return model.attachTags(ctx, notes)
+	return notes, nil
 }
 
 func (model NoteModel) CountNotes(ctx context.Context, params ListNotesParams) (int, error) {
@@ -110,14 +107,7 @@ func (model NoteModel) GetByID(ctx context.Context, userID string, id string) (N
 		return Note{}, err
 	}
 
-	notes, err := model.attachTags(ctx, []Note{note})
-	if err != nil {
-		return Note{}, err
-	}
-	if len(notes) == 0 {
-		return Note{}, ErrNotFound
-	}
-	return notes[0], nil
+	return note, nil
 }
 
 func (model NoteModel) Create(ctx context.Context, params CreateNoteParams) (Note, error) {
@@ -135,9 +125,6 @@ func (model NoteModel) Create(ctx context.Context, params CreateNoteParams) (Not
 
 	note, err := scanNote(row)
 	if err != nil {
-		return Note{}, err
-	}
-	if err := replaceNoteTags(ctx, tx, note.ID, params.Tags); err != nil {
 		return Note{}, err
 	}
 	if err := replaceNoteLinks(ctx, tx, params.UserID, note.ID, params.Body); err != nil {
@@ -171,9 +158,6 @@ func (model NoteModel) Update(ctx context.Context, params UpdateNoteParams) (Not
 	if err != nil {
 		return Note{}, err
 	}
-	if err := replaceNoteTags(ctx, tx, note.ID, params.Tags); err != nil {
-		return Note{}, err
-	}
 	if err := replaceNoteLinks(ctx, tx, params.UserID, note.ID, params.Body); err != nil {
 		return Note{}, err
 	}
@@ -194,62 +178,6 @@ func (model NoteModel) Delete(ctx context.Context, userID string, id string) err
 	}
 
 	return nil
-}
-
-func replaceNoteTags(ctx context.Context, tx pgx.Tx, noteID string, tags []string) error {
-	if _, err := tx.Exec(ctx, "DELETE FROM note_tags WHERE note_id = $1", noteID); err != nil {
-		return err
-	}
-
-	for _, tag := range tags {
-		if _, err := tx.Exec(ctx, `
-			INSERT INTO note_tags (note_id, tag)
-			VALUES ($1, $2)
-			ON CONFLICT DO NOTHING
-		`, noteID, tag); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-func (model NoteModel) attachTags(ctx context.Context, notes []Note) ([]Note, error) {
-	if len(notes) == 0 {
-		return notes, nil
-	}
-
-	noteIDs := make([]string, 0, len(notes))
-	noteIndex := make(map[string]int)
-	for index, note := range notes {
-		noteIDs = append(noteIDs, note.ID)
-		noteIndex[note.ID] = index
-		notes[index].Tags = make([]string, 0)
-	}
-
-	rows, err := model.pool.Query(ctx, `
-		SELECT note_id, tag
-		FROM note_tags
-		WHERE note_id = ANY($1)
-		ORDER BY tag
-	`, noteIDs)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var noteID string
-		var tag string
-		if err := rows.Scan(&noteID, &tag); err != nil {
-			return nil, err
-		}
-		index, ok := noteIndex[noteID]
-		if ok {
-			notes[index].Tags = append(notes[index].Tags, tag)
-		}
-	}
-
-	return notes, rows.Err()
 }
 
 type noteScanner interface {

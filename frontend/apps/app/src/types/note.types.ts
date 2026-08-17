@@ -6,7 +6,6 @@ export const noteSchema = z.object({
   user_id: z.string().uuid(),
   title: z.string(),
   body: z.string(),
-  tags: z.array(z.string()),
   created_at: z.string(),
   updated_at: z.string(),
 })
@@ -36,7 +35,6 @@ export type BacklinksResponse = z.infer<typeof backlinksResponseSchema>
 export type CreateNoteInput = {
   title: string
   body: string
-  tags: string[]
 }
 
 export type UpdateNoteInput = Partial<CreateNoteInput>
