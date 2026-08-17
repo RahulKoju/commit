@@ -2,7 +2,6 @@ package models
 
 import (
 	"context"
-	"errors"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -36,15 +35,6 @@ type ListFocusSessionsParams struct {
 	DateTo   string
 	Limit    int
 	Offset   int
-}
-
-type CreateFocusSessionParams struct {
-	UserID                  string
-	TaskID                  string
-	Tags                    []string
-	StartTime               time.Time
-	DurationMinutes         int
-	FocusDailyMinimumMinute int
 }
 
 type FocusModel struct {
@@ -103,53 +93,15 @@ func (model FocusModel) CountFocusSessions(ctx context.Context, params ListFocus
 	return count, nil
 }
 
-func (model FocusModel) Create(ctx context.Context, params CreateFocusSessionParams) (FocusSession, error) {
-	tx, err := model.pool.Begin(ctx)
-	if err != nil {
-		return FocusSession{}, err
-	}
-	defer tx.Rollback(ctx)
-
-	row := tx.QueryRow(ctx, `
-		INSERT INTO focus_sessions (user_id, task_id, start_time, duration_minutes)
-		SELECT $1, t.id, $3, $4
-		FROM tasks t
-		WHERE t.user_id = $1 AND t.id = $2
-		RETURNING id, user_id, task_id, (SELECT title FROM tasks WHERE id = $2), start_time, duration_minutes, created_at
-	`, params.UserID, params.TaskID, params.StartTime, params.DurationMinutes)
-
-	session, err := scanFocusSession(row)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return FocusSession{}, ErrNotFound
-	}
-	if err != nil {
-		return FocusSession{}, err
-	}
-
-	if err := replaceFocusSessionTags(ctx, tx, session.ID, params.Tags); err != nil {
-		return FocusSession{}, err
-	}
-
-	if err := model.autoCheckFocusedStudy(ctx, tx, params.UserID, session.StartTime, params.FocusDailyMinimumMinute); err != nil {
-		return FocusSession{}, err
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return FocusSession{}, err
-	}
-
-	sessions, err := model.attachFocusTags(ctx, []FocusSession{session})
-	if err != nil {
-		return FocusSession{}, err
-	}
-	return sessions[0], nil
-}
-
 type focusScanner interface {
 	Scan(dest ...interface{}) error
 }
 
-func (model FocusModel) autoCheckFocusedStudy(ctx context.Context, tx pgx.Tx, userID string, day time.Time, minimumMinutes int) error {
+// autoCheckFocusedStudy upserts the "Focused study" habit log for the day of
+// day when the user's completed focus minutes reach the configured minimum.
+// It runs inside the completing transaction (never on start), so only
+// completed sessions' elapsed time ever counts toward the habit.
+func autoCheckFocusedStudy(ctx context.Context, tx pgx.Tx, userID string, day time.Time, minimumMinutes int) error {
 	var totalMinutes int
 	err := tx.QueryRow(ctx, `
 		SELECT COALESCE(SUM(duration_minutes), 0)

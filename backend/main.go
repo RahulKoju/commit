@@ -48,6 +48,7 @@ func main() {
 	userModel := models.NewUserModel(pool)
 	taskModel := models.NewTaskModel(pool)
 	focusModel := models.NewFocusModel(pool)
+	activeFocusModel := models.NewActiveFocusModel(pool)
 	noteModel := models.NewNoteModel(pool)
 	reminderModel := models.NewReminderModel(pool)
 	habitModel := models.NewHabitModel(pool)
@@ -56,7 +57,7 @@ func main() {
 	dashboardModel := models.NewDashboardModel(pool)
 	adminService := services.NewAdminService(userModel)
 	taskService := services.NewTaskService(taskModel)
-	focusService := services.NewFocusService(focusModel)
+	focusService := services.NewFocusService(focusModel, activeFocusModel)
 	noteService := services.NewNoteService(noteModel)
 	habitService := services.NewHabitService(habitModel)
 	dashboardService := services.NewDashboardService(dashboardModel, userModel)
@@ -89,6 +90,7 @@ func main() {
 
 	metrics.StartDBStatsCollector(pool)
 	services.StartReminderScheduler(reminderService)
+	services.StartFocusHeartbeatScheduler(focusService)
 
 	if err := router.Run(":" + cfg.Port); err != nil {
 		log.Fatalf("run server: %v", err)

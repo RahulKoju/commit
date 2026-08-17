@@ -153,7 +153,10 @@ func (handler TaskHandler) Delete(c *gin.Context) {
 		if errors.Is(err, models.ErrNotFound) {
 			status = http.StatusNotFound
 		}
-		c.JSON(status, gin.H{"error": "failed to delete task"})
+		if errors.Is(err, models.ErrActiveFocusConflict) {
+			status = http.StatusConflict
+		}
+		c.JSON(status, gin.H{"error": err.Error()})
 		return
 	}
 

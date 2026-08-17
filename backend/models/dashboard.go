@@ -2,8 +2,10 @@ package models
 
 import (
 	"context"
+	"errors"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -319,27 +321,28 @@ func (model DashboardModel) weekComparison(ctx context.Context, userID string) (
 }
 
 func (model DashboardModel) activeFocusSession(ctx context.Context, userID string) (*DashboardFocusSession, error) {
-	rows, err := model.pool.Query(ctx, `
-		SELECT fs.id, fs.task_id, t.title, fs.start_time, fs.duration_minutes
-		FROM focus_sessions fs
-		INNER JOIN tasks t ON t.id = fs.task_id
-		WHERE fs.user_id = $1
-		  AND fs.start_time::date = CURRENT_DATE
-		ORDER BY fs.start_time DESC
+	row := model.pool.QueryRow(ctx, `
+		SELECT afs.id, afs.task_id, COALESCE(t.title, ''), afs.started_at,
+		       GREATEST(1, CEIL((afs.elapsed_seconds + COALESCE(EXTRACT(EPOCH FROM (now() - afs.segment_started_at)), 0)) / 60.0))::int
+		FROM active_focus_sessions afs
+		LEFT JOIN tasks t ON t.id = afs.task_id AND t.user_id = afs.user_id
+		WHERE afs.user_id = $1
+		  AND afs.status IN ('running', 'paused')
+		  AND afs.started_at::date = CURRENT_DATE
+		ORDER BY afs.started_at DESC
 		LIMIT 1
 	`, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	if !rows.Next() {
-		return nil, rows.Err()
-	}
-
 	var session DashboardFocusSession
-	if err := rows.Scan(&session.ID, &session.TaskID, &session.TaskTitle, &session.StartTime, &session.DurationMinutes); err != nil {
+	var taskID *string
+	err := row.Scan(&session.ID, &taskID, &session.TaskTitle, &session.StartTime, &session.DurationMinutes)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
 		return nil, err
 	}
-	return &session, rows.Err()
+	if taskID != nil {
+		session.TaskID = *taskID
+	}
+	return &session, nil
 }

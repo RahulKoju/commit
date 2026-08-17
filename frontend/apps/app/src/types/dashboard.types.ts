@@ -39,7 +39,7 @@ export const dashboardWeekComparisonSchema = z.object({
 
 export const dashboardFocusSessionSchema = z.object({
   id: z.string().uuid(),
-  task_id: z.string().uuid(),
+  task_id: z.string().uuid().nullable(),
   task_title: z.string(),
   start_time: z.string(),
   duration_minutes: z.number().int(),

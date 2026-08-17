@@ -3,6 +3,7 @@ package models
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -202,6 +203,19 @@ func (model TaskModel) Update(ctx context.Context, params UpdateTaskParams) (Tas
 }
 
 func (model TaskModel) Delete(ctx context.Context, userID string, id string) error {
+	var activeCount int
+	err := model.pool.QueryRow(ctx, `
+		SELECT COUNT(*)
+		FROM active_focus_sessions
+		WHERE user_id = $1 AND task_id = $2 AND status IN ('running', 'paused')
+	`, userID, id).Scan(&activeCount)
+	if err != nil {
+		return err
+	}
+	if activeCount > 0 {
+		return fmt.Errorf("%w: finish or discard the active focus session first", ErrActiveFocusConflict)
+	}
+
 	commandTag, err := model.pool.Exec(ctx, "DELETE FROM tasks WHERE user_id = $1 AND id = $2", userID, id)
 	if err != nil {
 		return err
