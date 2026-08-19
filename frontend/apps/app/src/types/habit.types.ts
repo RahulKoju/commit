@@ -47,6 +47,18 @@ export const habitDayStatusSchema = z.object({
   date: z.string(),
   value: z.number(),
   completed: z.boolean(),
+  scheduled: z.boolean(),
+})
+
+export const habitMatrixLogSchema = z.object({
+  habit_id: z.string().uuid(),
+  logged_date: z.string(),
+  value: z.number(),
+})
+
+export const habitMatrixSchema = z.object({
+  habits: z.array(habitSchema),
+  logs: z.array(habitMatrixLogSchema),
 })
 
 export const habitAnalyticsSchema = z.object({
@@ -84,18 +96,27 @@ export const habitAnalyticsResponseSchema = z.object({
   analytics: habitAnalyticsSchema,
 })
 
+export const habitMatrixResponseSchema = z.object({
+  habits: z.array(habitSchema),
+  logs: z.array(habitMatrixLogSchema),
+})
+
 export type HabitType = z.infer<typeof habitTypeSchema>
 export type HabitFrequencyType = z.infer<typeof habitFrequencyTypeSchema>
 export type Habit = z.infer<typeof habitSchema>
 export type HabitCategory = z.infer<typeof habitCategorySchema>
 export type HabitLog = z.infer<typeof habitLogSchema>
 export type HabitAnalytics = z.infer<typeof habitAnalyticsSchema>
+export type HabitDayStatus = z.infer<typeof habitDayStatusSchema>
+export type HabitMatrixLog = z.infer<typeof habitMatrixLogSchema>
+export type HabitMatrix = z.infer<typeof habitMatrixSchema>
 export type HabitsResponse = z.infer<typeof habitsResponseSchema>
 export type HabitResponse = z.infer<typeof habitResponseSchema>
 export type HabitCategoriesResponse = z.infer<typeof habitCategoriesResponseSchema>
 export type HabitCategoryResponse = z.infer<typeof habitCategoryResponseSchema>
 export type HabitLogResponse = z.infer<typeof habitLogResponseSchema>
 export type HabitAnalyticsResponse = z.infer<typeof habitAnalyticsResponseSchema>
+export type HabitMatrixResponse = z.infer<typeof habitMatrixResponseSchema>
 
 export type CreateHabitCategoryInput = {
   name: string

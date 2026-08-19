@@ -1,33 +1,52 @@
-import { BarChart3, Check, Download, Plus, Trash2, Pencil, X, Search, Flame } from "lucide-react"
-import { useMemo, useState, useEffect, useRef, type FormEvent } from "react"
+import { useMemo, useState } from "react"
+import { Settings2 } from "lucide-react"
 import { Button } from "@workspace/ui/components/button"
-import { Input } from "@workspace/ui/components/input"
-import { Label } from "@workspace/ui/components/label"
 
+import { HabitDetailSheet } from "@/components/habits/HabitDetailSheet"
+import { HabitsMatrix } from "@/components/habits/HabitsMatrix"
+import { ManageHabitsDialog } from "@/components/habits/ManageHabitsDialog"
+import { useHabitMatrix, useHabits } from "@/hooks/useHabits"
+import type { Habit } from "@/types/habit.types"
 import {
-  useCreateHabit,
-  useCreateHabitCategory,
-  useDeleteHabit,
-  useDeleteHabitCategory,
-  useHabitAnalytics,
-  useHabitCategories,
-  useHabits,
-  useLogHabit,
-  useUpdateHabit,
-  useUpdateHabitCategory,
-} from "@/hooks/useHabits"
-import type { CreateHabitInput, Habit, HabitType } from "@/types/habit.types"
-
-const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const
+  isHabitMet,
+  isScheduledOn,
+  listDateKeys,
+  monthRange,
+  rangeLabel,
+  toDateKey,
+  weekRange,
+  type DateRange,
+} from "@/components/habits/habitMatrixUtils"
 
 export function HabitsPage() {
   const habitsQuery = useHabits()
-  const categoriesQuery = useHabitCategories()
-  const [selectedHabitId, setSelectedHabitId] = useState("")
-  const [editingHabit, setEditingHabit] = useState<Habit | null>(null)
-  const [deletingHabit, setDeletingHabit] = useState<Habit | null>(null)
-  const groupedHabits = useMemo(() => groupHabits(habitsQuery.data?.habits ?? []), [habitsQuery.data?.habits])
-  const selectedHabit = habitsQuery.data?.habits.find((habit) => habit.id === selectedHabitId) ?? habitsQuery.data?.habits[0]
+  const [view, setView] = useState<"week" | "month">("week")
+  const [manageOpen, setManageOpen] = useState(false)
+  const [detailHabit, setDetailHabit] = useState<Habit | null>(null)
+
+  const today = toDateKey(new Date())
+
+  const range: DateRange = useMemo(() => {
+    const anchor = new Date()
+    return view === "week" ? weekRange(anchor) : monthRange(anchor)
+  }, [view])
+
+  const matrixQuery = useHabitMatrix(range.start, range.end)
+
+  const detailPeriodAverage = useMemo(() => {
+    if (!detailHabit || !matrixQuery.data) return null
+    const { logs } = matrixQuery.data
+    const logMap = new Map(logs.map((log) => [`${log.habit_id}|${log.logged_date}`, log.value]))
+    let scheduled = 0
+    let completed = 0
+    for (const dateKey of listDateKeys(range.start, range.end)) {
+      if (dateKey > today) continue
+      if (!isScheduledOn(detailHabit, dateKey)) continue
+      scheduled++
+      if (isHabitMet(detailHabit, logMap.get(`${detailHabit.id}|${dateKey}`) ?? 0)) completed++
+    }
+    return scheduled > 0 ? Math.round((completed / scheduled) * 100) : null
+  }, [detailHabit, matrixQuery.data, range, today])
 
   return (
     <section className="space-y-6">
@@ -38,759 +57,53 @@ export function HabitsPage() {
             Check in daily, track numeric targets, and review streaks.
           </p>
         </div>
-        <div className="flex gap-2">
-          <ExportCSVButton />
-          <CategoryForm />
-          <HabitForm categories={categoriesQuery.data?.categories ?? []} />
+        <div className="flex items-center gap-2">
+          <div className="flex rounded-lg border p-0.5">
+            <button
+              type="button"
+              onClick={() => setView("week")}
+              className={`rounded-md px-3 py-1 text-sm font-medium transition-colors ${
+                view === "week" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Week
+            </button>
+            <button
+              type="button"
+              onClick={() => setView("month")}
+              className={`rounded-md px-3 py-1 text-sm font-medium transition-colors ${
+                view === "month" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Month
+            </button>
+          </div>
+          <Button type="button" variant="outline" onClick={() => setManageOpen(true)}>
+            <Settings2 />
+            Manage
+          </Button>
         </div>
       </div>
 
-      {habitsQuery.isLoading ? <p className="text-sm text-muted-foreground">Loading habits...</p> : null}
-
-      <div className="grid gap-6 xl:grid-cols-[1fr_24rem]">
-        <div className="space-y-6">
-          {groupedHabits.map((group) => (
-            <div key={group.categoryName} className="rounded-xl border bg-background p-4">
-              <div className="mb-4 flex items-center justify-between">
-                <h2 className="font-semibold">{group.categoryName}</h2>
-                <span className="text-sm text-muted-foreground">
-                  {group.habits.filter(isCompletedToday).length}/{group.habits.length}
-                </span>
-              </div>
-              <div className="grid gap-3 md:grid-cols-2">
-                {group.habits.map((habit) => (
-                  <HabitCard
-                    key={habit.id}
-                    habit={habit}
-                    selected={selectedHabit?.id === habit.id}
-                    onSelect={() => setSelectedHabitId(habit.id)}
-                    onEdit={() => setEditingHabit(habit)}
-                    onDelete={() => setDeletingHabit(habit)}
-                  />
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-
-        <aside className="space-y-6">
-          <DailyRing habits={habitsQuery.data?.habits ?? []} />
-          {selectedHabit ? <HabitAnalyticsPanel habit={selectedHabit} /> : null}
-        </aside>
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <span>{rangeLabel(range, view)}</span>
+        {matrixQuery.isFetching ? <span className="text-xs">Refreshing...</span> : null}
       </div>
 
-      {editingHabit ? (
-        <EditHabitModal
-          habit={editingHabit}
-          categories={categoriesQuery.data?.categories ?? []}
-          onClose={() => setEditingHabit(null)}
+      {matrixQuery.isLoading ? (
+        <p className="text-sm text-muted-foreground">Loading habits...</p>
+      ) : (
+        <HabitsMatrix
+          habits={matrixQuery.data?.habits ?? habitsQuery.data?.habits ?? []}
+          logs={matrixQuery.data?.logs ?? []}
+          range={range}
+          today={today}
+          onOpenHabit={setDetailHabit}
         />
-      ) : null}
+      )}
 
-      {deletingHabit ? (
-        <DeleteHabitModal
-          habit={deletingHabit}
-          onClose={() => setDeletingHabit(null)}
-        />
-      ) : null}
+      <ManageHabitsDialog open={manageOpen} onOpenChange={setManageOpen} />
+      <HabitDetailSheet habit={detailHabit} periodAverage={detailPeriodAverage} onClose={() => setDetailHabit(null)} />
     </section>
   )
-}
-
-/* ─── Delete confirmation modal ─── */
-function DeleteHabitModal({ habit, onClose }: { habit: Habit; onClose: () => void }) {
-  const deleteHabit = useDeleteHabit()
-
-  async function handleDelete() {
-    await deleteHabit.mutateAsync(habit.id)
-    onClose()
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
-      <div className="w-[90vw] max-w-md rounded-xl border bg-background p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
-        <h2 className="text-lg font-semibold">Delete habit</h2>
-        <p className="mt-2 text-sm text-muted-foreground">
-          This will permanently remove <strong>{habit.name}</strong> and all its logs. This action cannot be undone.
-        </p>
-        <div className="mt-6 flex justify-end gap-3">
-          <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
-          <Button type="button" variant="destructive" onClick={handleDelete} disabled={deleteHabit.isPending}>
-            {deleteHabit.isPending ? "Deleting..." : "Delete"}
-          </Button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-/* ─── Edit habit modal ─── */
-function EditHabitModal({
-  habit,
-  categories,
-  onClose,
-}: {
-  habit: Habit
-  categories: Array<{ id: string; name: string }>
-  onClose: () => void
-}) {
-  const updateHabit = useUpdateHabit()
-  const [name, setName] = useState(habit.name)
-  const [description, setDescription] = useState(habit.description)
-  const [categoryId, setCategoryId] = useState(habit.category_id)
-  const [type, setType] = useState<HabitType>(habit.type)
-  const [targetValue, setTargetValue] = useState(habit.target_value ?? 0)
-  const [targetUnit, setTargetUnit] = useState(habit.target_unit ?? "")
-  const [frequencyType, setFrequencyType] = useState(habit.frequency_type)
-  const [frequencyDays, setFrequencyDays] = useState<number[]>(habit.frequency_days)
-  const [weeklyGoal, setWeeklyGoal] = useState(habit.weekly_goal)
-
-  async function handleSubmit(e: FormEvent) {
-    e.preventDefault()
-    await updateHabit.mutateAsync({
-      habitId: habit.id,
-      input: {
-        name: name !== habit.name ? name : undefined,
-        description: description !== habit.description ? description : undefined,
-        category_id: categoryId !== habit.category_id ? categoryId : undefined,
-        type: type !== habit.type ? type : undefined,
-        target_value: targetValue !== (habit.target_value ?? 0) ? targetValue : undefined,
-        target_unit: targetUnit !== (habit.target_unit ?? "") ? targetUnit : undefined,
-        frequency_type: frequencyType !== habit.frequency_type ? frequencyType : undefined,
-        frequency_days: JSON.stringify(frequencyDays) !== JSON.stringify(habit.frequency_days) ? frequencyDays : undefined,
-        weekly_goal: weeklyGoal !== habit.weekly_goal ? weeklyGoal : undefined,
-      },
-    })
-    onClose()
-  }
-
-  function toggleDay(day: number) {
-    setFrequencyDays((prev) =>
-      prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day].sort(),
-    )
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
-      <div className="w-[90vw] max-w-lg rounded-xl border bg-background p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Edit habit</h2>
-          <button type="button" onClick={onClose} className="text-muted-foreground hover:text-foreground">
-            <X className="size-4" />
-          </button>
-        </div>
-        <form className="mt-4 grid gap-4" onSubmit={handleSubmit}>
-          <div className="grid gap-2">
-            <Label htmlFor="edit-name">Name</Label>
-            <Input id="edit-name" value={name} onChange={(e) => setName(e.target.value)} required />
-          </div>
-
-          <div className="grid gap-2">
-            <Label htmlFor="edit-description">Description</Label>
-            <textarea
-              id="edit-description"
-              rows={2}
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              className="rounded-md border bg-background px-3 py-2 text-sm"
-            />
-          </div>
-
-          <div className="grid gap-2">
-            <Label htmlFor="edit-category">Category</Label>
-            <CategoryCombobox
-              id="edit-category"
-              categories={categories}
-              value={categoryId}
-              onChange={setCategoryId}
-            />
-          </div>
-
-          <div className="grid gap-2 sm:grid-cols-3">
-            <div className="grid gap-2">
-              <Label htmlFor="edit-type">Type</Label>
-              <select id="edit-type" value={type} onChange={(e) => setType(e.target.value as HabitType)} className="h-9 rounded-md border bg-background px-3 text-sm">
-                <option value="boolean">Boolean</option>
-                <option value="numeric">Numeric</option>
-              </select>
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="edit-target-value">Target value</Label>
-              <Input id="edit-target-value" type="number" min={0} step="0.1" value={targetValue} onChange={(e) => setTargetValue(Number(e.target.value))} />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="edit-target-unit">Unit</Label>
-              <Input id="edit-target-unit" value={targetUnit} onChange={(e) => setTargetUnit(e.target.value)} />
-            </div>
-          </div>
-
-          <div className="grid gap-2 sm:grid-cols-2">
-            <div className="grid gap-2">
-              <Label htmlFor="edit-frequency">Frequency</Label>
-              <select id="edit-frequency" value={frequencyType} onChange={(e) => setFrequencyType(e.target.value as "daily" | "weekly")} className="h-9 rounded-md border bg-background px-3 text-sm">
-                <option value="daily">Daily</option>
-                <option value="weekly">Specific days</option>
-              </select>
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="edit-weekly-goal">Weekly goal</Label>
-              <Input id="edit-weekly-goal" type="number" min={1} value={weeklyGoal} onChange={(e) => setWeeklyGoal(Number(e.target.value))} />
-            </div>
-          </div>
-
-          {frequencyType === "weekly" ? (
-            <div className="grid gap-2">
-              <Label>Days of week</Label>
-              <div className="flex flex-wrap gap-2">
-                {DAY_LABELS.map((label, i) => {
-                  const day = i + 1
-                  return (
-                    <button
-                      key={day}
-                      type="button"
-                      onClick={() => toggleDay(day)}
-                      className={`h-9 rounded-md border px-3 text-sm font-medium transition-colors ${
-                        frequencyDays.includes(day)
-                          ? "border-primary bg-primary text-primary-foreground"
-                          : "bg-background text-muted-foreground hover:border-primary/50"
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-          ) : null}
-
-          <div className="flex justify-end">
-            <Button type="submit" disabled={updateHabit.isPending}>
-              {updateHabit.isPending ? "Saving..." : "Save changes"}
-            </Button>
-          </div>
-        </form>
-      </div>
-    </div>
-  )
-}
-
-/* ─── Export CSV ─── */
-function ExportCSVButton() {
-  const [loading, setLoading] = useState(false)
-
-  async function handleExport() {
-    setLoading(true)
-    try {
-      const resp = await fetch(`${import.meta.env.VITE_API_URL ?? "http://localhost:8080"}/api/v1/habits/export`, {
-        credentials: "include",
-      })
-      if (!resp.ok) {
-        const body = await resp.json().catch(() => null)
-        throw new Error(body?.error ?? "Export failed")
-      }
-      const blob = await resp.blob()
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement("a")
-      a.href = url
-      a.download = "habits.csv"
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
-    } catch (err) {
-      const { toast } = await import("sonner")
-      toast.error(err instanceof Error ? err.message : "Export failed")
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  return (
-    <Button type="button" variant="outline" onClick={handleExport} disabled={loading}>
-      <Download className="size-4" />
-      {loading ? "Exporting..." : "CSV"}
-    </Button>
-  )
-}
-
-/* ─── Category form ─── */
-function CategoryForm() {
-  const [open, setOpen] = useState(false)
-  const categoriesQuery = useHabitCategories()
-  const createCategory = useCreateHabitCategory()
-  const updateCategory = useUpdateHabitCategory()
-  const deleteCategory = useDeleteHabitCategory()
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [editName, setEditName] = useState("")
-
-  async function onCreate(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    const formData = new FormData(event.currentTarget)
-    await createCategory.mutateAsync({ name: String(formData.get("name") ?? "") })
-    event.currentTarget.reset()
-  }
-
-  async function onUpdate(id: string) {
-    if (!editName.trim()) return
-    await updateCategory.mutateAsync({ categoryId: id, input: { name: editName.trim() } })
-    setEditingId(null)
-    setEditName("")
-  }
-
-  async function onDelete(id: string) {
-    await deleteCategory.mutateAsync(id)
-  }
-
-  return (
-    <div className="relative">
-      <Button type="button" variant="outline" onClick={() => setOpen((value) => !value)}>
-        Category
-      </Button>
-      {open ? (
-        <div className="absolute right-0 z-20 mt-2 w-80 rounded-xl border bg-background p-3 shadow-xl" onClick={(e) => e.stopPropagation()}>
-          <form className="flex gap-2" onSubmit={onCreate}>
-            <Label htmlFor="category-name" className="sr-only">Category name</Label>
-            <input id="category-name" name="name" required placeholder="New category name" className="h-9 min-w-0 flex-1 rounded-md border bg-background px-3 text-sm" />
-            <Button type="submit" size="icon" aria-label="Create category" disabled={createCategory.isPending}>
-              <Plus className="size-4" />
-            </Button>
-          </form>
-
-          {categoriesQuery.data?.categories.length ? (
-            <div className="mt-3 space-y-1">
-              {categoriesQuery.data.categories.map((cat) => (
-                <div key={cat.id} className="flex items-center gap-2 rounded-md px-2 py-1 text-sm hover:bg-muted/50">
-                  {editingId === cat.id ? (
-                    <>
-                      <input
-                        value={editName}
-                        onChange={(e) => setEditName(e.target.value)}
-                        className="h-7 min-w-0 flex-1 rounded border bg-background px-2 text-sm"
-                        autoFocus
-                        onKeyDown={(e) => { if (e.key === "Enter") onUpdate(cat.id); if (e.key === "Escape") setEditingId(null) }}
-                      />
-                      <button type="button" onClick={() => onUpdate(cat.id)} className="rounded p-1 text-green-600 hover:bg-green-100">
-                        <Check className="size-3.5" />
-                      </button>
-                      <button type="button" onClick={() => setEditingId(null)} className="rounded p-1 text-muted-foreground hover:bg-muted">
-                        <X className="size-3.5" />
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <span className="flex-1 truncate">{cat.name}</span>
-                      <button type="button" onClick={() => { setEditingId(cat.id); setEditName(cat.name) }} className="rounded p-1 text-muted-foreground hover:text-foreground">
-                        <Pencil className="size-3.5" />
-                      </button>
-                      <button type="button" onClick={() => onDelete(cat.id)} className="rounded p-1 text-muted-foreground hover:text-destructive">
-                        <Trash2 className="size-3.5" />
-                      </button>
-                    </>
-                  )}
-                </div>
-              ))}
-            </div>
-          ) : null}
-        </div>
-      ) : null}
-    </div>
-  )
-}
-
-/* ─── Create habit form ─── */
-function HabitForm({ categories }: { categories: Array<{ id: string; name: string }> }) {
-  const [open, setOpen] = useState(false)
-  const [categoryId, setCategoryId] = useState("")
-  const [frequencyType, setFrequencyType] = useState("daily")
-  const [frequencyDays, setFrequencyDays] = useState<number[]>([1, 2, 3, 4, 5, 6, 7])
-  const createHabit = useCreateHabit()
-
-  function toggleDay(day: number) {
-    setFrequencyDays((prev) =>
-      prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day].sort(),
-    )
-  }
-
-  async function onSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    const form = event.currentTarget
-    const formData = new FormData(form)
-    formData.set("category_id", categoryId)
-    formData.set("frequency_days", JSON.stringify(frequencyDays))
-    await createHabit.mutateAsync(habitInputFromFormData(formData))
-    form.reset()
-    setCategoryId("")
-    setFrequencyType("daily")
-    setFrequencyDays([1, 2, 3, 4, 5, 6, 7])
-    setOpen(false)
-  }
-
-  return (
-    <div className="relative">
-      <Button type="button" onClick={() => setOpen((value) => !value)}>
-        <Plus className="size-4" />
-        Habit
-      </Button>
-      {open ? (
-        <form className="absolute right-0 z-20 mt-2 grid w-[min(92vw,28rem)] gap-3 rounded-xl border bg-background p-4 shadow-xl" onSubmit={onSubmit}>
-          <div className="grid gap-2">
-            <Label htmlFor="habit-name">Name</Label>
-            <input id="habit-name" name="name" required placeholder="Meditate" className="h-9 rounded-md border bg-background px-3 text-sm" />
-          </div>
-
-          <div className="grid gap-2">
-            <Label htmlFor="habit-category">Category</Label>
-            <CategoryCombobox
-              id="habit-category"
-              categories={categories}
-              value={categoryId}
-              onChange={setCategoryId}
-            />
-          </div>
-
-          <div className="grid gap-2 sm:grid-cols-3">
-            <div className="grid gap-2">
-              <Label htmlFor="habit-type">Type</Label>
-              <select id="habit-type" name="type" defaultValue="boolean" className="h-9 rounded-md border bg-background px-3 text-sm">
-                <option value="boolean">Boolean</option>
-                <option value="numeric">Numeric</option>
-              </select>
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="habit-target-value">Target value</Label>
-              <input id="habit-target-value" name="target_value" type="number" min={0} step="0.1" placeholder="Target" className="h-9 rounded-md border bg-background px-3 text-sm" />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="habit-target-unit">Unit</Label>
-              <input id="habit-target-unit" name="target_unit" placeholder="Unit" className="h-9 rounded-md border bg-background px-3 text-sm" />
-            </div>
-          </div>
-
-          <div className="grid gap-2 sm:grid-cols-2">
-            <div className="grid gap-2">
-              <Label htmlFor="habit-frequency">Frequency</Label>
-              <select id="habit-frequency" name="frequency_type" value={frequencyType} onChange={(e) => setFrequencyType(e.target.value)} className="h-9 rounded-md border bg-background px-3 text-sm">
-                <option value="daily">Daily</option>
-                <option value="weekly">Specific days</option>
-              </select>
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="habit-weekly-goal">Weekly goal</Label>
-              <input id="habit-weekly-goal" name="weekly_goal" type="number" min={1} defaultValue={7} className="h-9 rounded-md border bg-background px-3 text-sm" />
-            </div>
-          </div>
-
-          {frequencyType === "weekly" ? (
-            <div className="grid gap-2">
-              <Label>Days of week</Label>
-              <div className="flex flex-wrap gap-2">
-                {DAY_LABELS.map((label, i) => {
-                  const day = i + 1
-                  return (
-                    <button
-                      key={day}
-                      type="button"
-                      onClick={() => toggleDay(day)}
-                      className={`h-9 rounded-md border px-3 text-sm font-medium transition-colors ${
-                        frequencyDays.includes(day)
-                          ? "border-primary bg-primary text-primary-foreground"
-                          : "bg-background text-muted-foreground hover:border-primary/50"
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-          ) : null}
-
-          <div className="grid gap-2">
-            <Label htmlFor="habit-description">Description</Label>
-            <textarea id="habit-description" name="description" rows={2} placeholder="Description" className="rounded-md border bg-background px-3 py-2 text-sm" />
-          </div>
-
-          <div className="flex justify-end">
-            <Button type="submit" disabled={createHabit.isPending}>Create habit</Button>
-          </div>
-        </form>
-      ) : null}
-    </div>
-  )
-}
-
-/* ─── Searchable category combobox ─── */
-function CategoryCombobox({
-  id,
-  categories,
-  value,
-  onChange,
-}: {
-  id: string
-  categories: Array<{ id: string; name: string }>
-  value: string
-  onChange: (id: string) => void
-}) {
-  const [open, setOpen] = useState(false)
-  const [search, setSearch] = useState("")
-  const inputRef = useRef<HTMLInputElement>(null)
-
-  const filtered = useMemo(
-    () => categories.filter((c) => c.name.toLowerCase().includes(search.toLowerCase())),
-    [categories, search],
-  )
-
-  const selected = categories.find((c) => c.id === value)
-
-  useEffect(() => {
-    if (open) inputRef.current?.focus()
-  }, [open])
-
-  return (
-    <div className="relative">
-      <button
-        type="button"
-        id={id}
-        onClick={() => setOpen((v) => !v)}
-        className="flex h-9 w-full items-center justify-between rounded-md border bg-background px-3 text-sm text-left"
-      >
-        <span className={selected ? "" : "text-muted-foreground"}>{selected?.name ?? "Select category"}</span>
-        <Search className="size-4 text-muted-foreground" />
-      </button>
-      {open ? (
-        <div className="absolute z-30 mt-1 w-full rounded-xl border bg-background shadow-xl" onClick={(e) => e.stopPropagation()}>
-          <div className="p-2">
-            <input
-              ref={inputRef}
-              type="text"
-              placeholder="Search..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full rounded-md border bg-background px-3 py-1.5 text-sm"
-            />
-          </div>
-          <ul className="max-h-48 overflow-y-auto p-1">
-            {filtered.length === 0 ? (
-              <li className="px-3 py-2 text-sm text-muted-foreground">No categories found</li>
-            ) : (
-              filtered.map((category) => (
-                <li key={category.id}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onChange(category.id)
-                      setOpen(false)
-                      setSearch("")
-                    }}
-                    className={`w-full rounded-md px-3 py-1.5 text-left text-sm hover:bg-muted ${
-                      category.id === value ? "bg-muted font-medium" : ""
-                    }`}
-                  >
-                    {category.name}
-                  </button>
-                </li>
-              ))
-            )}
-          </ul>
-        </div>
-      ) : null}
-    </div>
-  )
-}
-
-/* ─── Habit card ─── */
-function HabitCard({
-  habit,
-  selected,
-  onSelect,
-  onEdit,
-  onDelete,
-}: {
-  habit: Habit
-  selected: boolean
-  onSelect: () => void
-  onEdit: () => void
-  onDelete: () => void
-}) {
-  const logHabit = useLogHabit()
-  const today = new Date().toISOString().slice(0, 10)
-  const completed = isCompletedToday(habit)
-  const progress = habit.type === "numeric" && habit.target_value ? Math.min(100, ((habit.today_log?.value ?? 0) / habit.target_value) * 100) : completed ? 100 : 0
-
-  const [note, setNote] = useState(habit.today_log?.note ?? "")
-
-  async function toggleBoolean() {
-    await logHabit.mutateAsync({
-      habitId: habit.id,
-      input: { logged_date: today, value: completed ? 0 : 1, note },
-    })
-  }
-
-  async function onNumericSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    const formData = new FormData(event.currentTarget)
-    await logHabit.mutateAsync({
-      habitId: habit.id,
-      input: { logged_date: today, value: Number(formData.get("value") ?? 0), note },
-    })
-  }
-
-  return (
-    <article className={`rounded-xl border p-4 ${selected ? "bg-muted" : "bg-background"}`} onClick={onSelect}>
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h3 className="font-semibold">{habit.name}</h3>
-          <p className="text-sm text-muted-foreground">{habit.description || habit.target_unit || habit.type}</p>
-        </div>
-        <div className="flex items-center gap-1">
-          {habit.current_streak > 0 ? (
-            <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${streakColor(habit.current_streak)}`}>
-              <Flame className={`size-3 ${habit.current_streak >= 90 ? "drop-shadow-[0_0_4px_currentColor]" : ""}`} />
-              {habit.current_streak}
-            </span>
-          ) : null}
-          <span className={`rounded-full px-2 py-0.5 text-xs ${statusClass(habit)}`}>{statusLabel(habit)}</span>
-          <button type="button" onClick={(e) => { e.stopPropagation(); onEdit(); }} className="rounded p-1 text-muted-foreground hover:text-foreground" title="Edit">
-            <Pencil className="size-3.5" />
-          </button>
-          <button type="button" onClick={(e) => { e.stopPropagation(); onDelete(); }} className="rounded p-1 text-muted-foreground hover:text-destructive" title="Delete">
-            <Trash2 className="size-3.5" />
-          </button>
-        </div>
-      </div>
-      {habit.type === "boolean" ? (
-        <div className="mt-4 space-y-2">
-          <Button className="w-full" type="button" variant={completed ? "outline" : "default"} onClick={toggleBoolean}>
-            {completed ? "Checked" : "Check in"}
-          </Button>
-          <input name="note" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Add a note..." className="h-8 w-full rounded-md border bg-background px-2 text-xs" />
-        </div>
-      ) : (
-        <form className="mt-4 grid gap-2" onClick={(e) => e.stopPropagation()} onSubmit={onNumericSubmit}>
-          <div className="h-2 rounded-full bg-muted">
-            <div className="h-2 rounded-full bg-primary" style={{ width: `${progress}%` }} />
-          </div>
-          <div className="flex gap-2">
-            <input name="value" type="number" step="0.1" defaultValue={habit.today_log?.value ?? ""} className="h-9 min-w-0 flex-1 rounded-md border bg-background px-3 text-sm" />
-            <Button type="submit" variant="outline">Save</Button>
-          </div>
-          <input name="note" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Add a note..." className="h-8 w-full rounded-md border bg-background px-2 text-xs" />
-        </form>
-      )}
-    </article>
-  )
-}
-
-function DailyRing({ habits }: { habits: Habit[] }) {
-  const completed = habits.filter(isCompletedToday).length
-  const total = habits.length
-  const percent = total ? Math.round((completed / total) * 100) : 0
-
-  return (
-    <div className="rounded-xl border bg-background p-4 text-center">
-      <h2 className="font-semibold">Today</h2>
-      <div className="mx-auto mt-4 grid size-32 place-items-center rounded-full border-8 border-primary/25">
-        <div>
-          <p className="text-2xl font-semibold">{percent}%</p>
-          <p className="text-xs text-muted-foreground">{completed}/{total}</p>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function HabitAnalyticsPanel({ habit }: { habit: Habit }) {
-  const analyticsQuery = useHabitAnalytics(habit.id)
-  const analytics = analyticsQuery.data?.analytics
-
-  return (
-    <div className="rounded-xl border bg-background p-4">
-      <div className="flex items-center gap-2">
-        <BarChart3 className="size-4" />
-        <h2 className="font-semibold">{habit.name}</h2>
-      </div>
-      {analytics ? (
-        <div className="mt-4 space-y-4">
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <Metric label="30 days" value={`${analytics.completion_rate_30}%`} />
-            <Metric label="90 days" value={`${analytics.completion_rate_90}%`} />
-            <Metric label="Current streak" value={`${analytics.current_streak}`} />
-            <Metric label="Longest streak" value={`${analytics.longest_streak}`} />
-            {habit.longest_streak > 0 ? <Metric label="All-time best" value={`${habit.longest_streak} days`} /> : null}
-          </div>
-          <div className="grid grid-cols-15 gap-1">
-            {analytics.daily_completion.slice(-30).map((day) => (
-              <div key={day.date} title={`${day.date}: ${day.value}`} className={`aspect-square rounded-sm ${day.completed ? "bg-green-600" : day.value > 0 ? "bg-yellow-400" : "bg-muted"}`} />
-            ))}
-          </div>
-        </div>
-      ) : (
-        <p className="mt-3 text-sm text-muted-foreground">Loading analytics...</p>
-      )}
-    </div>
-  )
-}
-
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-lg border p-3">
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <p className="font-semibold">{value}</p>
-    </div>
-  )
-}
-
-function groupHabits(habits: Habit[]): Array<{ categoryName: string; habits: Habit[] }> {
-  const groups = new Map<string, Habit[]>()
-  for (const habit of habits) {
-    const current = groups.get(habit.category_name) ?? []
-    current.push(habit)
-    groups.set(habit.category_name, current)
-  }
-  return Array.from(groups.entries()).map(([categoryName, items]) => ({ categoryName, habits: items }))
-}
-
-function isCompletedToday(habit: Habit): boolean {
-  if (!habit.today_log) return false
-  if (habit.type === "boolean") return habit.today_log.value >= 1
-  if (habit.target_value === null) return habit.today_log.value > 0
-  return habit.today_log.value >= habit.target_value
-}
-
-function statusLabel(habit: Habit): string {
-  if (isCompletedToday(habit)) return "Met"
-  if (habit.type === "numeric" && (habit.today_log?.value ?? 0) > 0) return "Partial"
-  return "Open"
-}
-
-function statusClass(habit: Habit): string {
-  if (isCompletedToday(habit)) return "bg-green-100 text-green-800"
-  if (habit.type === "numeric" && (habit.today_log?.value ?? 0) > 0) return "bg-yellow-100 text-yellow-800"
-  return "bg-muted text-muted-foreground"
-}
-
-function streakColor(streak: number): string {
-  if (streak >= 90) return "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 ring-1 ring-red-400"
-  if (streak >= 30) return "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400"
-  if (streak >= 7) return "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
-  return "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400"
-}
-
-function habitInputFromFormData(formData: FormData): CreateHabitInput {
-  const habitType = String(formData.get("type") ?? "boolean") as HabitType
-  const targetValue = Number(formData.get("target_value") ?? 0)
-  const freqDaysRaw = formData.get("frequency_days")
-  const frequencyDays: number[] = freqDaysRaw ? JSON.parse(String(freqDaysRaw)) : [1, 2, 3, 4, 5, 6, 7]
-  return {
-    category_id: String(formData.get("category_id") ?? ""),
-    name: String(formData.get("name") ?? ""),
-    description: String(formData.get("description") ?? ""),
-    type: habitType,
-    target_value: targetValue > 0 ? targetValue : undefined,
-    target_unit: String(formData.get("target_unit") ?? ""),
-    frequency_type: String(formData.get("frequency_type") ?? "daily") === "weekly" ? "weekly" : "daily",
-    frequency_days: frequencyDays,
-    weekly_goal: Number(formData.get("weekly_goal") ?? 7),
-    sort_order: 0,
-  }
 }

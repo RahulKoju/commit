@@ -79,6 +79,7 @@ type HabitDayStatus struct {
 	Date      string  `json:"date"`
 	Value     float64 `json:"value"`
 	Completed bool    `json:"completed"`
+	Scheduled bool    `json:"scheduled"`
 }
 
 type CreateHabitCategoryParams struct {
@@ -316,6 +317,10 @@ func (model HabitModel) DeleteHabit(ctx context.Context, userID string, id strin
 }
 
 func (model HabitModel) LogHabit(ctx context.Context, params LogHabitParams) (HabitLog, error) {
+	if err := model.ensureScheduledDay(ctx, params); err != nil {
+		return HabitLog{}, err
+	}
+
 	row := model.pool.QueryRow(ctx, `
 		INSERT INTO habit_logs (user_id, habit_id, logged_date, value, note)
 		SELECT $1, h.id, $3::date, $4, $5
@@ -331,6 +336,46 @@ func (model HabitModel) LogHabit(ctx context.Context, params LogHabitParams) (Ha
 		return HabitLog{}, ErrNotFound
 	}
 	return log, err
+}
+
+// ensureScheduledDay rejects logs written for a weekday that falls outside a
+// weekday-restricted habit's frequency_days (1=Monday .. 7=Sunday). Daily
+// habits are always scheduled, so they pass unconditionally.
+func (model HabitModel) ensureScheduledDay(ctx context.Context, params LogHabitParams) error {
+	row := model.pool.QueryRow(ctx, `
+		SELECT h.frequency_type, h.frequency_days
+		FROM habits h
+		WHERE h.user_id = $1 AND h.id = $2 AND h.deleted_at IS NULL
+	`, params.UserID, params.HabitID)
+
+	var frequencyType HabitFrequencyType
+	var frequencyDays []int32
+	if err := row.Scan(&frequencyType, &frequencyDays); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrNotFound
+		}
+		return err
+	}
+
+	if frequencyType != HabitFrequencyWeekly {
+		return nil
+	}
+
+	loggedDate, err := time.Parse("2006-01-02", params.LoggedDate)
+	if err != nil {
+		return err
+	}
+
+	weekday := int(loggedDate.Weekday())
+	if weekday == 0 {
+		weekday = 7
+	}
+	for _, day := range frequencyDays {
+		if int(day) == weekday {
+			return nil
+		}
+	}
+	return ErrHabitNotScheduled
 }
 
 func (model HabitModel) Analytics(ctx context.Context, userID string, habitID string) (HabitAnalytics, error) {
@@ -354,6 +399,17 @@ func (model HabitModel) Analytics(ctx context.Context, userID string, habitID st
 		DailyCompletion:    days,
 		CategoryCompletion: completionRate(days),
 	}, nil
+}
+
+type HabitMatrixLog struct {
+	HabitID    string  `json:"habit_id"`
+	LoggedDate string  `json:"logged_date"`
+	Value      float64 `json:"value"`
+}
+
+type HabitMatrix struct {
+	Habits []Habit         `json:"habits"`
+	Logs   []HabitMatrixLog `json:"logs"`
 }
 
 type HabitExportRow struct {
@@ -387,6 +443,64 @@ func (model HabitModel) ExportLogs(ctx context.Context, userID string) ([]HabitE
 		result = append(result, row)
 	}
 	return result, rows.Err()
+}
+
+// Matrix returns the flat habit list plus every habit log within [start, end]
+// (inclusive) in one call, so the frontend can render the date×habit table
+// without N+1 log queries. Habits carry their scheduling metadata
+// (frequency_type/frequency_days) so the client can gate cells and compute
+// weekday-aware averages.
+func (model HabitModel) Matrix(ctx context.Context, userID string, start string, end string) (HabitMatrix, error) {
+	habitRows, err := model.pool.Query(ctx, `
+		SELECT h.id, h.user_id, h.category_id, c.name, h.name, h.description, h.type, h.target_value, h.target_unit,
+		       h.frequency_type, h.frequency_days, h.weekly_goal, h.sort_order, h.created_at, h.updated_at
+		FROM habits h
+		INNER JOIN habit_categories c ON c.id = h.category_id AND c.user_id = h.user_id
+		WHERE h.user_id = $1 AND h.deleted_at IS NULL
+		ORDER BY h.sort_order, h.name
+	`, userID)
+	if err != nil {
+		return HabitMatrix{}, err
+	}
+
+	matrix := HabitMatrix{Habits: make([]Habit, 0), Logs: make([]HabitMatrixLog, 0)}
+	for habitRows.Next() {
+		habit, err := scanHabit(habitRows)
+		if err != nil {
+			habitRows.Close()
+			return HabitMatrix{}, err
+		}
+		matrix.Habits = append(matrix.Habits, habit)
+	}
+	if err := habitRows.Err(); err != nil {
+		habitRows.Close()
+		return HabitMatrix{}, err
+	}
+	habitRows.Close()
+
+	logRows, err := model.pool.Query(ctx, `
+		SELECT habit_id, logged_date::text, value::float8
+		FROM habit_logs
+		WHERE user_id = $1 AND logged_date BETWEEN $2::date AND $3::date
+		ORDER BY logged_date, habit_id
+	`, userID, start, end)
+	if err != nil {
+		return HabitMatrix{}, err
+	}
+	defer logRows.Close()
+
+	for logRows.Next() {
+		var log HabitMatrixLog
+		if err := logRows.Scan(&log.HabitID, &log.LoggedDate, &log.Value); err != nil {
+			return HabitMatrix{}, err
+		}
+		matrix.Logs = append(matrix.Logs, log)
+	}
+	if err := logRows.Err(); err != nil {
+		return HabitMatrix{}, err
+	}
+
+	return matrix, nil
 }
 
 func (model HabitModel) SeedDefaults(ctx context.Context, userID string) error {
@@ -501,6 +615,7 @@ func (model HabitModel) attachStreaks(ctx context.Context, habits []Habit, index
 				Date:      date,
 				Value:     value,
 				Completed: habitCompleted(h, value),
+				Scheduled: habitScheduledOn(h, date),
 			})
 		}
 		h.CurrentStreak = currentStreak(days)
@@ -548,10 +663,34 @@ func (model HabitModel) habitDayStatuses(ctx context.Context, habit Habit, days 
 			Date:      date,
 			Value:     value,
 			Completed: habitCompleted(habit, value),
+			Scheduled: habitScheduledOn(habit, date),
 		})
 	}
 
 	return result, nil
+}
+
+// habitScheduledOn reports whether a habit is scheduled on a given date.
+// Daily habits are scheduled every day. Weekday-restricted (weekly) habits are
+// scheduled only on weekdays in frequency_days (1=Monday .. 7=Sunday).
+func habitScheduledOn(habit Habit, date string) bool {
+	if habit.FrequencyType != HabitFrequencyWeekly {
+		return true
+	}
+	parsed, err := time.Parse("2006-01-02", date)
+	if err != nil {
+		return true
+	}
+	weekday := int(parsed.Weekday())
+	if weekday == 0 {
+		weekday = 7
+	}
+	for _, day := range habit.FrequencyDays {
+		if day == weekday {
+			return true
+		}
+	}
+	return false
 }
 
 type habitScanner interface {
@@ -620,21 +759,29 @@ func habitCompleted(habit Habit, value float64) bool {
 }
 
 func completionRate(days []HabitDayStatus) float64 {
-	if len(days) == 0 {
-		return 0
-	}
 	completed := 0
+	scheduled := 0
 	for _, day := range days {
+		if !day.Scheduled {
+			continue
+		}
+		scheduled++
 		if day.Completed {
 			completed++
 		}
 	}
-	return math.Round((float64(completed)/float64(len(days)))*1000) / 10
+	if scheduled == 0 {
+		return 0
+	}
+	return math.Round((float64(completed)/float64(scheduled))*1000) / 10
 }
 
 func currentStreak(days []HabitDayStatus) int {
 	streak := 0
 	for index := len(days) - 1; index >= 0; index-- {
+		if !days[index].Scheduled {
+			continue
+		}
 		if !days[index].Completed {
 			break
 		}
@@ -647,6 +794,9 @@ func longestStreak(days []HabitDayStatus) int {
 	longest := 0
 	current := 0
 	for _, day := range days {
+		if !day.Scheduled {
+			continue
+		}
 		if day.Completed {
 			current++
 			if current > longest {
@@ -667,13 +817,22 @@ func bestWeek(days []HabitDayStatus) int {
 			end = len(days)
 		}
 		completed := 0
+		scheduled := 0
 		for _, day := range days[index:end] {
+			if !day.Scheduled {
+				continue
+			}
+			scheduled++
 			if day.Completed {
 				completed++
 			}
 		}
-		if completed > best {
-			best = completed
+		if scheduled == 0 {
+			continue
+		}
+		weekRate := int(math.Round((float64(completed) / float64(scheduled)) * 100))
+		if weekRate > best {
+			best = weekRate
 		}
 	}
 	return best

@@ -1,0 +1,599 @@
+import { useState, type FormEvent } from "react"
+import { Button } from "@workspace/ui/components/button"
+import { Input } from "@workspace/ui/components/input"
+import { Label } from "@workspace/ui/components/label"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@workspace/ui/components/dialog"
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@workspace/ui/components/tabs"
+import { Check, Download, Pencil, Plus, Trash2, X } from "lucide-react"
+
+import {
+  useCreateHabit,
+  useCreateHabitCategory,
+  useDeleteHabit,
+  useDeleteHabitCategory,
+  useHabitCategories,
+  useHabits,
+  useUpdateHabit,
+  useUpdateHabitCategory,
+} from "@/hooks/useHabits"
+import type { CreateHabitInput, Habit, HabitType } from "@/types/habit.types"
+
+const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const
+
+export function ManageHabitsDialog({
+  open,
+  onOpenChange,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}) {
+  const habitsQuery = useHabits()
+  const [tab, setTab] = useState("habits")
+  const [creating, setCreating] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Manage habits</DialogTitle>
+          <DialogDescription>
+            Create, edit, or delete habits and their categories. Check-ins happen in the table.
+          </DialogDescription>
+        </DialogHeader>
+
+        <Tabs value={tab} onValueChange={setTab}>
+          <TabsList>
+            <TabsTrigger value="habits">Habits</TabsTrigger>
+            <TabsTrigger value="categories">Categories</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="habits" className="space-y-4">
+            <div className="flex justify-end">
+              <Button type="button" size="sm" onClick={() => setCreating((v) => !v)}>
+                <Plus />
+                {creating ? "Cancel" : "Add habit"}
+              </Button>
+            </div>
+
+            {creating ? <HabitForm onDone={() => setCreating(false)} /> : null}
+
+            <div className="max-h-80 space-y-2 overflow-y-auto">
+              {(habitsQuery.data?.habits ?? []).map((habit) => {
+                if (editingId === habit.id) {
+                  return (
+                    <EditHabitRow
+                      key={habit.id}
+                      habit={habit}
+                      onDone={() => setEditingId(null)}
+                    />
+                  )
+                }
+                if (deletingId === habit.id) {
+                  return (
+                    <div key={habit.id} className="flex items-center justify-between rounded-lg border p-3 text-sm">
+                      <span>
+                        Delete <strong>{habit.name}</strong> and all its logs?
+                      </span>
+                      <div className="flex gap-2">
+                        <Button type="button" size="sm" variant="outline" onClick={() => setDeletingId(null)}>
+                          Cancel
+                        </Button>
+                        <DeleteHabitButton habitId={habit.id} onDone={() => setDeletingId(null)} />
+                      </div>
+                    </div>
+                  )
+                }
+                return (
+                  <div key={habit.id} className="flex items-center justify-between gap-3 rounded-lg border p-3 text-sm">
+                    <div className="min-w-0">
+                      <p className="truncate font-medium">{habit.name}</p>
+                      <p className="truncate text-xs text-muted-foreground">
+                        {habit.category_name} · {habit.type}
+                        {habit.frequency_type === "weekly"
+                          ? ` · ${habit.frequency_days.length} day(s)/week`
+                          : ""}
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 gap-1">
+                      <button type="button" onClick={() => setEditingId(habit.id)} className="rounded p-1 text-muted-foreground hover:text-foreground" title="Edit">
+                        <Pencil />
+                      </button>
+                      <button type="button" onClick={() => setDeletingId(habit.id)} className="rounded p-1 text-muted-foreground hover:text-destructive" title="Delete">
+                        <Trash2 />
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="categories">
+            <CategoryPanel />
+          </TabsContent>
+        </Tabs>
+
+        <DialogFooter showCloseButton>
+          <ExportCSVButton />
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function DeleteHabitButton({ habitId, onDone }: { habitId: string; onDone: () => void }) {
+  const deleteHabit = useDeleteHabit()
+  async function handleDelete() {
+    await deleteHabit.mutateAsync(habitId)
+    onDone()
+  }
+  return (
+    <Button type="button" size="sm" variant="destructive" onClick={handleDelete} disabled={deleteHabit.isPending}>
+      {deleteHabit.isPending ? "Deleting..." : "Delete"}
+    </Button>
+  )
+}
+
+function ExportCSVButton() {
+  const [loading, setLoading] = useState(false)
+
+  async function handleExport() {
+    setLoading(true)
+    try {
+      const resp = await fetch(`${import.meta.env.VITE_API_URL ?? "http://localhost:8080"}/api/v1/habits/export`, {
+        credentials: "include",
+      })
+      if (!resp.ok) {
+        const body = await resp.json().catch(() => null)
+        throw new Error(body?.error ?? "Export failed")
+      }
+      const blob = await resp.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = "habits.csv"
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      const { toast } = await import("sonner")
+      toast.error(err instanceof Error ? err.message : "Export failed")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <Button type="button" variant="outline" onClick={handleExport} disabled={loading}>
+      <Download />
+      {loading ? "Exporting..." : "Export CSV"}
+    </Button>
+  )
+}
+
+function EditHabitRow({ habit, onDone }: { habit: Habit; onDone: () => void }) {
+  const updateHabit = useUpdateHabit()
+  const categoriesQuery = useHabitCategories()
+  const [name, setName] = useState(habit.name)
+  const [description, setDescription] = useState(habit.description)
+  const [categoryId, setCategoryId] = useState(habit.category_id)
+  const [type, setType] = useState<HabitType>(habit.type)
+  const [targetValue, setTargetValue] = useState(habit.target_value ?? 0)
+  const [targetUnit, setTargetUnit] = useState(habit.target_unit ?? "")
+  const [frequencyType, setFrequencyType] = useState(habit.frequency_type)
+  const [frequencyDays, setFrequencyDays] = useState<number[]>(habit.frequency_days)
+  const [weeklyGoal, setWeeklyGoal] = useState(habit.weekly_goal)
+
+  function toggleDay(day: number) {
+    setFrequencyDays((prev) =>
+      prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day].sort(),
+    )
+  }
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault()
+    await updateHabit.mutateAsync({
+      habitId: habit.id,
+      input: {
+        name: name !== habit.name ? name : undefined,
+        description: description !== habit.description ? description : undefined,
+        category_id: categoryId !== habit.category_id ? categoryId : undefined,
+        type: type !== habit.type ? type : undefined,
+        target_value: targetValue !== (habit.target_value ?? 0) ? targetValue : undefined,
+        target_unit: targetUnit !== (habit.target_unit ?? "") ? targetUnit : undefined,
+        frequency_type: frequencyType !== habit.frequency_type ? frequencyType : undefined,
+        frequency_days:
+          JSON.stringify(frequencyDays) !== JSON.stringify(habit.frequency_days) ? frequencyDays : undefined,
+        weekly_goal: weeklyGoal !== habit.weekly_goal ? weeklyGoal : undefined,
+      },
+    })
+    onDone()
+  }
+
+  return (
+    <form className="grid gap-3 rounded-lg border p-3" onSubmit={handleSubmit}>
+      <div className="grid gap-2">
+        <Label htmlFor={`edit-name-${habit.id}`}>Name</Label>
+        <Input id={`edit-name-${habit.id}`} value={name} onChange={(e) => setName(e.target.value)} required />
+      </div>
+
+      <div className="grid gap-2">
+        <Label htmlFor={`edit-desc-${habit.id}`}>Description</Label>
+        <textarea
+          id={`edit-desc-${habit.id}`}
+          rows={1}
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          className="rounded-md border bg-background px-3 py-2 text-sm"
+        />
+      </div>
+
+      <div className="grid gap-2">
+        <Label htmlFor={`edit-category-${habit.id}`}>Category</Label>
+        <CategoryCombobox
+          id={`edit-category-${habit.id}`}
+          categories={categoriesQuery.data?.categories ?? []}
+          value={categoryId}
+          onChange={setCategoryId}
+        />
+      </div>
+
+      <div className="grid gap-2 sm:grid-cols-3">
+        <div className="grid gap-2">
+          <Label htmlFor={`edit-type-${habit.id}`}>Type</Label>
+          <select id={`edit-type-${habit.id}`} value={type} onChange={(e) => setType(e.target.value as HabitType)} className="h-9 rounded-md border bg-background px-3 text-sm">
+            <option value="boolean">Boolean</option>
+            <option value="numeric">Numeric</option>
+          </select>
+        </div>
+        <div className="grid gap-2">
+          <Label htmlFor={`edit-target-${habit.id}`}>Target value</Label>
+          <Input id={`edit-target-${habit.id}`} type="number" min={0} step="0.1" value={targetValue} onChange={(e) => setTargetValue(Number(e.target.value))} />
+        </div>
+        <div className="grid gap-2">
+          <Label htmlFor={`edit-unit-${habit.id}`}>Unit</Label>
+          <Input id={`edit-unit-${habit.id}`} value={targetUnit} onChange={(e) => setTargetUnit(e.target.value)} />
+        </div>
+      </div>
+
+      <div className="grid gap-2 sm:grid-cols-2">
+        <div className="grid gap-2">
+          <Label htmlFor={`edit-freq-${habit.id}`}>Frequency</Label>
+          <select id={`edit-freq-${habit.id}`} value={frequencyType} onChange={(e) => setFrequencyType(e.target.value as "daily" | "weekly")} className="h-9 rounded-md border bg-background px-3 text-sm">
+            <option value="daily">Daily</option>
+            <option value="weekly">Specific days</option>
+          </select>
+        </div>
+        <div className="grid gap-2">
+          <Label htmlFor={`edit-goal-${habit.id}`}>Weekly goal</Label>
+          <Input id={`edit-goal-${habit.id}`} type="number" min={1} value={weeklyGoal} onChange={(e) => setWeeklyGoal(Number(e.target.value))} />
+        </div>
+      </div>
+
+      {frequencyType === "weekly" ? (
+        <div className="grid gap-2">
+          <Label>Days of week</Label>
+          <div className="flex flex-wrap gap-2">
+            {DAY_LABELS.map((label, i) => {
+              const day = i + 1
+              return (
+                <button
+                  key={day}
+                  type="button"
+                  onClick={() => toggleDay(day)}
+                  className={`h-9 rounded-md border px-3 text-sm font-medium transition-colors ${
+                    frequencyDays.includes(day)
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "bg-background text-muted-foreground hover:border-primary/50"
+                  }`}
+                >
+                  {label}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      ) : null}
+
+      <div className="flex justify-end gap-2">
+        <Button type="button" variant="outline" size="sm" onClick={onDone}>Cancel</Button>
+        <Button type="submit" size="sm" disabled={updateHabit.isPending}>
+          {updateHabit.isPending ? "Saving..." : "Save changes"}
+        </Button>
+      </div>
+    </form>
+  )
+}
+
+function HabitForm({ onDone }: { onDone: () => void }) {
+  const [categoryId, setCategoryId] = useState("")
+  const [frequencyType, setFrequencyType] = useState("daily")
+  const [frequencyDays, setFrequencyDays] = useState<number[]>([1, 2, 3, 4, 5, 6, 7])
+  const createHabit = useCreateHabit()
+  const categoriesQuery = useHabitCategories()
+
+  function toggleDay(day: number) {
+    setFrequencyDays((prev) =>
+      prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day].sort(),
+    )
+  }
+
+  async function onSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const form = event.currentTarget
+    const formData = new FormData(form)
+    formData.set("category_id", categoryId)
+    formData.set("frequency_days", JSON.stringify(frequencyDays))
+    await createHabit.mutateAsync(habitInputFromFormData(formData))
+    form.reset()
+    setCategoryId("")
+    setFrequencyType("daily")
+    setFrequencyDays([1, 2, 3, 4, 5, 6, 7])
+    onDone()
+  }
+
+  return (
+    <form className="grid gap-3 rounded-lg border p-3" onSubmit={onSubmit}>
+      <div className="grid gap-2">
+        <Label htmlFor="new-habit-name">Name</Label>
+        <input id="new-habit-name" name="name" required placeholder="Meditate" className="h-9 rounded-md border bg-background px-3 text-sm" />
+      </div>
+
+      <div className="grid gap-2">
+        <Label htmlFor="new-habit-category">Category</Label>
+        <CategoryCombobox
+          id="new-habit-category"
+          categories={categoriesQuery.data?.categories ?? []}
+          value={categoryId}
+          onChange={setCategoryId}
+        />
+      </div>
+
+      <div className="grid gap-2 sm:grid-cols-3">
+        <div className="grid gap-2">
+          <Label htmlFor="new-habit-type">Type</Label>
+          <select id="new-habit-type" name="type" defaultValue="boolean" className="h-9 rounded-md border bg-background px-3 text-sm">
+            <option value="boolean">Boolean</option>
+            <option value="numeric">Numeric</option>
+          </select>
+        </div>
+        <div className="grid gap-2">
+          <Label htmlFor="new-habit-target">Target value</Label>
+          <input id="new-habit-target" name="target_value" type="number" min={0} step="0.1" placeholder="Target" className="h-9 rounded-md border bg-background px-3 text-sm" />
+        </div>
+        <div className="grid gap-2">
+          <Label htmlFor="new-habit-unit">Unit</Label>
+          <input id="new-habit-unit" name="target_unit" placeholder="Unit" className="h-9 rounded-md border bg-background px-3 text-sm" />
+        </div>
+      </div>
+
+      <div className="grid gap-2 sm:grid-cols-2">
+        <div className="grid gap-2">
+          <Label htmlFor="new-habit-freq">Frequency</Label>
+          <select id="new-habit-freq" name="frequency_type" value={frequencyType} onChange={(e) => setFrequencyType(e.target.value)} className="h-9 rounded-md border bg-background px-3 text-sm">
+            <option value="daily">Daily</option>
+            <option value="weekly">Specific days</option>
+          </select>
+        </div>
+        <div className="grid gap-2">
+          <Label htmlFor="new-habit-goal">Weekly goal</Label>
+          <input id="new-habit-goal" name="weekly_goal" type="number" min={1} defaultValue={7} className="h-9 rounded-md border bg-background px-3 text-sm" />
+        </div>
+      </div>
+
+      {frequencyType === "weekly" ? (
+        <div className="grid gap-2">
+          <Label>Days of week</Label>
+          <div className="flex flex-wrap gap-2">
+            {DAY_LABELS.map((label, i) => {
+              const day = i + 1
+              return (
+                <button
+                  key={day}
+                  type="button"
+                  onClick={() => toggleDay(day)}
+                  className={`h-9 rounded-md border px-3 text-sm font-medium transition-colors ${
+                    frequencyDays.includes(day)
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "bg-background text-muted-foreground hover:border-primary/50"
+                  }`}
+                >
+                  {label}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      ) : null}
+
+      <div className="grid gap-2">
+        <Label htmlFor="new-habit-desc">Description</Label>
+        <textarea id="new-habit-desc" name="description" rows={1} placeholder="Description" className="rounded-md border bg-background px-3 py-2 text-sm" />
+      </div>
+
+      <div className="flex justify-end gap-2">
+        <Button type="button" variant="outline" size="sm" onClick={onDone}>Cancel</Button>
+        <Button type="submit" size="sm" disabled={createHabit.isPending}>
+          {createHabit.isPending ? "Creating..." : "Create habit"}
+        </Button>
+      </div>
+    </form>
+  )
+}
+
+function CategoryPanel() {
+  const categoriesQuery = useHabitCategories()
+  const createCategory = useCreateHabitCategory()
+  const updateCategory = useUpdateHabitCategory()
+  const deleteCategory = useDeleteHabitCategory()
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editName, setEditName] = useState("")
+
+  async function onCreate(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const formData = new FormData(event.currentTarget)
+    await createCategory.mutateAsync({ name: String(formData.get("name") ?? "") })
+    event.currentTarget.reset()
+  }
+
+  async function onUpdate(id: string) {
+    if (!editName.trim()) return
+    await updateCategory.mutateAsync({ categoryId: id, input: { name: editName.trim() } })
+    setEditingId(null)
+    setEditName("")
+  }
+
+  async function onDelete(id: string) {
+    await deleteCategory.mutateAsync(id)
+  }
+
+  return (
+    <div className="space-y-3">
+      <form className="flex gap-2" onSubmit={onCreate}>
+        <Label htmlFor="category-name" className="sr-only">Category name</Label>
+        <input id="category-name" name="name" required placeholder="New category name" className="h-9 min-w-0 flex-1 rounded-md border bg-background px-3 text-sm" />
+        <Button type="submit" size="sm" disabled={createCategory.isPending}>
+          <Plus />
+          Add
+        </Button>
+      </form>
+
+      {categoriesQuery.data?.categories.length ? (
+        <div className="space-y-1">
+          {categoriesQuery.data.categories.map((cat) => (
+            <div key={cat.id} className="flex items-center gap-2 rounded-md px-2 py-1 text-sm hover:bg-muted/50">
+              {editingId === cat.id ? (
+                <>
+                  <input
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    className="h-7 min-w-0 flex-1 rounded border bg-background px-2 text-sm"
+                    autoFocus
+                    onKeyDown={(e) => { if (e.key === "Enter") onUpdate(cat.id); if (e.key === "Escape") setEditingId(null) }}
+                  />
+                  <button type="button" onClick={() => onUpdate(cat.id)} className="rounded p-1 text-green-600 hover:bg-green-100">
+                    <Check />
+                  </button>
+                  <button type="button" onClick={() => setEditingId(null)} className="rounded p-1 text-muted-foreground hover:bg-muted">
+                    <X />
+                  </button>
+                </>
+              ) : (
+                <>
+                  <span className="flex-1 truncate">{cat.name}</span>
+                  <button type="button" onClick={() => { setEditingId(cat.id); setEditName(cat.name) }} className="rounded p-1 text-muted-foreground hover:text-foreground">
+                    <Pencil />
+                  </button>
+                  <button type="button" onClick={() => onDelete(cat.id)} className="rounded p-1 text-muted-foreground hover:text-destructive">
+                    <Trash2 />
+                  </button>
+                </>
+              )}
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+function CategoryCombobox({
+  id,
+  categories,
+  value,
+  onChange,
+}: {
+  id: string
+  categories: Array<{ id: string; name: string }>
+  value: string
+  onChange: (id: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [search, setSearch] = useState("")
+  const filtered = categories.filter((c) => c.name.toLowerCase().includes(search.toLowerCase()))
+  const selected = categories.find((c) => c.id === value)
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        id={id}
+        onClick={() => setOpen((v) => !v)}
+        className="flex h-9 w-full items-center justify-between rounded-md border bg-background px-3 text-sm text-left"
+      >
+        <span className={selected ? "" : "text-muted-foreground"}>{selected?.name ?? "Select category"}</span>
+        <span className="text-muted-foreground">▾</span>
+      </button>
+      {open ? (
+        <div className="absolute z-30 mt-1 w-full rounded-xl border bg-background shadow-xl" onClick={(e) => e.stopPropagation()}>
+          <div className="p-2">
+            <input
+              type="text"
+              placeholder="Search..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full rounded-md border bg-background px-3 py-1.5 text-sm"
+            />
+          </div>
+          <ul className="max-h-48 overflow-y-auto p-1">
+            {filtered.length === 0 ? (
+              <li className="px-3 py-2 text-sm text-muted-foreground">No categories found</li>
+            ) : (
+              filtered.map((category) => (
+                <li key={category.id}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onChange(category.id)
+                      setOpen(false)
+                      setSearch("")
+                    }}
+                    className={`w-full rounded-md px-3 py-1.5 text-left text-sm hover:bg-muted ${
+                      category.id === value ? "bg-muted font-medium" : ""
+                    }`}
+                  >
+                    {category.name}
+                  </button>
+                </li>
+              ))
+            )}
+          </ul>
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+function habitInputFromFormData(formData: FormData): CreateHabitInput {
+  const habitType = String(formData.get("type") ?? "boolean") as HabitType
+  const targetValue = Number(formData.get("target_value") ?? 0)
+  const freqDaysRaw = formData.get("frequency_days")
+  const frequencyDays: number[] = freqDaysRaw ? JSON.parse(String(freqDaysRaw)) : [1, 2, 3, 4, 5, 6, 7]
+  return {
+    category_id: String(formData.get("category_id") ?? ""),
+    name: String(formData.get("name") ?? ""),
+    description: String(formData.get("description") ?? ""),
+    type: habitType,
+    target_value: targetValue > 0 ? targetValue : undefined,
+    target_unit: String(formData.get("target_unit") ?? ""),
+    frequency_type: String(formData.get("frequency_type") ?? "daily") === "weekly" ? "weekly" : "daily",
+    frequency_days: frequencyDays,
+    weekly_goal: Number(formData.get("weekly_goal") ?? 7),
+    sort_order: 0,
+  }
+}

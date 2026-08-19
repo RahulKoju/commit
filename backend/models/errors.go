@@ -11,3 +11,7 @@ var ErrActiveFocusConflict = errors.New("an active focus session already exists"
 // ErrInvalidState is returned when an operation targets a session whose
 // current status does not permit it (e.g. resuming a running session).
 var ErrInvalidState = errors.New("focus session is not in the required state")
+
+// ErrHabitNotScheduled is returned when a habit log is written for a date whose
+// weekday is outside the habit's frequency_days (weekday-restricted habits).
+var ErrHabitNotScheduled = errors.New("habit is not scheduled on this date")

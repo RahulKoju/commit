@@ -6,6 +6,7 @@ import {
   habitCategoriesResponseSchema,
   habitCategoryResponseSchema,
   habitLogResponseSchema,
+  habitMatrixResponseSchema,
   habitResponseSchema,
   habitsResponseSchema,
   type CreateHabitCategoryInput,
@@ -14,6 +15,7 @@ import {
   type HabitCategoriesResponse,
   type HabitCategoryResponse,
   type HabitLogResponse,
+  type HabitMatrixResponse,
   type HabitResponse,
   type HabitsResponse,
   type LogHabitInput,
@@ -24,6 +26,7 @@ import {
 export const habitQueryKeys = {
   all: ["habits"] as const,
   categories: ["habits", "categories"] as const,
+  matrix: (start: string, end: string) => ["habits", "matrix", start, end] as const,
   analytics: (id: string) => ["habits", id, "analytics"] as const,
 }
 
@@ -34,6 +37,17 @@ export function useHabits() {
       apiFetch<HabitsResponse>("/api/v1/habits", {
         schema: habitsResponseSchema,
       }),
+  })
+}
+
+export function useHabitMatrix(start: string, end: string) {
+  return useQuery({
+    queryKey: habitQueryKeys.matrix(start, end),
+    queryFn: () =>
+      apiFetch<HabitMatrixResponse>(
+        `/api/v1/habits/matrix?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`,
+        { schema: habitMatrixResponseSchema },
+      ),
   })
 }
 
@@ -126,7 +140,12 @@ export function useLogHabit() {
         body: input,
         schema: habitLogResponseSchema,
       }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: habitQueryKeys.all }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: habitQueryKeys.all })
+      queryClient.invalidateQueries({ queryKey: ["habits", "matrix"] })
+      queryClient.invalidateQueries({ queryKey: ["dashboard", "summary"] })
+      queryClient.invalidateQueries({ queryKey: ["dashboard", "activity-heatmap"] })
+    },
   })
 }
 

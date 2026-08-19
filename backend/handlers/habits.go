@@ -292,6 +292,20 @@ func (handler HabitHandler) Analytics(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"analytics": analytics})
 }
 
+func (handler HabitHandler) Matrix(c *gin.Context) {
+	userID, ok := currentUserID(c)
+	if !ok {
+		return
+	}
+
+	matrix, err := handler.habits.Matrix(c.Request.Context(), userID, c.Query("start"), c.Query("end"))
+	if err != nil {
+		writeHabitError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"habits": matrix.Habits, "logs": matrix.Logs})
+}
+
 func formatFloat(value float64) string {
 	return fmt.Sprintf("%g", value)
 }

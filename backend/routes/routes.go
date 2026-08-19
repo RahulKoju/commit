@@ -95,6 +95,7 @@ func Register(router *gin.Engine, deps Dependencies) {
 	protected.GET("/habits", habitHandler.ListHabits)
 	protected.POST("/habits", habitHandler.CreateHabit)
 	protected.GET("/habits/export", habitHandler.ExportCSV)
+	protected.GET("/habits/matrix", habitHandler.Matrix)
 	protected.PATCH("/habits/:id", habitHandler.UpdateHabit)
 	protected.DELETE("/habits/:id", habitHandler.DeleteHabit)
 	protected.POST("/habits/:id/log", habitHandler.LogHabit)

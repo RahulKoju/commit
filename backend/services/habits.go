@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"commit/backend/models"
 )
@@ -188,6 +189,21 @@ func (service HabitService) LogHabit(ctx context.Context, input LogHabitInput) (
 
 func (service HabitService) ExportLogs(ctx context.Context, userID string) ([]models.HabitExportRow, error) {
 	return service.habits.ExportLogs(ctx, userID)
+}
+
+func (service HabitService) Matrix(ctx context.Context, userID string, start string, end string) (models.HabitMatrix, error) {
+	if strings.TrimSpace(start) == "" || strings.TrimSpace(end) == "" {
+		return models.HabitMatrix{}, fmt.Errorf("start and end are required")
+	}
+	start = strings.TrimSpace(start)
+	end = strings.TrimSpace(end)
+	if _, err := time.Parse("2006-01-02", start); err != nil {
+		return models.HabitMatrix{}, fmt.Errorf("start must be a valid date (YYYY-MM-DD)")
+	}
+	if _, err := time.Parse("2006-01-02", end); err != nil {
+		return models.HabitMatrix{}, fmt.Errorf("end must be a valid date (YYYY-MM-DD)")
+	}
+	return service.habits.Matrix(ctx, userID, start, end)
 }
 
 func (service HabitService) Analytics(ctx context.Context, userID string, habitID string) (models.HabitAnalytics, error) {
