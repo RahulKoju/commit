@@ -20,6 +20,21 @@ export function NotesPage() {
     [notes, selectedNoteId]
   )
   const activeNote = editingNoteId === "new" ? null : notes.find((note) => note.id === editingNoteId) ?? selectedNote
+  const deleteNote = useDeleteNote()
+
+  async function handleDelete() {
+    if (!activeNote) return
+    await deleteNote.mutateAsync(activeNote.id)
+    const remaining = notes.filter((note) => note.id !== activeNote.id)
+    if (remaining.length > 0) {
+      setSelectedNoteId(remaining[0].id)
+      setEditingNoteId(remaining[0].id)
+    } else {
+      setSelectedNoteId(null)
+      setEditingNoteId("new")
+    }
+    setPreview(true)
+  }
 
   return (
     <section className="space-y-6">
@@ -66,37 +81,57 @@ export function NotesPage() {
 
         <div className="rounded-xl border bg-background p-4">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <h2 className="font-semibold">{editingNoteId === "new" ? "New note" : activeNote?.title ?? "Note"}</h2>
-            <div className="flex gap-2">
-              <Button type="button" variant={preview ? "default" : "outline"} onClick={() => setPreview(true)}>
-                <Eye className="size-4" />
-                Preview
-              </Button>
-              <Button type="button" variant={!preview ? "default" : "outline"} onClick={() => setPreview(false)}>
-                <Edit3 className="size-4" />
-                Edit
-              </Button>
+            <div>
+              <h2 className="text-xl font-semibold">
+                {editingNoteId === "new" ? "New note" : activeNote?.title ?? "Note"}
+              </h2>
+              {activeNote ? (
+                <p className="text-sm text-muted-foreground">
+                  Updated {new Date(activeNote.updated_at).toLocaleString()}
+                </p>
+              ) : null}
             </div>
-          </div>
-          <div className="grid gap-4 xl:grid-cols-2">
-            {!preview || !activeNote ? (
-              <div className={activeNote && preview ? "xl:col-span-1" : "xl:col-span-2"}>
-                <NoteForm
-                  note={editingNoteId === "new" ? null : activeNote}
-                  onSaved={(note) => {
-                    setSelectedNoteId(note.id)
-                    setEditingNoteId(note.id)
-                    setPreview(true)
-                  }}
-                />
+            {activeNote ? (
+              <div className="flex items-center gap-2">
+                <div className="flex items-center overflow-hidden rounded-md border bg-background">
+                  <Button
+                    type="button"
+                    variant={preview ? "default" : "ghost"}
+                    className={`rounded-none ${preview ? "" : "text-muted-foreground"}`}
+                    onClick={() => setPreview(true)}
+                  >
+                    <Eye className="size-4" />
+                    View
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={!preview ? "default" : "ghost"}
+                    className={`rounded-none ${!preview ? "" : "text-muted-foreground"}`}
+                    onClick={() => setPreview(false)}
+                  >
+                    <Edit3 className="size-4" />
+                    Edit
+                  </Button>
+                </div>
+                <Button type="button" variant="outline" onClick={handleDelete}>
+                  <Trash2 className="size-4" />
+                  Delete
+                </Button>
               </div>
             ) : null}
-            {preview && activeNote ? (
-              <div className={!preview || !activeNote ? "xl:col-span-2" : "xl:col-span-1"}>
-                <NotePreview note={activeNote} onEdit={() => setPreview(false)} />
-              </div>
-            ) : null}
           </div>
+          {preview && activeNote ? (
+            <NotePreview note={activeNote} />
+          ) : (
+            <NoteForm
+              note={editingNoteId === "new" ? null : activeNote}
+              onSaved={(note) => {
+                setSelectedNoteId(note.id)
+                setEditingNoteId(note.id)
+                setPreview(true)
+              }}
+            />
+          )}
         </div>
       </div>
     </section>
@@ -179,32 +214,11 @@ function NoteForm({
   )
 }
 
-function NotePreview({ note, onEdit }: { note: Note; onEdit: () => void }) {
-  const deleteNote = useDeleteNote()
+function NotePreview({ note }: { note: Note }) {
   const backlinksQuery = useNoteBacklinks(note.id)
-
-  async function onDelete() {
-    await deleteNote.mutateAsync(note.id)
-  }
 
   return (
     <article className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h3 className="text-xl font-semibold">{note.title}</h3>
-          <p className="text-sm text-muted-foreground">Updated {new Date(note.updated_at).toLocaleString()}</p>
-        </div>
-        <div className="flex gap-2">
-          <Button type="button" variant="outline" onClick={onEdit}>
-            <Edit3 className="size-4" />
-            Edit
-          </Button>
-          <Button type="button" variant="outline" onClick={onDelete}>
-            <Trash2 className="size-4" />
-            Delete
-          </Button>
-        </div>
-      </div>
       <div
         className="prose prose-sm max-w-none rounded-lg border bg-muted/30 p-4"
         dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(note.body) }}

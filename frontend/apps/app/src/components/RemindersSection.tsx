@@ -358,8 +358,9 @@ function ReminderForm({
       </div>
 
       {type === "recurring" ? (
-        <>
-          <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
+        <div className="space-y-3">
+          <div className="space-y-2">
+            <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
             <label className="grid gap-1">
               <span className="text-xs text-muted-foreground">Schedule</span>
               <select value={preset} onChange={(e) => applyPreset(e.target.value as RecurrencePreset)} className="h-9 rounded-md border bg-background px-2">
@@ -441,26 +442,29 @@ function ReminderForm({
               ))}
             </div>
           ) : null}
+          </div>
 
-          <label className="grid gap-1 text-sm">
-            <span className="text-xs text-muted-foreground">
-              Raw cron (single source of truth)
-            </span>
-            <input
-              value={cron}
-              onChange={(e) => updateRawCron(e.target.value)}
-              placeholder="0 18 * * 1,3,5"
-              className="h-9 rounded-md border bg-background px-2 font-mono text-xs"
-            />
-            <span className={`text-xs ${isCustom ? "text-muted-foreground" : "text-foreground"}`}>
+          <div className="space-y-1">
+            <label className="grid gap-1 text-sm">
+              <span className="text-xs text-muted-foreground">
+                Raw cron (single source of truth)
+              </span>
+              <input
+                value={cron}
+                onChange={(e) => updateRawCron(e.target.value)}
+                placeholder="0 18 * * 1,3,5"
+                className="h-9 rounded-md border bg-background px-2 font-mono text-xs"
+              />
+            </label>
+            <p className={`text-xs ${isCustom ? "text-muted-foreground" : "text-foreground"}`}>
               {isCustom
                 ? `Custom schedule${description ? `: ${description}` : ""}`
                 : description
                   ? description
                   : "Enter a cron expression"}
-            </span>
-          </label>
-        </>
+            </p>
+          </div>
+        </div>
       ) : (
         <label className="grid gap-1 text-sm">
           <span className="text-xs text-muted-foreground">Date and time</span>
