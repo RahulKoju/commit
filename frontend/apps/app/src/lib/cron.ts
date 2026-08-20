@@ -1,12 +1,33 @@
 import { CronExpressionParser } from "cron-parser"
 import { toString as cronToString } from "cronstrue"
 
-export type RecurrencePreset = "daily" | "weekly" | "monthly" | "custom"
+export type RecurrencePreset =
+  | "daily"
+  | "weekly"
+  | "monthly"
+  | "every_minutes"
+  | "every_hours"
+  | "yearly"
+  | "custom"
 
 export type PresetFields = {
   hour: number
   minute: number
-  dayOfWeek: number // 0..6, Sunday = 0 (used by weekly)
+  weekdays: number[] // 0..6, Sunday = 0
+  dayOfMonth: number
+  month: number
+  intervalMinutes: number
+  intervalHours: number
+}
+
+export const DEFAULT_PRESET_FIELDS: PresetFields = {
+  hour: 18,
+  minute: 0,
+  weekdays: [1],
+  dayOfMonth: 1,
+  month: 1,
+  intervalMinutes: 15,
+  intervalHours: 2,
 }
 
 // presetToCron builds the standard 5-field cron expression for a friendly
@@ -16,9 +37,15 @@ export function presetToCron(preset: RecurrencePreset, fields: PresetFields): st
     case "daily":
       return `${fields.minute} ${fields.hour} * * *`
     case "weekly":
-      return `${fields.minute} ${fields.hour} * * ${fields.dayOfWeek}`
+      return `${fields.minute} ${fields.hour} * * ${fields.weekdays.join(",")}`
     case "monthly":
-      return `${fields.minute} ${fields.hour} 1 * *`
+      return `${fields.minute} ${fields.hour} ${fields.dayOfMonth} * *`
+    case "every_minutes":
+      return `*/${fields.intervalMinutes} * * * *`
+    case "every_hours":
+      return `${fields.minute} */${fields.intervalHours} * * *`
+    case "yearly":
+      return `${fields.minute} ${fields.hour} ${fields.dayOfMonth} ${fields.month} *`
     case "custom":
       return ""
   }
@@ -49,29 +76,63 @@ export function detectPreset(
 
   const isStar = (value: string) => value === "*"
   const isSingle = (value: string) => /^\d+$/.test(value)
-  const isList = (value: string) => /^(\d|\d,\d+)+$/.test(value)
+  const isList = (value: string) => /^\d+(,\d+)*$/.test(value)
+  const isEvery = (value: string) => /^\*\/\d+$/.test(value)
+  const withFields = (fields: Partial<PresetFields>): PresetFields => ({
+    ...DEFAULT_PRESET_FIELDS,
+    ...fields,
+  })
+
+  if (isEvery(minute) && isStar(hour) && isStar(dom) && isStar(month) && isStar(dow)) {
+    return {
+      preset: "every_minutes",
+      fields: withFields({ intervalMinutes: Number(minute.slice(2)) }),
+    }
+  }
+
+  if (isSingle(minute) && isEvery(hour) && isStar(dom) && isStar(month) && isStar(dow)) {
+    return {
+      preset: "every_hours",
+      fields: withFields({ minute: Number(minute), intervalHours: Number(hour.slice(2)) }),
+    }
+  }
 
   if (isStar(dow) && isStar(dom) && isStar(month)) {
     if (!isSingle(hour) || !isSingle(minute)) return { preset: "custom" }
-    const preset: RecurrencePreset = "daily"
-    return { preset, fields: { hour: Number(hour), minute: Number(minute), dayOfWeek: 0 } }
+    return { preset: "daily", fields: withFields({ hour: Number(hour), minute: Number(minute) }) }
   }
 
   if (isStar(dom) && isStar(month) && isList(dow)) {
-    const dows = dow.split(",")
-    // Only a single weekday maps to the "weekly" preset; multiple weekdays are
-    // a valid custom schedule.
-    if (dows.length === 1 && isSingle(dows[0]) && isSingle(hour) && isSingle(minute)) {
-      const preset: RecurrencePreset = "weekly"
-      return { preset, fields: { hour: Number(hour), minute: Number(minute), dayOfWeek: Number(dows[0]) } }
+    if (!isSingle(hour) || !isSingle(minute)) return { preset: "custom" }
+    return {
+      preset: "weekly",
+      fields: withFields({
+        hour: Number(hour),
+        minute: Number(minute),
+        weekdays: dow.split(",").map(Number),
+      }),
     }
-    return { preset: "custom" }
   }
 
-  if (isStar(dow) && isStar(month) && isSingle(dom) && dom === "1") {
+  if (isStar(dow) && isStar(month) && isSingle(dom)) {
     if (!isSingle(hour) || !isSingle(minute)) return { preset: "custom" }
-    const preset: RecurrencePreset = "monthly"
-    return { preset, fields: { hour: Number(hour), minute: Number(minute), dayOfWeek: 0 } }
+    return {
+      preset: "monthly",
+      fields: withFields({ hour: Number(hour), minute: Number(minute), dayOfMonth: Number(dom) }),
+    }
+  }
+
+  if (isStar(dow) && isSingle(month) && isSingle(dom)) {
+    if (!isSingle(hour) || !isSingle(minute)) return { preset: "custom" }
+    return {
+      preset: "yearly",
+      fields: withFields({
+        hour: Number(hour),
+        minute: Number(minute),
+        dayOfMonth: Number(dom),
+        month: Number(month),
+      }),
+    }
   }
 
   return { preset: "custom" }

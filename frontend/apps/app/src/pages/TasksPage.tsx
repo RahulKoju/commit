@@ -50,8 +50,13 @@ export function TasksPage() {
   const [view, setView] = useState<TaskView>("today")
   const [priority, setPriority] = useState<TaskPriority | "">("")
   const [status, setStatus] = useState<TaskStatus | "">("")
-  const filters = useMemo(() => ({ view, priority, status }), [view, priority, status])
+  const filters = useMemo(() => ({ view, priority, status: view === "today" ? "" : status }), [view, priority, status])
   const tasksQuery = useTasks(filters)
+
+  function selectView(nextView: TaskView) {
+    setView(nextView)
+    if (nextView === "today") setStatus("")
+  }
 
   return (
     <section className="space-y-6">
@@ -71,7 +76,7 @@ export function TasksPage() {
             key={item.value}
             type="button"
             variant={view === item.value ? "default" : "outline"}
-            onClick={() => setView(item.value)}
+            onClick={() => selectView(item.value)}
           >
             {item.label}
           </Button>
@@ -94,21 +99,23 @@ export function TasksPage() {
             ))}
           </select>
         </label>
-        <label className="grid gap-1 text-sm">
-          <span className="font-medium">Status</span>
-          <select
-            className="h-9 rounded-md border bg-background px-3"
-            value={status}
-            onChange={(event) => setStatus(event.target.value as TaskStatus | "")}
-          >
-            <option value="">Any</option>
-            {statuses.map((item) => (
-              <option key={item.value} value={item.value}>
-                {item.label}
-              </option>
-            ))}
-          </select>
-        </label>
+        {view === "today" ? null : (
+          <label className="grid gap-1 text-sm">
+            <span className="font-medium">Status</span>
+            <select
+              className="h-9 rounded-md border bg-background px-3"
+              value={status}
+              onChange={(event) => setStatus(event.target.value as TaskStatus | "")}
+            >
+              <option value="">Any</option>
+              {statuses.map((item) => (
+                <option key={item.value} value={item.value}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
       </div>
 
       {tasksQuery.isLoading ? (
@@ -132,7 +139,7 @@ function CreateTaskPanel() {
         New task
       </Button>
       {open ? (
-        <div className="absolute right-0 z-20 mt-2 w-[min(92vw,32rem)] rounded-xl border bg-background p-4 shadow-xl">
+        <div className="fixed inset-x-4 top-24 z-20 max-h-[calc(100vh-7rem)] overflow-y-auto rounded-xl border bg-background p-4 shadow-xl sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 sm:w-[32rem] sm:max-w-[calc(100vw-2rem)]">
           <TaskForm onDone={() => setOpen(false)} />
         </div>
       ) : null}

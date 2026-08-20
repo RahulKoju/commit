@@ -23,29 +23,33 @@ type habitCategoryRequest struct {
 }
 
 type habitRequest struct {
-	CategoryID    string   `json:"category_id" binding:"required"`
-	Name          string   `json:"name" binding:"required"`
-	Description   string   `json:"description"`
-	Type          string   `json:"type" binding:"required"`
-	TargetValue   *float64 `json:"target_value"`
-	TargetUnit    *string  `json:"target_unit"`
-	FrequencyType string   `json:"frequency_type"`
-	FrequencyDays []int    `json:"frequency_days"`
-	WeeklyGoal    int      `json:"weekly_goal"`
-	SortOrder     int      `json:"sort_order"`
+	CategoryID         string   `json:"category_id" binding:"required"`
+	Name               string   `json:"name" binding:"required"`
+	Description        string   `json:"description"`
+	Type               string   `json:"type" binding:"required"`
+	TargetValue        *float64 `json:"target_value"`
+	TargetValueMax     *float64 `json:"target_value_max"`
+	ComparisonOperator string   `json:"comparison_operator"`
+	TargetUnit         *string  `json:"target_unit"`
+	FrequencyType      string   `json:"frequency_type"`
+	FrequencyDays      []int    `json:"frequency_days"`
+	WeeklyGoal         int      `json:"weekly_goal"`
+	SortOrder          int      `json:"sort_order"`
 }
 
 type updateHabitRequest struct {
-	CategoryID    *string  `json:"category_id"`
-	Name          *string  `json:"name"`
-	Description   *string  `json:"description"`
-	Type          *string  `json:"type"`
-	TargetValue   *float64 `json:"target_value"`
-	TargetUnit    *string  `json:"target_unit"`
-	FrequencyType *string  `json:"frequency_type"`
-	FrequencyDays *[]int   `json:"frequency_days"`
-	WeeklyGoal    *int     `json:"weekly_goal"`
-	SortOrder     *int     `json:"sort_order"`
+	CategoryID         *string  `json:"category_id"`
+	Name               *string  `json:"name"`
+	Description        *string  `json:"description"`
+	Type               *string  `json:"type"`
+	TargetValue        *float64 `json:"target_value"`
+	TargetValueMax     *float64 `json:"target_value_max"`
+	ComparisonOperator *string  `json:"comparison_operator"`
+	TargetUnit         *string  `json:"target_unit"`
+	FrequencyType      *string  `json:"frequency_type"`
+	FrequencyDays      *[]int   `json:"frequency_days"`
+	WeeklyGoal         *int     `json:"weekly_goal"`
+	SortOrder          *int     `json:"sort_order"`
 }
 
 type habitLogRequest struct {
@@ -183,17 +187,19 @@ func (handler HabitHandler) CreateHabit(c *gin.Context) {
 	}
 
 	habit, err := handler.habits.CreateHabit(c.Request.Context(), services.CreateHabitInput{
-		UserID:        userID,
-		CategoryID:    request.CategoryID,
-		Name:          request.Name,
-		Description:   request.Description,
-		Type:          request.Type,
-		TargetValue:   request.TargetValue,
-		TargetUnit:    request.TargetUnit,
-		FrequencyType: request.FrequencyType,
-		FrequencyDays: request.FrequencyDays,
-		WeeklyGoal:    request.WeeklyGoal,
-		SortOrder:     request.SortOrder,
+		UserID:             userID,
+		CategoryID:         request.CategoryID,
+		Name:               request.Name,
+		Description:        request.Description,
+		Type:               request.Type,
+		TargetValue:        request.TargetValue,
+		TargetValueMax:     request.TargetValueMax,
+		ComparisonOperator: request.ComparisonOperator,
+		TargetUnit:         request.TargetUnit,
+		FrequencyType:      request.FrequencyType,
+		FrequencyDays:      request.FrequencyDays,
+		WeeklyGoal:         request.WeeklyGoal,
+		SortOrder:          request.SortOrder,
 	})
 	if err != nil {
 		writeHabitError(c, err)
@@ -215,18 +221,20 @@ func (handler HabitHandler) UpdateHabit(c *gin.Context) {
 	}
 
 	habit, err := handler.habits.UpdateHabit(c.Request.Context(), services.UpdateHabitInput{
-		UserID:        userID,
-		ID:            c.Param("id"),
-		CategoryID:    request.CategoryID,
-		Name:          request.Name,
-		Description:   request.Description,
-		Type:          request.Type,
-		TargetValue:   request.TargetValue,
-		TargetUnit:    request.TargetUnit,
-		FrequencyType: request.FrequencyType,
-		FrequencyDays: request.FrequencyDays,
-		WeeklyGoal:    request.WeeklyGoal,
-		SortOrder:     request.SortOrder,
+		UserID:             userID,
+		ID:                 c.Param("id"),
+		CategoryID:         request.CategoryID,
+		Name:               request.Name,
+		Description:        request.Description,
+		Type:               request.Type,
+		TargetValue:        request.TargetValue,
+		TargetValueMax:     request.TargetValueMax,
+		ComparisonOperator: request.ComparisonOperator,
+		TargetUnit:         request.TargetUnit,
+		FrequencyType:      request.FrequencyType,
+		FrequencyDays:      request.FrequencyDays,
+		WeeklyGoal:         request.WeeklyGoal,
+		SortOrder:          request.SortOrder,
 	})
 	if err != nil {
 		writeHabitError(c, err)

@@ -28,9 +28,15 @@ import {
   useUpdateHabit,
   useUpdateHabitCategory,
 } from "@/hooks/useHabits"
-import type { CreateHabitInput, Habit, HabitType } from "@/types/habit.types"
+import type { CreateHabitInput, Habit, HabitComparisonOperator, HabitType } from "@/types/habit.types"
 
 const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const
+const COMPARISON_OPTIONS: Array<{ value: HabitComparisonOperator; label: string }> = [
+  { value: "gte", label: "At least" },
+  { value: "lte", label: "At most" },
+  { value: "eq", label: "Exactly" },
+  { value: "between", label: "Between" },
+]
 
 export function ManageHabitsDialog({
   open,
@@ -194,10 +200,13 @@ function EditHabitRow({ habit, onDone }: { habit: Habit; onDone: () => void }) {
   const [categoryId, setCategoryId] = useState(habit.category_id)
   const [type, setType] = useState<HabitType>(habit.type)
   const [targetValue, setTargetValue] = useState(habit.target_value ?? 0)
+  const [targetValueMax, setTargetValueMax] = useState(habit.target_value_max ?? (habit.target_value ?? 0) + 1)
+  const [comparisonOperator, setComparisonOperator] = useState<HabitComparisonOperator>(habit.comparison_operator)
   const [targetUnit, setTargetUnit] = useState(habit.target_unit ?? "")
   const [frequencyType, setFrequencyType] = useState(habit.frequency_type)
   const [frequencyDays, setFrequencyDays] = useState<number[]>(habit.frequency_days)
   const [weeklyGoal, setWeeklyGoal] = useState(habit.weekly_goal)
+  const [error, setError] = useState<string | null>(null)
 
   function toggleDay(day: number) {
     setFrequencyDays((prev) =>
@@ -207,22 +216,33 @@ function EditHabitRow({ habit, onDone }: { habit: Habit; onDone: () => void }) {
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
-    await updateHabit.mutateAsync({
-      habitId: habit.id,
-      input: {
-        name: name !== habit.name ? name : undefined,
-        description: description !== habit.description ? description : undefined,
-        category_id: categoryId !== habit.category_id ? categoryId : undefined,
-        type: type !== habit.type ? type : undefined,
-        target_value: targetValue !== (habit.target_value ?? 0) ? targetValue : undefined,
-        target_unit: targetUnit !== (habit.target_unit ?? "") ? targetUnit : undefined,
-        frequency_type: frequencyType !== habit.frequency_type ? frequencyType : undefined,
-        frequency_days:
-          JSON.stringify(frequencyDays) !== JSON.stringify(habit.frequency_days) ? frequencyDays : undefined,
-        weekly_goal: weeklyGoal !== habit.weekly_goal ? weeklyGoal : undefined,
-      },
-    })
-    onDone()
+    setError(null)
+    try {
+      await updateHabit.mutateAsync({
+        habitId: habit.id,
+        input: {
+          name: name !== habit.name ? name : undefined,
+          description: description !== habit.description ? description : undefined,
+          category_id: categoryId !== habit.category_id ? categoryId : undefined,
+          type: type !== habit.type ? type : undefined,
+          target_value: type === "numeric" && targetValue !== (habit.target_value ?? 0) ? targetValue : undefined,
+          target_value_max:
+            type === "numeric" && comparisonOperator === "between"
+              ? targetValueMax
+              : undefined,
+          comparison_operator:
+            type === "numeric" && comparisonOperator !== habit.comparison_operator ? comparisonOperator : undefined,
+          target_unit: type === "numeric" && targetUnit !== (habit.target_unit ?? "") ? targetUnit : undefined,
+          frequency_type: frequencyType !== habit.frequency_type ? frequencyType : undefined,
+          frequency_days:
+            JSON.stringify(frequencyDays) !== JSON.stringify(habit.frequency_days) ? frequencyDays : undefined,
+          weekly_goal: weeklyGoal !== habit.weekly_goal ? weeklyGoal : undefined,
+        },
+      })
+      onDone()
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : "Unable to update habit")
+    }
   }
 
   return (
@@ -253,7 +273,7 @@ function EditHabitRow({ habit, onDone }: { habit: Habit; onDone: () => void }) {
         />
       </div>
 
-      <div className="grid gap-2 sm:grid-cols-3">
+      <div className={type === "numeric" ? "grid gap-2 sm:grid-cols-3" : "grid gap-2"}>
         <div className="grid gap-2">
           <Label htmlFor={`edit-type-${habit.id}`}>Type</Label>
           <select id={`edit-type-${habit.id}`} value={type} onChange={(e) => setType(e.target.value as HabitType)} className="h-9 rounded-md border bg-background px-3 text-sm">
@@ -261,14 +281,32 @@ function EditHabitRow({ habit, onDone }: { habit: Habit; onDone: () => void }) {
             <option value="numeric">Numeric</option>
           </select>
         </div>
-        <div className="grid gap-2">
-          <Label htmlFor={`edit-target-${habit.id}`}>Target value</Label>
-          <Input id={`edit-target-${habit.id}`} type="number" min={0} step="0.1" value={targetValue} onChange={(e) => setTargetValue(Number(e.target.value))} />
-        </div>
-        <div className="grid gap-2">
-          <Label htmlFor={`edit-unit-${habit.id}`}>Unit</Label>
-          <Input id={`edit-unit-${habit.id}`} value={targetUnit} onChange={(e) => setTargetUnit(e.target.value)} />
-        </div>
+        {type === "numeric" ? (
+          <>
+            <div className="grid gap-2">
+              <Label htmlFor={`edit-operator-${habit.id}`}>Goal</Label>
+              <select id={`edit-operator-${habit.id}`} value={comparisonOperator} onChange={(e) => setComparisonOperator(e.target.value as HabitComparisonOperator)} className="h-9 rounded-md border bg-background px-3 text-sm">
+                {COMPARISON_OPTIONS.map((item) => (
+                  <option key={item.value} value={item.value}>{item.label}</option>
+                ))}
+              </select>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor={`edit-target-${habit.id}`}>{comparisonOperator === "between" ? "Minimum" : "Target value"}</Label>
+              <Input id={`edit-target-${habit.id}`} type="number" min={0} step="0.1" value={targetValue} onChange={(e) => setTargetValue(Number(e.target.value))} />
+            </div>
+            {comparisonOperator === "between" ? (
+              <div className="grid gap-2">
+                <Label htmlFor={`edit-target-max-${habit.id}`}>Maximum</Label>
+                <Input id={`edit-target-max-${habit.id}`} type="number" min={0} step="0.1" value={targetValueMax} onChange={(e) => setTargetValueMax(Number(e.target.value))} />
+              </div>
+            ) : null}
+            <div className="grid gap-2">
+              <Label htmlFor={`edit-unit-${habit.id}`}>Unit</Label>
+              <Input id={`edit-unit-${habit.id}`} value={targetUnit} onChange={(e) => setTargetUnit(e.target.value)} />
+            </div>
+          </>
+        ) : null}
       </div>
 
       <div className="grid gap-2 sm:grid-cols-2">
@@ -310,6 +348,8 @@ function EditHabitRow({ habit, onDone }: { habit: Habit; onDone: () => void }) {
         </div>
       ) : null}
 
+      {error ? <p className="text-sm text-destructive">{error}</p> : null}
+
       <div className="flex justify-end gap-2">
         <Button type="button" variant="outline" size="sm" onClick={onDone}>Cancel</Button>
         <Button type="submit" size="sm" disabled={updateHabit.isPending}>
@@ -322,8 +362,11 @@ function EditHabitRow({ habit, onDone }: { habit: Habit; onDone: () => void }) {
 
 function HabitForm({ onDone }: { onDone: () => void }) {
   const [categoryId, setCategoryId] = useState("")
+  const [type, setType] = useState<HabitType>("boolean")
+  const [comparisonOperator, setComparisonOperator] = useState<HabitComparisonOperator>("gte")
   const [frequencyType, setFrequencyType] = useState("daily")
   const [frequencyDays, setFrequencyDays] = useState<number[]>([1, 2, 3, 4, 5, 6, 7])
+  const [error, setError] = useState<string | null>(null)
   const createHabit = useCreateHabit()
   const categoriesQuery = useHabitCategories()
 
@@ -335,16 +378,25 @@ function HabitForm({ onDone }: { onDone: () => void }) {
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    setError(null)
     const form = event.currentTarget
     const formData = new FormData(form)
     formData.set("category_id", categoryId)
+    formData.set("type", type)
+    formData.set("comparison_operator", comparisonOperator)
     formData.set("frequency_days", JSON.stringify(frequencyDays))
-    await createHabit.mutateAsync(habitInputFromFormData(formData))
-    form.reset()
-    setCategoryId("")
-    setFrequencyType("daily")
-    setFrequencyDays([1, 2, 3, 4, 5, 6, 7])
-    onDone()
+    try {
+      await createHabit.mutateAsync(habitInputFromFormData(formData))
+      form.reset()
+      setCategoryId("")
+      setType("boolean")
+      setComparisonOperator("gte")
+      setFrequencyType("daily")
+      setFrequencyDays([1, 2, 3, 4, 5, 6, 7])
+      onDone()
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : "Unable to create habit")
+    }
   }
 
   return (
@@ -364,22 +416,40 @@ function HabitForm({ onDone }: { onDone: () => void }) {
         />
       </div>
 
-      <div className="grid gap-2 sm:grid-cols-3">
+      <div className={type === "numeric" ? "grid gap-2 sm:grid-cols-3" : "grid gap-2"}>
         <div className="grid gap-2">
           <Label htmlFor="new-habit-type">Type</Label>
-          <select id="new-habit-type" name="type" defaultValue="boolean" className="h-9 rounded-md border bg-background px-3 text-sm">
+          <select id="new-habit-type" name="type" value={type} onChange={(e) => setType(e.target.value as HabitType)} className="h-9 rounded-md border bg-background px-3 text-sm">
             <option value="boolean">Boolean</option>
             <option value="numeric">Numeric</option>
           </select>
         </div>
-        <div className="grid gap-2">
-          <Label htmlFor="new-habit-target">Target value</Label>
-          <input id="new-habit-target" name="target_value" type="number" min={0} step="0.1" placeholder="Target" className="h-9 rounded-md border bg-background px-3 text-sm" />
-        </div>
-        <div className="grid gap-2">
-          <Label htmlFor="new-habit-unit">Unit</Label>
-          <input id="new-habit-unit" name="target_unit" placeholder="Unit" className="h-9 rounded-md border bg-background px-3 text-sm" />
-        </div>
+        {type === "numeric" ? (
+          <>
+            <div className="grid gap-2">
+              <Label htmlFor="new-habit-operator">Goal</Label>
+              <select id="new-habit-operator" name="comparison_operator" value={comparisonOperator} onChange={(e) => setComparisonOperator(e.target.value as HabitComparisonOperator)} className="h-9 rounded-md border bg-background px-3 text-sm">
+                {COMPARISON_OPTIONS.map((item) => (
+                  <option key={item.value} value={item.value}>{item.label}</option>
+                ))}
+              </select>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="new-habit-target">{comparisonOperator === "between" ? "Minimum" : "Target value"}</Label>
+              <input id="new-habit-target" name="target_value" type="number" min={0} step="0.1" placeholder={comparisonOperator === "between" ? "Min" : "Target"} className="h-9 rounded-md border bg-background px-3 text-sm" />
+            </div>
+            {comparisonOperator === "between" ? (
+              <div className="grid gap-2">
+                <Label htmlFor="new-habit-target-max">Maximum</Label>
+                <input id="new-habit-target-max" name="target_value_max" type="number" min={0} step="0.1" placeholder="Max" className="h-9 rounded-md border bg-background px-3 text-sm" />
+              </div>
+            ) : null}
+            <div className="grid gap-2">
+              <Label htmlFor="new-habit-unit">Unit</Label>
+              <input id="new-habit-unit" name="target_unit" placeholder="Unit" className="h-9 rounded-md border bg-background px-3 text-sm" />
+            </div>
+          </>
+        ) : null}
       </div>
 
       <div className="grid gap-2 sm:grid-cols-2">
@@ -426,6 +496,8 @@ function HabitForm({ onDone }: { onDone: () => void }) {
         <textarea id="new-habit-desc" name="description" rows={1} placeholder="Description" className="rounded-md border bg-background px-3 py-2 text-sm" />
       </div>
 
+      {error ? <p className="text-sm text-destructive">{error}</p> : null}
+
       <div className="flex justify-end gap-2">
         <Button type="button" variant="outline" size="sm" onClick={onDone}>Cancel</Button>
         <Button type="submit" size="sm" disabled={createHabit.isPending}>
@@ -443,23 +515,39 @@ function CategoryPanel() {
   const deleteCategory = useDeleteHabitCategory()
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editName, setEditName] = useState("")
+  const [error, setError] = useState<string | null>(null)
 
   async function onCreate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const formData = new FormData(event.currentTarget)
-    await createCategory.mutateAsync({ name: String(formData.get("name") ?? "") })
-    event.currentTarget.reset()
+    setError(null)
+    try {
+      await createCategory.mutateAsync({ name: String(formData.get("name") ?? "") })
+      event.currentTarget.reset()
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : "Unable to create category")
+    }
   }
 
   async function onUpdate(id: string) {
     if (!editName.trim()) return
-    await updateCategory.mutateAsync({ categoryId: id, input: { name: editName.trim() } })
-    setEditingId(null)
-    setEditName("")
+    setError(null)
+    try {
+      await updateCategory.mutateAsync({ categoryId: id, input: { name: editName.trim() } })
+      setEditingId(null)
+      setEditName("")
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : "Unable to update category")
+    }
   }
 
   async function onDelete(id: string) {
-    await deleteCategory.mutateAsync(id)
+    setError(null)
+    try {
+      await deleteCategory.mutateAsync(id)
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : "Unable to delete category")
+    }
   }
 
   return (
@@ -472,6 +560,8 @@ function CategoryPanel() {
           Add
         </Button>
       </form>
+
+      {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
       {categoriesQuery.data?.categories.length ? (
         <div className="space-y-1">
@@ -581,7 +671,9 @@ function CategoryCombobox({
 
 function habitInputFromFormData(formData: FormData): CreateHabitInput {
   const habitType = String(formData.get("type") ?? "boolean") as HabitType
-  const targetValue = Number(formData.get("target_value") ?? 0)
+  const targetValue = optionalNumber(formData.get("target_value"))
+  const targetValueMax = optionalNumber(formData.get("target_value_max"))
+  const comparisonOperator = String(formData.get("comparison_operator") ?? "gte") as HabitComparisonOperator
   const freqDaysRaw = formData.get("frequency_days")
   const frequencyDays: number[] = freqDaysRaw ? JSON.parse(String(freqDaysRaw)) : [1, 2, 3, 4, 5, 6, 7]
   return {
@@ -589,11 +681,21 @@ function habitInputFromFormData(formData: FormData): CreateHabitInput {
     name: String(formData.get("name") ?? ""),
     description: String(formData.get("description") ?? ""),
     type: habitType,
-    target_value: targetValue > 0 ? targetValue : undefined,
-    target_unit: String(formData.get("target_unit") ?? ""),
+    target_value: habitType === "numeric" ? targetValue : undefined,
+    target_value_max: habitType === "numeric" && comparisonOperator === "between" ? targetValueMax : undefined,
+    comparison_operator: habitType === "numeric" ? comparisonOperator : undefined,
+    target_unit: habitType === "numeric" ? String(formData.get("target_unit") ?? "") : "",
     frequency_type: String(formData.get("frequency_type") ?? "daily") === "weekly" ? "weekly" : "daily",
     frequency_days: frequencyDays,
     weekly_goal: Number(formData.get("weekly_goal") ?? 7),
     sort_order: 0,
   }
+}
+
+function optionalNumber(value: FormDataEntryValue | null): number | undefined {
+  if (value === null) return undefined
+  const text = String(value).trim()
+  if (text === "") return undefined
+  const parsed = Number(text)
+  return Number.isFinite(parsed) ? parsed : undefined
 }

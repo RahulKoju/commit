@@ -2,6 +2,7 @@ import { z } from "zod"
 
 export const habitTypeSchema = z.enum(["boolean", "numeric"])
 export const habitFrequencyTypeSchema = z.enum(["daily", "weekly"])
+export const habitComparisonOperatorSchema = z.enum(["gte", "lte", "eq", "between"])
 
 export const habitLogSchema = z.object({
   id: z.string().uuid(),
@@ -23,6 +24,8 @@ export const habitSchema = z.object({
   description: z.string(),
   type: habitTypeSchema,
   target_value: z.number().nullable(),
+  target_value_max: z.number().nullable(),
+  comparison_operator: habitComparisonOperatorSchema,
   target_unit: z.string().nullable(),
   frequency_type: habitFrequencyTypeSchema,
   frequency_days: z.array(z.number().int()),
@@ -103,6 +106,7 @@ export const habitMatrixResponseSchema = z.object({
 
 export type HabitType = z.infer<typeof habitTypeSchema>
 export type HabitFrequencyType = z.infer<typeof habitFrequencyTypeSchema>
+export type HabitComparisonOperator = z.infer<typeof habitComparisonOperatorSchema>
 export type Habit = z.infer<typeof habitSchema>
 export type HabitCategory = z.infer<typeof habitCategorySchema>
 export type HabitLog = z.infer<typeof habitLogSchema>
@@ -132,6 +136,8 @@ export type CreateHabitInput = {
   description: string
   type: HabitType
   target_value?: number
+  target_value_max?: number
+  comparison_operator?: HabitComparisonOperator
   target_unit?: string
   frequency_type: HabitFrequencyType
   frequency_days: number[]
@@ -145,6 +151,8 @@ export type UpdateHabitInput = {
   description?: string
   type?: HabitType
   target_value?: number
+  target_value_max?: number
+  comparison_operator?: HabitComparisonOperator
   target_unit?: string
   frequency_type?: HabitFrequencyType
   frequency_days?: number[]

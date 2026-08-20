@@ -9,7 +9,7 @@ import {
   X,
 } from "lucide-react"
 import type { ComponentType } from "react"
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useMemo, useState } from "react"
 import { Link } from "react-router-dom"
 import {
   AreaChart,
@@ -96,10 +96,6 @@ export function DashboardPage() {
 
   const [currentOrder, setCurrentOrder] = useState(order)
 
-  useEffect(() => {
-    setCurrentOrder(order)
-  }, [order])
-
   function onDragStart(id: string) {
     setDragId(id)
   }
@@ -132,12 +128,18 @@ export function DashboardPage() {
     setCustomizing(false)
   }
 
+  function startCustomizing() {
+    setCurrentOrder(order)
+    setCustomizing(true)
+  }
+
+  const displayOrder = customizing ? currentOrder : order
   const widgets = useMemo(
     () =>
-      currentOrder
+      displayOrder
         .map((id) => WIDGET_REGISTRY.find((w) => w.id === id))
         .filter(Boolean) as WidgetDef[],
-    [currentOrder]
+    [displayOrder]
   )
 
   return (
@@ -170,7 +172,7 @@ export function DashboardPage() {
             <Button
               type="button"
               variant="outline"
-              onClick={() => setCustomizing(true)}
+              onClick={startCustomizing}
             >
               <LayoutGrid className="size-4" />
               Customize
@@ -310,22 +312,15 @@ function HabitChartWidget({
         <ResponsiveContainer width="100%" height={160}>
           <AreaChart data={data}>
             <XAxis
-              dataKey="day"
+              dataKey="date"
+              tickFormatter={shortDay}
               tick={{ fontSize: 12 }}
               axisLine={false}
               tickLine={false}
             />
             <YAxis hide />
             <Tooltip
-              contentStyle={{
-                fontSize: 13,
-                borderRadius: 8,
-                border: "1px solid var(--color-border)",
-              }}
-              formatter={(value: any, name: any) => [
-                value,
-                name === "completed" ? "Completed" : "Total",
-              ]}
+              content={<HabitChartTooltip />}
             />
             <Area
               type="monotone"
@@ -336,7 +331,7 @@ function HabitChartWidget({
             />
             {separatorIndex > 0 ? (
               <ReferenceLine
-                x={data[separatorIndex]?.day}
+                x={data[separatorIndex]?.date}
                 stroke="var(--color-border)"
                 strokeDasharray="4 4"
               />
@@ -399,6 +394,26 @@ function MiniAreaChart({
           <Area type="monotone" dataKey={dataKey} stroke={color} fill={color} fillOpacity={0.35} />
         </AreaChart>
       </ResponsiveContainer>
+    </div>
+  )
+}
+
+function HabitChartTooltip({
+  active,
+  payload,
+}: {
+  active?: boolean
+  payload?: Array<{ payload?: HabitChartDatum }>
+}) {
+  if (!active || !payload?.length) return null
+  const item = payload[0]?.payload
+  if (!item) return null
+  return (
+    <div className="rounded-lg border bg-background px-3 py-2 text-sm shadow-sm">
+      <p className="font-medium">{formatDateKey(item.date)}</p>
+      <p className="text-muted-foreground">
+        {item.completed}/{item.total} habits
+      </p>
     </div>
   )
 }
@@ -561,7 +576,7 @@ function trend(
 }
 
 function formatDate(value: string | undefined): string {
-  const date = value ? new Date(value) : new Date()
+  const date = value ? parseDateKey(value) : new Date()
   return date.toLocaleDateString(undefined, {
     weekday: "long",
     month: "long",
@@ -570,13 +585,33 @@ function formatDate(value: string | undefined): string {
 }
 
 function shortDay(value: string): string {
-  return new Date(value).toLocaleDateString(undefined, { weekday: "short" })
+  return parseDateKey(value).toLocaleDateString(undefined, { weekday: "short" })
+}
+
+function formatDateKey(value: string): string {
+  return parseDateKey(value).toLocaleDateString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  })
+}
+
+function parseDateKey(value: string): Date {
+  const [year = 0, month = 1, day = 1] = value.split("-").map(Number)
+  return new Date(year, month - 1, day)
+}
+
+type HabitChartDatum = {
+  date: string
+  completed: number
+  total: number
 }
 
 function chartData(items: DashboardSummary["weekly_habit_chart"]) {
-  return items.map((item) => ({
-    day: shortDay(item.date),
+  return items.map((item): HabitChartDatum => ({
+    date: item.date,
     completed: item.checked,
+    total: item.total,
   }))
 }
 

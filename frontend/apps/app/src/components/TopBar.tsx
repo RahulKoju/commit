@@ -3,7 +3,7 @@ import { Button } from "@workspace/ui/components/button"
 
 import { apiFetch } from "@/lib/api"
 import { useCurrentUser } from "@/hooks/useAuth"
-import { useTheme } from "@/components/theme-provider"
+import { useTheme } from "@/components/theme-context"
 
 export function TopBar() {
   const { data } = useCurrentUser()

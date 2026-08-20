@@ -27,7 +27,11 @@ export function CommandPalette() {
     function onKeyDown(event: KeyboardEvent) {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "p") {
         event.preventDefault()
-        setOpen((prev) => !prev)
+        setOpen((prev) => {
+          const next = !prev
+          if (next) setQuery("")
+          return next
+        })
       }
       if (event.key === "Escape") setOpen(false)
     }
@@ -37,7 +41,6 @@ export function CommandPalette() {
 
   useEffect(() => {
     if (open) {
-      setQuery("")
       setTimeout(() => inputRef.current?.focus(), 50)
     }
   }, [open])

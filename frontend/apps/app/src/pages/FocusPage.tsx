@@ -6,7 +6,7 @@ import { Button } from "@workspace/ui/components/button"
 import { useActiveFocusSession, useCompleteActiveFocusSession, useDiscardActiveFocusSession, useFocusSessions, useFocusStats, usePauseActiveFocusSession, useResumeActiveFocusSession, useStartActiveFocusSession } from "@/hooks/useFocus"
 import { useTasks } from "@/hooks/useTasks"
 import { useFocusStore, sessionTypeLabel } from "@/store/useFocusStore"
-import type { FocusSessionFilters } from "@/types/focus.types"
+import type { ActiveFocusSession, FocusSessionFilters } from "@/types/focus.types"
 
 const defaultDurations = {
   work: 25,
@@ -16,6 +16,17 @@ const defaultDurations = {
 
 const apiBaseURL = import.meta.env.VITE_API_URL ?? "http://localhost:8080"
 
+type FocusMachineState =
+  | "idle"
+  | "running_work"
+  | "paused_work"
+  | "running_break"
+  | "paused_break"
+  | "completing"
+  | "transitioning"
+
+type FocusPendingState = Extract<FocusMachineState, "completing" | "transitioning">
+
 export function FocusPage() {
   const [workMinutes, setWorkMinutes] = useState(defaultDurations.work)
   const [shortBreakMinutes, setShortBreakMinutes] = useState(defaultDurations.shortBreak)
@@ -23,6 +34,12 @@ export function FocusPage() {
   const [dateFrom, setDateFrom] = useState("")
   const [dateTo, setDateTo] = useState("")
   const [error, setError] = useState<string | null>(null)
+  const [durationErrors, setDurationErrors] = useState<Record<"work" | "shortBreak" | "longBreak", string | null>>({
+    work: null,
+    shortBreak: null,
+    longBreak: null,
+  })
+  const [pendingState, setPendingState] = useState<FocusPendingState | null>(null)
   const location = useLocation()
   const selectedTaskId = useFocusStore((state) => state.selectedTaskId)
   const setSelectedTaskId = useFocusStore((state) => state.setSelectedTaskId)
@@ -57,8 +74,11 @@ export function FocusPage() {
   const active = session && (session.status === "running" || session.status === "paused") ? session : null
   const isRunning = active?.status === "running"
   const isPaused = active?.status === "paused"
-  const kind = active ? sessionTypeLabel(active.session_type, timerMode) : "idle"
+  const focusState = deriveFocusState(active, pendingState)
+  const activeTimerMode = active ? (active.planned_duration_seconds == null ? "stopwatch" : "pomodoro") : timerMode
+  const kind = active ? sessionTypeLabel(active.session_type, activeTimerMode) : "idle"
   const isStopwatchWork = active?.session_type === "work" && active.planned_duration_seconds == null
+  const showPomodoroControls = active ? activeTimerMode === "pomodoro" : timerMode === "pomodoro"
   const displaySeconds =
     active?.planned_duration_seconds == null ? elapsedSeconds : Math.max(0, active.planned_duration_seconds - elapsedSeconds)
 
@@ -88,23 +108,25 @@ export function FocusPage() {
 
   // Auto-complete a pomodoro work session at 0, then auto-start the short break.
   useEffect(() => {
-    if (!active || active.session_type !== "work" || active.planned_duration_seconds == null || isPaused) return
+    if (!active || focusState !== "running_work" || active.planned_duration_seconds == null || isStopwatchWork) return
     if (displaySeconds > 0) return
     if (completingRef.current) return
     completingRef.current = true
+    setPendingState("completing")
     completeActive.mutate(active.id, {
       onSuccess: () => {
         clearPreselectedTask()
-        startBreak("short_break")
+        startBreak("short_break", { transitioning: true })
       },
       onError: (submitError: unknown) => {
         setError(submitError instanceof Error ? submitError.message : "Unable to complete session")
+        setPendingState(null)
       },
       onSettled: () => {
         completingRef.current = false
       },
     })
-  }, [active, displaySeconds, isPaused, completeActive, clearPreselectedTask])
+  }, [active, displaySeconds, focusState, isStopwatchWork, completeActive, clearPreselectedTask])
 
   // Heartbeat while running: keep the server's liveness window open. Fired
   // every 20s; failures are swallowed (the scheduler's grace window covers
@@ -138,8 +160,11 @@ export function FocusPage() {
     return () => window.removeEventListener("pagehide", onPageHide)
   }, [isRunning, active?.id])
 
-  function startBreak(type: "short_break" | "long_break") {
+  function startBreak(type: "short_break" | "long_break", options?: { transitioning?: boolean }) {
     setError(null)
+    if (options?.transitioning) {
+      setPendingState("transitioning")
+    }
     startActive.mutate(
       {
         session_type: type,
@@ -149,6 +174,11 @@ export function FocusPage() {
         onSuccess: (response) => applySession(response.session),
         onError: (submitError: unknown) => {
           setError(submitError instanceof Error ? submitError.message : "Unable to start break")
+        },
+        onSettled: () => {
+          if (options?.transitioning) {
+            setPendingState(null)
+          }
         },
       }
     )
@@ -160,6 +190,10 @@ export function FocusPage() {
       setError("Select a task before starting a focus session.")
       return
     }
+    if (timerMode === "pomodoro" && Object.values(durationErrors).some(Boolean)) {
+      setError("Fix duration settings before starting a Pomodoro session.")
+      return
+    }
     startActive.mutate(
       {
         session_type: "work",
@@ -167,7 +201,10 @@ export function FocusPage() {
         planned_duration_seconds: timerMode === "stopwatch" ? undefined : workMinutes * 60,
       },
       {
-        onSuccess: (response) => applySession(response.session),
+        onSuccess: (response) => {
+          setPendingState(null)
+          applySession(response.session)
+        },
         onError: (submitError: unknown) => {
           const err = submitError as Error & { status?: number }
           setError(err.status === 409 ? "An active focus session already exists; resume or finish it first." : err.message || "Unable to start session")
@@ -238,7 +275,7 @@ export function FocusPage() {
         <div>
           <h1 className="text-2xl font-semibold">Focus</h1>
           <p className="text-sm text-muted-foreground">
-            {timerMode === "stopwatch" ? "Track time with a simple stopwatch." : "Run task-linked Pomodoro sessions and review focus history."}
+            {activeTimerMode === "stopwatch" ? "Track time with a simple stopwatch." : "Run task-linked Pomodoro sessions and review focus history."}
           </p>
         </div>
         <div className="flex gap-2">
@@ -294,11 +331,11 @@ export function FocusPage() {
             </label>
 
             <div className="rounded-xl border bg-muted/40 p-8 text-center">
-              <p className="text-sm text-muted-foreground">{isStopwatchWork ? "Elapsed time" : timerModeLabel(kind)}</p>
+              <p className="text-sm text-muted-foreground">{timerStateLabel(focusState, isStopwatchWork ? "Elapsed time" : timerModeLabel(kind))}</p>
               <p className="mt-3 text-7xl font-semibold tabular-nums">{formatSeconds(displaySeconds)}</p>
               {active ? (
                 <p className="mt-3 text-sm text-muted-foreground">
-                  {isPaused ? "Paused" : "Running"}
+                  {pendingState ? "Updating" : isPaused ? "Paused" : "Running"}
                   {active.session_type !== "work" ? ` · ${active.session_type === "short_break" ? "Short break" : "Long break"}` : ""}
                 </p>
               ) : preselectedTaskTitle ? (
@@ -325,7 +362,7 @@ export function FocusPage() {
                     </Button>
                   )}
                   {active.session_type === "work" && isStopwatchWork ? (
-                    <Button type="button" onClick={onStop}>
+                    <Button type="button" onClick={onStop} disabled={pendingState !== null}>
                       <Square className="size-4" />
                       Stop
                     </Button>
@@ -339,29 +376,60 @@ export function FocusPage() {
                 <>
                   <Button type="button" onClick={onStart}>
                     <Play className="size-4" />
-                    Start work
+                    {timerMode === "stopwatch" ? "Start stopwatch" : "Start work"}
                   </Button>
-                  <Button type="button" variant="outline" onClick={() => startBreak("short_break")}>
-                    <Pause className="size-4" />
-                    Short break
-                  </Button>
-                  <Button type="button" variant="outline" onClick={() => startBreak("long_break")}>
-                    <Pause className="size-4" />
-                    Long break
-                  </Button>
+                  {timerMode === "pomodoro" ? (
+                    <>
+                      <Button type="button" variant="outline" onClick={() => startBreak("short_break")}>
+                        <Pause className="size-4" />
+                        Short break
+                      </Button>
+                      <Button type="button" variant="outline" onClick={() => startBreak("long_break")}>
+                        <Pause className="size-4" />
+                        Long break
+                      </Button>
+                    </>
+                  ) : null}
                 </>
               )}
             </div>
           </div>
         </div>
 
-        {!isFullScreen ? (
+        {!isFullScreen && showPomodoroControls ? (
           <div className="rounded-xl border bg-background p-4">
             <h2 className="font-semibold">Durations</h2>
             <div className="mt-4 grid gap-3">
-              <NumberField label="Work" value={workMinutes} onChange={setWorkMinutes} />
-              <NumberField label="Short break" value={shortBreakMinutes} onChange={setShortBreakMinutes} />
-              <NumberField label="Long break" value={longBreakMinutes} onChange={setLongBreakMinutes} />
+              <NumberField
+                label="Work"
+                value={workMinutes}
+                error={durationErrors.work}
+                onChange={(value) => {
+                  setWorkMinutes(value)
+                  setDurationErrors((current) => ({ ...current, work: null }))
+                }}
+                onInvalid={(message) => setDurationErrors((current) => ({ ...current, work: message }))}
+              />
+              <NumberField
+                label="Short break"
+                value={shortBreakMinutes}
+                error={durationErrors.shortBreak}
+                onChange={(value) => {
+                  setShortBreakMinutes(value)
+                  setDurationErrors((current) => ({ ...current, shortBreak: null }))
+                }}
+                onInvalid={(message) => setDurationErrors((current) => ({ ...current, shortBreak: message }))}
+              />
+              <NumberField
+                label="Long break"
+                value={longBreakMinutes}
+                error={durationErrors.longBreak}
+                onChange={(value) => {
+                  setLongBreakMinutes(value)
+                  setDurationErrors((current) => ({ ...current, longBreak: null }))
+                }}
+                onInvalid={(message) => setDurationErrors((current) => ({ ...current, longBreak: message }))}
+              />
             </div>
           </div>
         ) : null}
@@ -451,22 +519,44 @@ export function FocusPage() {
 function NumberField({
   label,
   value,
+  error,
   onChange,
+  onInvalid,
 }: {
   label: string
   value: number
+  error: string | null
   onChange: (value: number) => void
+  onInvalid: (message: string) => void
 }) {
+  const [displayValue, setDisplayValue] = useState(String(value))
+
+  function handleChange(rawValue: string) {
+    setDisplayValue(rawValue)
+    if (rawValue.trim() === "") {
+      onInvalid("Duration is required.")
+      return
+    }
+    const parsed = Number(rawValue)
+    if (!Number.isFinite(parsed) || parsed < 1) {
+      onInvalid("Use at least 1 minute.")
+      return
+    }
+    onChange(parsed)
+  }
+
   return (
     <label className="grid gap-2 text-sm">
       <span className="font-medium">{label}</span>
       <input
         type="number"
         min={1}
-        className="h-9 rounded-md border bg-background px-3"
-        value={value}
-        onChange={(event) => onChange(Number(event.target.value))}
+        aria-invalid={!!error}
+        className={`h-9 rounded-md border bg-background px-3 ${error ? "border-destructive" : ""}`}
+        value={displayValue}
+        onChange={(event) => handleChange(event.target.value)}
       />
+      {error ? <span className="text-xs text-destructive">{error}</span> : null}
     </label>
   )
 }
@@ -482,4 +572,23 @@ function timerModeLabel(mode: "idle" | "work" | "short-break" | "long-break"): s
   if (mode === "short-break") return "Short break"
   if (mode === "long-break") return "Long break"
   return "Ready"
+}
+
+function deriveFocusState(
+  active: ActiveFocusSession | null,
+  pendingState: FocusPendingState | null,
+): FocusMachineState {
+  if (pendingState) return pendingState
+  if (!active) return "idle"
+  const paused = active.status === "paused"
+  if (active.session_type === "work") {
+    return paused ? "paused_work" : "running_work"
+  }
+  return paused ? "paused_break" : "running_break"
+}
+
+function timerStateLabel(state: FocusMachineState, fallback: string): string {
+  if (state === "completing") return "Completing interval"
+  if (state === "transitioning") return "Starting break"
+  return fallback
 }

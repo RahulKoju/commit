@@ -3,6 +3,7 @@ package models
 import (
 	"context"
 	"errors"
+	"log"
 	"math"
 	"sort"
 	"time"
@@ -74,6 +75,23 @@ type DashboardModel struct {
 	pool *pgxpool.Pool
 }
 
+const dashboardTimezone = "Asia/Kathmandu"
+
+var dashboardLocation = loadDashboardLocation()
+
+func loadDashboardLocation() *time.Location {
+	location, err := time.LoadLocation(dashboardTimezone)
+	if err != nil {
+		log.Printf("load dashboard timezone %q: %v; falling back to UTC", dashboardTimezone, err)
+		return time.UTC
+	}
+	return location
+}
+
+func dashboardNow() time.Time {
+	return time.Now().In(dashboardLocation)
+}
+
 func NewDashboardModel(pool *pgxpool.Pool) DashboardModel {
 	return DashboardModel{pool: pool}
 }
@@ -109,7 +127,7 @@ func (model DashboardModel) Summary(ctx context.Context, userID string) (Dashboa
 	}
 
 	return DashboardSummary{
-		Today:              time.Now().Format("2006-01-02"),
+		Today:              dashboardNow().Format("2006-01-02"),
 		TaskSummary:        taskSummary,
 		HabitSummary:       habitSummary,
 		RecentNotes:        recentNotes,
@@ -127,10 +145,10 @@ func (model DashboardModel) taskSummary(ctx context.Context, userID string) (Das
 		       COUNT(*) FILTER (WHERE status = 'done')::int
 		FROM tasks
 		WHERE user_id = $1 AND (
-			scheduled_date = CURRENT_DATE
-			OR (status <> 'done' AND scheduled_date < CURRENT_DATE)
+			scheduled_date = (now() AT TIME ZONE $2)::date
+			OR (status <> 'done' AND scheduled_date < (now() AT TIME ZONE $2)::date)
 		)
-	`, userID).Scan(&summary.Total, &summary.Done)
+	`, userID, dashboardTimezone).Scan(&summary.Total, &summary.Done)
 	return summary, err
 }
 
@@ -146,7 +164,7 @@ type habitDayCounts struct {
 // habit.go to stay consistent with the habits matrix and analytics.
 func (model DashboardModel) habitDailyCounts(ctx context.Context, userID string, startDate, endDate string) (map[string]habitDayCounts, error) {
 	habitRows, err := model.pool.Query(ctx, `
-		SELECT id, type, target_value, frequency_type, frequency_days
+		SELECT id, type, target_value, target_value_max, comparison_operator, frequency_type, frequency_days
 		FROM habits
 		WHERE user_id = $1 AND deleted_at IS NULL
 	`, userID)
@@ -162,13 +180,19 @@ func (model DashboardModel) habitDailyCounts(ctx context.Context, userID string,
 	for habitRows.Next() {
 		var habit Habit
 		var targetValue pgtype.Numeric
+		var targetValueMax pgtype.Numeric
 		var frequencyDays []int32
-		if err := habitRows.Scan(&habit.ID, &habit.Type, &targetValue, &habit.FrequencyType, &frequencyDays); err != nil {
+		if err := habitRows.Scan(&habit.ID, &habit.Type, &targetValue, &targetValueMax, &habit.ComparisonOperator, &habit.FrequencyType, &frequencyDays); err != nil {
 			return nil, err
 		}
 		if targetValue.Valid {
 			if value, err := targetValue.Float64Value(); err == nil && value.Valid {
 				habit.TargetValue = &value.Float64
+			}
+		}
+		if targetValueMax.Valid {
+			if value, err := targetValueMax.Float64Value(); err == nil && value.Valid {
+				habit.TargetValueMax = &value.Float64
 			}
 		}
 		habit.FrequencyDays = make([]int, 0, len(frequencyDays))
@@ -236,7 +260,7 @@ func (model DashboardModel) habitDailyCounts(ctx context.Context, userID string,
 }
 
 func (model DashboardModel) habitSummary(ctx context.Context, userID string) (DashboardHabitSummary, error) {
-	today := time.Now().Format("2006-01-02")
+	today := dashboardNow().Format("2006-01-02")
 	counts, err := model.habitDailyCounts(ctx, userID, today, today)
 	if err != nil {
 		return DashboardHabitSummary{}, err
@@ -270,15 +294,16 @@ func (model DashboardModel) recentNotes(ctx context.Context, userID string) ([]D
 }
 
 func (model DashboardModel) weeklyHabitChart(ctx context.Context, userID string) ([]DashboardHabitChartItem, error) {
-	end := time.Now().Format("2006-01-02")
-	start := time.Now().AddDate(0, 0, -13).Format("2006-01-02")
+	now := dashboardNow()
+	end := now.Format("2006-01-02")
+	start := now.AddDate(0, 0, -13).Format("2006-01-02")
 	counts, err := model.habitDailyCounts(ctx, userID, start, end)
 	if err != nil {
 		return nil, err
 	}
 
 	items := make([]DashboardHabitChartItem, 0, 14)
-	for day := time.Now().AddDate(0, 0, -13); !day.After(time.Now()); day = day.AddDate(0, 0, 1) {
+	for day := now.AddDate(0, 0, -13); !day.After(now); day = day.AddDate(0, 0, 1) {
 		date := day.Format("2006-01-02")
 		items = append(items, DashboardHabitChartItem{
 			Date:    date,
@@ -356,9 +381,12 @@ func activityLevel(points int, boundaries []int) int {
 }
 
 func (model DashboardModel) weeklyProductivity(ctx context.Context, userID string) ([]DashboardProductivityChartItem, error) {
+	now := dashboardNow()
+	start := now.AddDate(0, 0, -13).Format("2006-01-02")
+	end := now.Format("2006-01-02")
 	rows, err := model.pool.Query(ctx, `
 		WITH days AS (
-			SELECT generate_series(CURRENT_DATE - INTERVAL '13 days', CURRENT_DATE, INTERVAL '1 day')::date AS day
+			SELECT generate_series($2::date, $3::date, INTERVAL '1 day')::date AS day
 		)
 		SELECT d.day::text,
 		       COALESCE(t.done_count, 0)::int,
@@ -367,31 +395,31 @@ func (model DashboardModel) weeklyProductivity(ctx context.Context, userID strin
 		       COALESCE(r.reminder_count, 0)::int
 		FROM days d
 		LEFT JOIN (
-			SELECT completed_at::date AS day, COUNT(*)::int AS done_count
+			SELECT (completed_at AT TIME ZONE $4)::date AS day, COUNT(*)::int AS done_count
 			FROM tasks
 			WHERE user_id = $1 AND status = 'done' AND completed_at IS NOT NULL
-			GROUP BY completed_at::date
+			GROUP BY (completed_at AT TIME ZONE $4)::date
 		) t ON t.day = d.day
 		LEFT JOIN (
-			SELECT start_time::date AS day, COALESCE(SUM(duration_minutes), 0)::int AS minutes_sum
+			SELECT (start_time AT TIME ZONE $4)::date AS day, COALESCE(SUM(duration_minutes), 0)::int AS minutes_sum
 			FROM focus_sessions
 			WHERE user_id = $1
-			GROUP BY start_time::date
+			GROUP BY (start_time AT TIME ZONE $4)::date
 		) f ON f.day = d.day
 		LEFT JOIN (
-			SELECT created_at::date AS day, COUNT(*)::int AS note_count
+			SELECT (created_at AT TIME ZONE $4)::date AS day, COUNT(*)::int AS note_count
 			FROM notes
 			WHERE user_id = $1
-			GROUP BY created_at::date
+			GROUP BY (created_at AT TIME ZONE $4)::date
 		) n ON n.day = d.day
 		LEFT JOIN (
-			SELECT created_at::date AS day, COUNT(*)::int AS reminder_count
+			SELECT (created_at AT TIME ZONE $4)::date AS day, COUNT(*)::int AS reminder_count
 			FROM reminders
 			WHERE user_id = $1
-			GROUP BY created_at::date
+			GROUP BY (created_at AT TIME ZONE $4)::date
 		) r ON r.day = d.day
 		ORDER BY d.day
-	`, userID)
+	`, userID, start, end, dashboardTimezone)
 	if err != nil {
 		return nil, err
 	}
@@ -412,8 +440,9 @@ func (model DashboardModel) ActivityHeatmap(ctx context.Context, userID string, 
 	if days <= 0 {
 		days = 365
 	}
-	end := time.Now().Format("2006-01-02")
-	start := time.Now().AddDate(0, 0, -(days - 1)).Format("2006-01-02")
+	now := dashboardNow()
+	end := now.Format("2006-01-02")
+	start := now.AddDate(0, 0, -(days - 1)).Format("2006-01-02")
 
 	counts, err := model.habitDailyCounts(ctx, userID, start, end)
 	if err != nil {
@@ -421,7 +450,7 @@ func (model DashboardModel) ActivityHeatmap(ctx context.Context, userID string, 
 	}
 
 	habitItems := make([]HabitHeatmapItem, 0, days)
-	for day := time.Now().AddDate(0, 0, -(days - 1)); !day.After(time.Now()); day = day.AddDate(0, 0, 1) {
+	for day := now.AddDate(0, 0, -(days - 1)); !day.After(now); day = day.AddDate(0, 0, 1) {
 		date := day.Format("2006-01-02")
 		habitItems = append(habitItems, HabitHeatmapItem{
 			Date:      date,
@@ -432,7 +461,7 @@ func (model DashboardModel) ActivityHeatmap(ctx context.Context, userID string, 
 
 	rows, err := model.pool.Query(ctx, `
 		WITH dates AS (
-			SELECT generate_series(CURRENT_DATE - ($2::int - 1), CURRENT_DATE, INTERVAL '1 day')::date AS day
+			SELECT generate_series($2::date, $3::date, INTERVAL '1 day')::date AS day
 		)
 		SELECT d.day::text,
 		       COALESCE(t.done_count, 0)::int,
@@ -441,31 +470,31 @@ func (model DashboardModel) ActivityHeatmap(ctx context.Context, userID string, 
 		       COALESCE(r.reminder_count, 0)::int
 		FROM dates d
 		LEFT JOIN (
-			SELECT completed_at::date AS day, COUNT(*)::int AS done_count
+			SELECT (completed_at AT TIME ZONE $4)::date AS day, COUNT(*)::int AS done_count
 			FROM tasks
 			WHERE user_id = $1 AND status = 'done' AND completed_at IS NOT NULL
-			GROUP BY completed_at::date
+			GROUP BY (completed_at AT TIME ZONE $4)::date
 		) t ON t.day = d.day
 		LEFT JOIN (
-			SELECT start_time::date AS day, COALESCE(SUM(duration_minutes), 0)::int AS minutes_sum
+			SELECT (start_time AT TIME ZONE $4)::date AS day, COALESCE(SUM(duration_minutes), 0)::int AS minutes_sum
 			FROM focus_sessions
 			WHERE user_id = $1
-			GROUP BY start_time::date
+			GROUP BY (start_time AT TIME ZONE $4)::date
 		) f ON f.day = d.day
 		LEFT JOIN (
-			SELECT created_at::date AS day, COUNT(*)::int AS note_count
+			SELECT (created_at AT TIME ZONE $4)::date AS day, COUNT(*)::int AS note_count
 			FROM notes
 			WHERE user_id = $1
-			GROUP BY created_at::date
+			GROUP BY (created_at AT TIME ZONE $4)::date
 		) n ON n.day = d.day
 		LEFT JOIN (
-			SELECT created_at::date AS day, COUNT(*)::int AS reminder_count
+			SELECT (created_at AT TIME ZONE $4)::date AS day, COUNT(*)::int AS reminder_count
 			FROM reminders
 			WHERE user_id = $1
-			GROUP BY created_at::date
+			GROUP BY (created_at AT TIME ZONE $4)::date
 		) r ON r.day = d.day
 		ORDER BY d.day
-	`, userID, days)
+	`, userID, start, end, dashboardTimezone)
 	if err != nil {
 		return DashboardHeatmap{}, err
 	}
@@ -505,10 +534,11 @@ func (model DashboardModel) ActivityHeatmap(ctx context.Context, userID string, 
 func (model DashboardModel) weekComparison(ctx context.Context, userID string) (DashboardWeekComparison, error) {
 	var comp DashboardWeekComparison
 
-	thisWeekStart := time.Now().AddDate(0, 0, -6).Format("2006-01-02")
-	thisWeekEnd := time.Now().Format("2006-01-02")
-	lastWeekStart := time.Now().AddDate(0, 0, -13).Format("2006-01-02")
-	lastWeekEnd := time.Now().AddDate(0, 0, -7).Format("2006-01-02")
+	now := dashboardNow()
+	thisWeekStart := now.AddDate(0, 0, -6).Format("2006-01-02")
+	thisWeekEnd := now.Format("2006-01-02")
+	lastWeekStart := now.AddDate(0, 0, -13).Format("2006-01-02")
+	lastWeekEnd := now.AddDate(0, 0, -7).Format("2006-01-02")
 
 	counts, err := model.habitDailyCounts(ctx, userID, lastWeekStart, thisWeekEnd)
 	if err != nil {
@@ -525,16 +555,16 @@ func (model DashboardModel) weekComparison(ctx context.Context, userID string) (
 
 	err = model.pool.QueryRow(ctx, `
 		WITH this_week AS (
-			SELECT CURRENT_DATE - INTERVAL '6 days' AS start_date, CURRENT_DATE AS end_date
+			SELECT $2::date AS start_date, $3::date AS end_date
 		), last_week AS (
-			SELECT CURRENT_DATE - INTERVAL '13 days' AS start_date, CURRENT_DATE - INTERVAL '7 days' AS end_date
+			SELECT $4::date AS start_date, $5::date AS end_date
 		)
 		SELECT
 			COALESCE((SELECT COUNT(*)::int FROM tasks WHERE user_id = $1 AND status = 'done' AND scheduled_date BETWEEN (SELECT start_date FROM this_week) AND (SELECT end_date FROM this_week)), 0),
 			COALESCE((SELECT COUNT(*)::int FROM tasks WHERE user_id = $1 AND status = 'done' AND scheduled_date BETWEEN (SELECT start_date FROM last_week) AND (SELECT end_date FROM last_week)), 0),
-			COALESCE((SELECT COALESCE(SUM(duration_minutes), 0)::int FROM focus_sessions WHERE user_id = $1 AND start_time::date BETWEEN (SELECT start_date FROM this_week) AND (SELECT end_date FROM this_week)), 0),
-			COALESCE((SELECT COALESCE(SUM(duration_minutes), 0)::int FROM focus_sessions WHERE user_id = $1 AND start_time::date BETWEEN (SELECT start_date FROM last_week) AND (SELECT end_date FROM last_week)), 0)
-	`, userID).Scan(
+			COALESCE((SELECT COALESCE(SUM(duration_minutes), 0)::int FROM focus_sessions WHERE user_id = $1 AND (start_time AT TIME ZONE $6)::date BETWEEN (SELECT start_date FROM this_week) AND (SELECT end_date FROM this_week)), 0),
+			COALESCE((SELECT COALESCE(SUM(duration_minutes), 0)::int FROM focus_sessions WHERE user_id = $1 AND (start_time AT TIME ZONE $6)::date BETWEEN (SELECT start_date FROM last_week) AND (SELECT end_date FROM last_week)), 0)
+	`, userID, thisWeekStart, thisWeekEnd, lastWeekStart, lastWeekEnd, dashboardTimezone).Scan(
 		&comp.TasksDoneThisWeek,
 		&comp.TasksDoneLastWeek,
 		&comp.FocusMinutesThisWeek,
@@ -551,10 +581,10 @@ func (model DashboardModel) activeFocusSession(ctx context.Context, userID strin
 		LEFT JOIN tasks t ON t.id = afs.task_id AND t.user_id = afs.user_id
 		WHERE afs.user_id = $1
 		  AND afs.status IN ('running', 'paused')
-		  AND afs.started_at::date = CURRENT_DATE
+		  AND (afs.started_at AT TIME ZONE $2)::date = (now() AT TIME ZONE $2)::date
 		ORDER BY afs.started_at DESC
 		LIMIT 1
-	`, userID)
+	`, userID, dashboardTimezone)
 	var session DashboardFocusSession
 	var taskID *string
 	err := row.Scan(&session.ID, &taskID, &session.TaskTitle, &session.StartTime, &session.DurationMinutes)

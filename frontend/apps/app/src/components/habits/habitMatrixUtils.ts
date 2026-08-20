@@ -54,7 +54,19 @@ export function isScheduledOn(habit: Habit, dateKey: string): boolean {
 export function isHabitMet(habit: Habit, value: number): boolean {
   if (habit.type === "boolean") return value >= 1
   if (habit.target_value === null || habit.target_value === undefined) return value > 0
+  if (habit.comparison_operator === "lte") return value <= habit.target_value
+  if (habit.comparison_operator === "eq") return value === habit.target_value
+  if (habit.comparison_operator === "between") {
+    if (habit.target_value_max === null || habit.target_value_max === undefined) return false
+    return value >= habit.target_value && value <= habit.target_value_max
+  }
   return value >= habit.target_value
+}
+
+export function defaultLogValueForHabit(habit: Habit): number {
+  if (habit.type === "boolean") return 1
+  if (habit.target_value === null || habit.target_value === undefined) return 1
+  return habit.target_value
 }
 
 export function rangeLabel(range: DateRange, view: "week" | "month"): string {

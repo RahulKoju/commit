@@ -1,4 +1,4 @@
-import { useMemo } from "react"
+import { useCallback, useMemo } from "react"
 import { Button } from "@workspace/ui/components/button"
 import {
   Table,
@@ -14,6 +14,7 @@ import { useLogHabit } from "@/hooks/useHabits"
 import type { Habit, HabitMatrixLog } from "@/types/habit.types"
 import { HabitCell } from "./HabitCell"
 import {
+  defaultLogValueForHabit,
   isHabitMet,
   isScheduledOn,
   listDateKeys,
@@ -45,17 +46,15 @@ export function HabitsMatrix({
     return map
   }, [logs])
 
-  function valueFor(habitID: string, dateKey: string): number {
+  const valueFor = useCallback((habitID: string, dateKey: string): number => {
     return logsByKey.get(`${habitID}|${dateKey}`) ?? 0
-  }
+  }, [logsByKey])
 
   function toggleHabit(habit: Habit, dateKey: string, currentValue: number) {
     const nextValue =
       isHabitMet(habit, currentValue)
         ? 0
-        : habit.type === "numeric" && habit.target_value !== null && habit.target_value !== undefined
-          ? habit.target_value
-          : 1
+        : defaultLogValueForHabit(habit)
     void logHabit.mutateAsync({ habitId: habit.id, input: { logged_date: dateKey, value: nextValue } })
   }
 
@@ -75,7 +74,7 @@ export function HabitsMatrix({
         percent: scheduled.length > 0 ? Math.round((completed / scheduled.length) * 100) : null,
       }
     })
-  }, [dates, habits, logsByKey, today])
+  }, [dates, habits, today, valueFor])
 
   const habitAverages = useMemo(() => {
     return habits.map((habit) => {
@@ -94,17 +93,18 @@ export function HabitsMatrix({
         scheduledDays,
       }
     })
-  }, [habits, dates, logsByKey, today])
+  }, [habits, dates, today, valueFor])
 
   return (
     <TooltipProvider delayDuration={200}>
-      <div className="overflow-x-auto rounded-xl border">
-        <Table className="min-w-max">
+      <div className="relative rounded-xl border">
+        <div className="habit-matrix-scroll overflow-x-auto overscroll-x-contain pb-2">
+          <Table className="min-w-max">
           <TableHeader>
             <TableRow>
-              <TableHead className="sticky left-0 bg-background text-muted-foreground">Date</TableHead>
+              <TableHead className="sticky left-0 z-10 min-w-24 bg-background text-muted-foreground">Date</TableHead>
               {habits.map((habit) => (
-                <TableHead key={habit.id} className="min-w-20 px-2 text-center">
+                <TableHead key={habit.id} className="min-w-16 px-1 text-center sm:min-w-20 sm:px-2">
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button
@@ -112,7 +112,8 @@ export function HabitsMatrix({
                         variant="ghost"
                         size="sm"
                         onClick={() => onOpenHabit(habit)}
-                        className="max-w-28 truncate font-medium"
+                        title={habit.name}
+                        className="max-w-16 truncate px-1 text-xs font-medium sm:max-w-28 sm:px-3 sm:text-sm"
                       >
                         {habit.name}
                       </Button>
@@ -127,7 +128,7 @@ export function HabitsMatrix({
           <TableBody>
             {dayStats.map(({ dateKey, isFuture, scheduledCount, completed, percent }) => (
               <TableRow key={dateKey} className={isFuture ? "opacity-40" : undefined}>
-                <TableCell className="sticky left-0 bg-background whitespace-nowrap text-sm">
+                <TableCell className="sticky left-0 z-10 whitespace-nowrap bg-background text-xs sm:text-sm">
                   <span className="font-medium">
                     {new Date(`${dateKey}T00:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
                   </span>
@@ -141,7 +142,7 @@ export function HabitsMatrix({
                   const scheduled = isScheduledOn(habit, dateKey)
                   const disabled = !scheduled || isFuture
                   return (
-                    <TableCell key={habit.id} className="px-2 py-2 text-center">
+                    <TableCell key={habit.id} className="px-1 py-2 text-center sm:px-2">
                       <HabitCell
                         habit={habit}
                         dateKey={dateKey}
@@ -153,7 +154,7 @@ export function HabitsMatrix({
                     </TableCell>
                   )
                 })}
-                <TableCell className="px-2 py-2 text-center">
+                <TableCell className="px-1 py-2 text-center sm:px-2">
                   {isFuture ? (
                     <span className="text-xs text-muted-foreground">—</span>
                   ) : (
@@ -165,9 +166,9 @@ export function HabitsMatrix({
               </TableRow>
             ))}
             <TableRow className="bg-muted/50">
-              <TableCell className="sticky left-0 bg-muted/50 font-semibold">Average</TableCell>
+              <TableCell className="sticky left-0 z-10 bg-muted/50 font-semibold">Average</TableCell>
               {habitAverages.map(({ habit, percent }) => (
-                <TableCell key={habit.id} className="px-2 py-2 text-center font-medium">
+                <TableCell key={habit.id} className="px-1 py-2 text-center font-medium sm:px-2">
                   {percent === null ? "—" : `${percent}%`}
                 </TableCell>
               ))}
@@ -175,6 +176,8 @@ export function HabitsMatrix({
             </TableRow>
           </TableBody>
         </Table>
+        </div>
+        <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 right-0 w-8 rounded-r-xl bg-linear-to-l from-background to-transparent" />
       </div>
     </TooltipProvider>
   )

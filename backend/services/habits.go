@@ -25,32 +25,36 @@ type UpdateHabitCategoryInput struct {
 }
 
 type CreateHabitInput struct {
-	UserID        string
-	CategoryID    string
-	Name          string
-	Description   string
-	Type          string
-	TargetValue   *float64
-	TargetUnit    *string
-	FrequencyType string
-	FrequencyDays []int
-	WeeklyGoal    int
-	SortOrder     int
+	UserID             string
+	CategoryID         string
+	Name               string
+	Description        string
+	Type               string
+	TargetValue        *float64
+	TargetValueMax     *float64
+	ComparisonOperator string
+	TargetUnit         *string
+	FrequencyType      string
+	FrequencyDays      []int
+	WeeklyGoal         int
+	SortOrder          int
 }
 
 type UpdateHabitInput struct {
-	UserID        string
-	ID            string
-	CategoryID    *string
-	Name          *string
-	Description   *string
-	Type          *string
-	TargetValue   *float64
-	TargetUnit    *string
-	FrequencyType *string
-	FrequencyDays *[]int
-	WeeklyGoal    *int
-	SortOrder     *int
+	UserID             string
+	ID                 string
+	CategoryID         *string
+	Name               *string
+	Description        *string
+	Type               *string
+	TargetValue        *float64
+	TargetValueMax     *float64
+	ComparisonOperator *string
+	TargetUnit         *string
+	FrequencyType      *string
+	FrequencyDays      *[]int
+	WeeklyGoal         *int
+	SortOrder          *int
 }
 
 type LogHabitInput struct {
@@ -108,18 +112,20 @@ func (service HabitService) UpdateHabit(ctx context.Context, input UpdateHabitIn
 	}
 
 	params := models.UpdateHabitParams{
-		UserID:        input.UserID,
-		ID:            input.ID,
-		CategoryID:    current.CategoryID,
-		Name:          current.Name,
-		Description:   current.Description,
-		Type:          current.Type,
-		TargetValue:   current.TargetValue,
-		TargetUnit:    current.TargetUnit,
-		FrequencyType: current.FrequencyType,
-		FrequencyDays: current.FrequencyDays,
-		WeeklyGoal:    current.WeeklyGoal,
-		SortOrder:     current.SortOrder,
+		UserID:             input.UserID,
+		ID:                 input.ID,
+		CategoryID:         current.CategoryID,
+		Name:               current.Name,
+		Description:        current.Description,
+		Type:               current.Type,
+		TargetValue:        current.TargetValue,
+		TargetValueMax:     current.TargetValueMax,
+		ComparisonOperator: current.ComparisonOperator,
+		TargetUnit:         current.TargetUnit,
+		FrequencyType:      current.FrequencyType,
+		FrequencyDays:      current.FrequencyDays,
+		WeeklyGoal:         current.WeeklyGoal,
+		SortOrder:          current.SortOrder,
 	}
 	if input.CategoryID != nil {
 		params.CategoryID = strings.TrimSpace(*input.CategoryID)
@@ -139,6 +145,16 @@ func (service HabitService) UpdateHabit(ctx context.Context, input UpdateHabitIn
 	}
 	if input.TargetValue != nil {
 		params.TargetValue = input.TargetValue
+	}
+	if input.TargetValueMax != nil {
+		params.TargetValueMax = input.TargetValueMax
+	}
+	if input.ComparisonOperator != nil {
+		comparisonOperator, err := parseComparisonOperator(*input.ComparisonOperator)
+		if err != nil {
+			return models.Habit{}, err
+		}
+		params.ComparisonOperator = comparisonOperator
 	}
 	if input.TargetUnit != nil {
 		unit := strings.TrimSpace(*input.TargetUnit)
@@ -160,7 +176,7 @@ func (service HabitService) UpdateHabit(ctx context.Context, input UpdateHabitIn
 	if input.SortOrder != nil {
 		params.SortOrder = *input.SortOrder
 	}
-	if err := validateHabit(params.Name, params.CategoryID, params.WeeklyGoal); err != nil {
+	if err := validateHabit(params.Name, params.CategoryID, params.Type, params.TargetValue, params.TargetValueMax, params.ComparisonOperator, params.WeeklyGoal); err != nil {
 		return models.Habit{}, err
 	}
 
@@ -223,13 +239,17 @@ func createHabitParams(input CreateHabitInput) (models.CreateHabitParams, error)
 	if err != nil {
 		return models.CreateHabitParams{}, err
 	}
+	comparisonOperator, err := parseComparisonOperator(input.ComparisonOperator)
+	if err != nil {
+		return models.CreateHabitParams{}, err
+	}
 	weeklyGoal := input.WeeklyGoal
 	if weeklyGoal == 0 {
 		weeklyGoal = 7
 	}
 	name := strings.TrimSpace(input.Name)
 	categoryID := strings.TrimSpace(input.CategoryID)
-	if err := validateHabit(name, categoryID, weeklyGoal); err != nil {
+	if err := validateHabit(name, categoryID, habitType, input.TargetValue, input.TargetValueMax, comparisonOperator, weeklyGoal); err != nil {
 		return models.CreateHabitParams{}, err
 	}
 	var unit *string
@@ -243,18 +263,35 @@ func createHabitParams(input CreateHabitInput) (models.CreateHabitParams, error)
 	}
 
 	return models.CreateHabitParams{
-		UserID:        input.UserID,
-		CategoryID:    categoryID,
-		Name:          name,
-		Description:   input.Description,
-		Type:          habitType,
-		TargetValue:   input.TargetValue,
-		TargetUnit:    unit,
-		FrequencyType: frequencyType,
-		FrequencyDays: frequencyDays,
-		WeeklyGoal:    weeklyGoal,
-		SortOrder:     input.SortOrder,
+		UserID:             input.UserID,
+		CategoryID:         categoryID,
+		Name:               name,
+		Description:        input.Description,
+		Type:               habitType,
+		TargetValue:        input.TargetValue,
+		TargetValueMax:     input.TargetValueMax,
+		ComparisonOperator: comparisonOperator,
+		TargetUnit:         unit,
+		FrequencyType:      frequencyType,
+		FrequencyDays:      frequencyDays,
+		WeeklyGoal:         weeklyGoal,
+		SortOrder:          input.SortOrder,
 	}, nil
+}
+
+func parseComparisonOperator(value string) (models.HabitComparisonOperator, error) {
+	switch models.HabitComparisonOperator(defaultHabitString(value, string(models.HabitComparisonGTE))) {
+	case models.HabitComparisonGTE:
+		return models.HabitComparisonGTE, nil
+	case models.HabitComparisonLTE:
+		return models.HabitComparisonLTE, nil
+	case models.HabitComparisonEQ:
+		return models.HabitComparisonEQ, nil
+	case models.HabitComparisonBetween:
+		return models.HabitComparisonBetween, nil
+	default:
+		return "", fmt.Errorf("invalid comparison operator")
+	}
 }
 
 func parseHabitType(value string) (models.HabitType, error) {
@@ -279,7 +316,7 @@ func parseFrequencyType(value string) (models.HabitFrequencyType, error) {
 	}
 }
 
-func validateHabit(name string, categoryID string, weeklyGoal int) error {
+func validateHabit(name string, categoryID string, habitType models.HabitType, targetValue *float64, targetValueMax *float64, comparisonOperator models.HabitComparisonOperator, weeklyGoal int) error {
 	if strings.TrimSpace(name) == "" {
 		return fmt.Errorf("habit name is required")
 	}
@@ -288,6 +325,17 @@ func validateHabit(name string, categoryID string, weeklyGoal int) error {
 	}
 	if weeklyGoal <= 0 {
 		return fmt.Errorf("weekly_goal must be greater than 0")
+	}
+	if habitType != models.HabitTypeNumeric {
+		return nil
+	}
+	if comparisonOperator == models.HabitComparisonBetween {
+		if targetValue == nil || targetValueMax == nil {
+			return fmt.Errorf("between habits require minimum and maximum target values")
+		}
+		if *targetValueMax <= *targetValue {
+			return fmt.Errorf("target_value_max must be greater than target_value")
+		}
 	}
 	return nil
 }
