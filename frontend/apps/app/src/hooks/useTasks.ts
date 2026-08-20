@@ -90,10 +90,7 @@ function normalizeCreateTaskInput(input: CreateTaskInput): CreateTaskInput {
 }
 
 function normalizeUpdateTaskInput(input: UpdateTaskInput): UpdateTaskInput {
-  return {
-    ...input,
-    scheduled_date: input.scheduled_date ?? "",
-    recurrence_rule: input.recurrence_rule ?? "",
-    estimated_minutes: input.estimated_minutes ?? null,
-  }
+  return Object.fromEntries(
+    Object.entries(input).filter(([, value]) => value !== undefined)
+  ) as UpdateTaskInput
 }
