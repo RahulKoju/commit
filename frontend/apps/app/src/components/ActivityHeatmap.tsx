@@ -36,7 +36,7 @@ export function ActivityHeatmap({ data }: { data: HeatmapDataItem[] }) {
   )
 }
 
-export const INTENSITY_COLORS = {
+const INTENSITY_COLORS = {
   0: "var(--color-muted)",
   1: "var(--color-green-200)",
   2: "var(--color-green-400)",
@@ -44,7 +44,7 @@ export const INTENSITY_COLORS = {
   4: "var(--color-green-800)",
 }
 
-export type WeekGrid = (HeatmapDataItem | null)[][]
+type WeekGrid = (HeatmapDataItem | null)[][]
 
 function buildWeeks(data: HeatmapDataItem[]): WeekGrid {
   if (data.length === 0) return []
