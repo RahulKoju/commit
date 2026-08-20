@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 
 import { apiFetch } from "@/lib/api"
+import { dashboardQueryKeys } from "@/hooks/useDashboard"
 import { appendPagination, type PaginationParams } from "@/types/common.types"
 import {
   taskResponseSchema,
@@ -36,7 +37,10 @@ export function useCreateTask() {
         body: normalizeCreateTaskInput(input),
         schema: taskResponseSchema,
       }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: taskQueryKeys.all }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: taskQueryKeys.all })
+      queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.all })
+    },
   })
 }
 
@@ -49,7 +53,10 @@ export function useUpdateTask() {
         body: normalizeUpdateTaskInput(input),
         schema: taskResponseSchema,
       }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: taskQueryKeys.all }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: taskQueryKeys.all })
+      queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.all })
+    },
   })
 }
 
@@ -58,7 +65,10 @@ export function useDeleteTask() {
   return useMutation({
     mutationFn: (id: string) =>
       apiFetch<undefined>(`/api/v1/tasks/${id}`, { method: "DELETE" }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: taskQueryKeys.all }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: taskQueryKeys.all })
+      queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.all })
+    },
   })
 }
 

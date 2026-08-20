@@ -44,7 +44,7 @@ func (handler DashboardHandler) ActivityHeatmap(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"heatmap": heatmap})
+	c.JSON(http.StatusOK, heatmap)
 }
 
 func (handler DashboardHandler) GetLayout(c *gin.Context) {

@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 
 import { apiFetch } from "@/lib/api"
+import { dashboardQueryKeys } from "@/hooks/useDashboard"
 import {
   reminderResponseSchema,
   remindersResponseSchema,
@@ -36,7 +37,10 @@ export function useCreateReminder(noteId: string) {
         body: input,
         schema: reminderResponseSchema,
       }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: reminderQueryKeys.all }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: reminderQueryKeys.all })
+      queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.all })
+    },
   })
 }
 
@@ -49,7 +53,10 @@ export function useUpdateReminder(noteId: string) {
         body: input,
         schema: reminderResponseSchema,
       }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: reminderQueryKeys.all }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: reminderQueryKeys.all })
+      queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.all })
+    },
   })
 }
 
@@ -58,7 +65,10 @@ export function useDeleteReminder(noteId: string) {
   return useMutation({
     mutationFn: (id: string) =>
       apiFetch<undefined>(`/api/v1/notes/${noteId}/reminders/${id}`, { method: "DELETE" }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: reminderQueryKeys.all }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: reminderQueryKeys.all })
+      queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.all })
+    },
   })
 }
 

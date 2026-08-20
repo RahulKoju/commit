@@ -2,8 +2,8 @@ import { useMemo } from "react"
 
 export type HeatmapDataItem = {
   date: string
-  total: number
-  completed: number
+  level: number
+  title?: string
 }
 
 export function ActivityHeatmap({ data }: { data: HeatmapDataItem[] }) {
@@ -15,8 +15,7 @@ export function ActivityHeatmap({ data }: { data: HeatmapDataItem[] }) {
         {weeks.map((week, wi) =>
           week.map((day, di) => {
             if (!day) return null
-            const intensity = day.total > 0 ? Math.round((day.completed / day.total) * 4) : 0
-            const fill = INTENSITY_COLORS[intensity as keyof typeof INTENSITY_COLORS]
+            const fill = INTENSITY_COLORS[day.level as keyof typeof INTENSITY_COLORS]
             return (
               <rect
                 key={day.date}
@@ -27,7 +26,7 @@ export function ActivityHeatmap({ data }: { data: HeatmapDataItem[] }) {
                 rx={2}
                 fill={fill}
               >
-                <title>{`${day.date}: ${day.completed}/${day.total}`}</title>
+                <title>{day.title ?? day.date}</title>
               </rect>
             )
           }),
@@ -37,7 +36,7 @@ export function ActivityHeatmap({ data }: { data: HeatmapDataItem[] }) {
   )
 }
 
-const INTENSITY_COLORS = {
+export const INTENSITY_COLORS = {
   0: "var(--color-muted)",
   1: "var(--color-green-200)",
   2: "var(--color-green-400)",
@@ -45,7 +44,7 @@ const INTENSITY_COLORS = {
   4: "var(--color-green-800)",
 }
 
-type WeekGrid = (HeatmapDataItem | null)[][]
+export type WeekGrid = (HeatmapDataItem | null)[][]
 
 function buildWeeks(data: HeatmapDataItem[]): WeekGrid {
   if (data.length === 0) return []

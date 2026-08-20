@@ -18,7 +18,6 @@ import {
   YAxis,
   Tooltip,
   ResponsiveContainer,
-  Legend,
   ReferenceLine,
 } from "recharts"
 import { Button } from "@workspace/ui/components/button"
@@ -48,6 +47,7 @@ const DEFAULT_WIDGET_ORDER = [
   "habit-chart",
   "productivity-chart",
   "activity-heatmap",
+  "overall-activity-heatmap",
   "recent-notes",
 ]
 
@@ -56,13 +56,18 @@ const WIDGET_REGISTRY: WidgetDef[] = [
   { id: "habit-chart", label: "Weekly habits", Component: HabitChartWidget },
   {
     id: "productivity-chart",
-    label: "Weekly productivity",
+    label: "Everything else",
     Component: ProductivityChartWidget,
   },
   {
     id: "activity-heatmap",
-    label: "Activity heatmap",
+    label: "Habits heatmap",
     Component: ActivityHeatmapWidget,
+  },
+  {
+    id: "overall-activity-heatmap",
+    label: "Overall activity heatmap",
+    Component: OverallActivityHeatmapWidget,
   },
   { id: "recent-notes", label: "Recent notes", Component: RecentNotesWidget },
 ]
@@ -343,7 +348,7 @@ function HabitChartWidget({
   )
 }
 
-/* ─── Widget: Productivity chart ─── */
+/* ─── Widget: Everything else chart ─── */
 function ProductivityChartWidget({
   summary,
 }: {
@@ -351,76 +356,110 @@ function ProductivityChartWidget({
   heatmapQuery: ReturnType<typeof useActivityHeatmap>
 }) {
   const data = productivityData(summary.weekly_productivity)
-  const separatorIndex = data.length > 7 ? data.length - 7 : -1
   return (
     <div className="rounded-xl border bg-background p-4">
-      <h2 className="font-semibold">Productivity (last 14 days)</h2>
-      <p className="text-xs text-muted-foreground">Last week vs this week</p>
-      <div className="mt-4">
-        <ResponsiveContainer width="100%" height={200}>
-          <AreaChart data={data}>
-            <XAxis
-              dataKey="day"
-              tick={{ fontSize: 12 }}
-              axisLine={false}
-              tickLine={false}
-            />
-            <YAxis hide />
-            <Tooltip
-              contentStyle={{
-                fontSize: 13,
-                borderRadius: 8,
-                border: "1px solid var(--color-border)",
-              }}
-            />
-            <Legend wrapperStyle={{ fontSize: 12 }} />
-            <Area
-              type="monotone"
-              dataKey="tasks"
-              name="Tasks"
-              stackId="a"
-              stroke="var(--color-primary)"
-              fill="var(--color-primary)"
-              fillOpacity={0.4}
-            />
-            <Area
-              type="monotone"
-              dataKey="habits"
-              name="Habits"
-              stackId="a"
-              stroke="#22c55e"
-              fill="#22c55e"
-              fillOpacity={0.4}
-            />
-            {separatorIndex > 0 ? (
-              <ReferenceLine
-                x={data[separatorIndex]?.day}
-                stroke="var(--color-border)"
-                strokeDasharray="4 4"
-              />
-            ) : null}
-          </AreaChart>
-        </ResponsiveContainer>
+      <h2 className="font-semibold">Everything else (last 14 days)</h2>
+      <p className="text-xs text-muted-foreground">
+        Tasks completed, focus minutes, notes &amp; reminders created
+      </p>
+      <div className="mt-4 grid gap-4 md:grid-cols-3">
+        <MiniAreaChart data={data} dataKey="tasks" label="Tasks completed" color="var(--color-primary)" />
+        <MiniAreaChart data={data} dataKey="focus" label="Focus minutes" color="#8b5cf6" />
+        <MiniAreaChart data={data} dataKey="created" label="Notes + reminders" color="#22c55e" />
       </div>
     </div>
   )
 }
 
-/* ─── Widget: Activity heatmap ─── */
+function MiniAreaChart({
+  data,
+  dataKey,
+  label,
+  color,
+}: {
+  data: { day: string; [key: string]: string | number }[]
+  dataKey: string
+  label: string
+  color: string
+}) {
+  return (
+    <div>
+      <p className="mb-1 text-xs font-medium text-muted-foreground">{label}</p>
+      <ResponsiveContainer width="100%" height={140}>
+        <AreaChart data={data}>
+          <XAxis dataKey="day" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+          <YAxis hide />
+          <Tooltip
+            contentStyle={{
+              fontSize: 13,
+              borderRadius: 8,
+              border: "1px solid var(--color-border)",
+            }}
+          />
+          <Area type="monotone" dataKey={dataKey} stroke={color} fill={color} fillOpacity={0.35} />
+        </AreaChart>
+      </ResponsiveContainer>
+    </div>
+  )
+}
+
+/* ─── Widget: Habits heatmap ─── */
 function ActivityHeatmapWidget({
   heatmapQuery,
 }: {
   summary: DashboardSummary
   heatmapQuery: ReturnType<typeof useActivityHeatmap>
 }) {
+  const items = useMemo(
+    () =>
+      (heatmapQuery.data?.habit_heatmap ?? []).map((item) => ({
+        date: item.date,
+        level: item.total > 0 ? Math.round((item.completed / item.total) * 4) : 0,
+        title: `${item.date}: ${item.completed}/${item.total} habits`,
+      })),
+    [heatmapQuery.data]
+  )
   return (
     <div className="rounded-xl border bg-background p-4">
-      <h2 className="font-semibold">Activity</h2>
+      <h2 className="font-semibold">Habits</h2>
       <div className="mt-4">
         {heatmapQuery.isLoading ? (
           <p className="text-sm text-muted-foreground">Loading heatmap...</p>
-        ) : heatmapQuery.data?.heatmap ? (
-          <ActivityHeatmap data={heatmapQuery.data.heatmap} />
+        ) : items.length > 0 ? (
+          <ActivityHeatmap data={items} />
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
+/* ─── Widget: Overall activity heatmap ─── */
+function OverallActivityHeatmapWidget({
+  heatmapQuery,
+}: {
+  summary: DashboardSummary
+  heatmapQuery: ReturnType<typeof useActivityHeatmap>
+}) {
+  const items = useMemo(
+    () =>
+      (heatmapQuery.data?.activity_heatmap ?? []).map((item) => ({
+        date: item.date,
+        level: item.level,
+        title: `${item.date}: ${item.points} points`,
+      })),
+    [heatmapQuery.data]
+  )
+  return (
+    <div className="rounded-xl border bg-background p-4">
+      <h2 className="font-semibold">Overall activity</h2>
+      <p className="text-xs text-muted-foreground">
+        Tasks, focus, notes &amp; reminders combined
+      </p>
+      <div className="mt-4">
+        {heatmapQuery.isLoading ? (
+          <p className="text-sm text-muted-foreground">Loading heatmap...</p>
+        ) : items.length > 0 ? (
+          <ActivityHeatmap data={items} />
         ) : null}
       </div>
     </div>
@@ -545,6 +584,7 @@ function productivityData(items: DashboardSummary["weekly_productivity"]) {
   return items.map((item) => ({
     day: shortDay(item.date),
     tasks: item.tasks_done,
-    habits: item.habits_checked,
+    focus: item.focus_minutes,
+    created: item.notes_created + item.reminders_created,
   }))
 }

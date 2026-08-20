@@ -19,7 +19,7 @@ func (service DashboardService) Summary(ctx context.Context, userID string) (mod
 	return service.dashboard.Summary(ctx, userID)
 }
 
-func (service DashboardService) ActivityHeatmap(ctx context.Context, userID string, days int) ([]models.ActivityHeatmapItem, error) {
+func (service DashboardService) ActivityHeatmap(ctx context.Context, userID string, days int) (models.DashboardHeatmap, error) {
 	return service.dashboard.ActivityHeatmap(ctx, userID, days)
 }
 
