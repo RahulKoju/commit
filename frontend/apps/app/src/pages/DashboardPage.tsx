@@ -358,9 +358,9 @@ function ProductivityChartWidget({
         Tasks completed, focus minutes, notes &amp; reminders created
       </p>
       <div className="mt-4 grid gap-4 md:grid-cols-3">
-        <MiniAreaChart data={data} dataKey="tasks" label="Tasks completed" color="var(--color-primary)" />
-        <MiniAreaChart data={data} dataKey="focus" label="Focus minutes" color="#8b5cf6" />
-        <MiniAreaChart data={data} dataKey="created" label="Notes + reminders" color="#22c55e" />
+        <MiniAreaChart data={data} dataKey="tasks" label="Tasks completed" valueLabel="tasks completed" color="var(--color-primary)" />
+        <MiniAreaChart data={data} dataKey="focus" label="Focus minutes" valueLabel="focus minutes" color="#8b5cf6" />
+        <MiniAreaChart data={data} dataKey="created" label="Notes + reminders" valueLabel="notes/reminders created" color="#22c55e" />
       </div>
     </div>
   )
@@ -370,11 +370,13 @@ function MiniAreaChart({
   data,
   dataKey,
   label,
+  valueLabel,
   color,
 }: {
-  data: { day: string; [key: string]: string | number }[]
+  data: { date: string; day: string; [key: string]: string | number }[]
   dataKey: string
   label: string
+  valueLabel: string
   color: string
 }) {
   return (
@@ -382,18 +384,43 @@ function MiniAreaChart({
       <p className="mb-1 text-xs font-medium text-muted-foreground">{label}</p>
       <ResponsiveContainer width="100%" height={140}>
         <AreaChart data={data}>
-          <XAxis dataKey="day" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+          <XAxis
+            dataKey="date"
+            tickFormatter={shortDay}
+            tick={{ fontSize: 11 }}
+            axisLine={false}
+            tickLine={false}
+          />
           <YAxis hide />
           <Tooltip
-            contentStyle={{
-              fontSize: 13,
-              borderRadius: 8,
-              border: "1px solid var(--color-border)",
-            }}
+            content={<MiniChartTooltip valueLabel={valueLabel} />}
           />
           <Area type="monotone" dataKey={dataKey} stroke={color} fill={color} fillOpacity={0.35} />
         </AreaChart>
       </ResponsiveContainer>
+    </div>
+  )
+}
+
+function MiniChartTooltip({
+  active,
+  payload,
+  valueLabel,
+}: {
+  active?: boolean
+  payload?: Array<{ payload?: MiniChartDatum; value?: number }>
+  valueLabel: string
+}) {
+  if (!active || !payload?.length) return null
+  const item = payload[0]?.payload
+  if (!item) return null
+  const value = payload[0]?.value ?? 0
+  return (
+    <div className="rounded-lg border bg-background px-3 py-2 text-sm shadow-sm">
+      <p className="font-medium">{formatDateKey(item.date)}</p>
+      <p className="text-muted-foreground">
+        {value} {valueLabel}
+      </p>
     </div>
   )
 }
@@ -607,6 +634,14 @@ type HabitChartDatum = {
   total: number
 }
 
+type MiniChartDatum = {
+  date: string
+  day: string
+  tasks: number
+  focus: number
+  created: number
+}
+
 function chartData(items: DashboardSummary["weekly_habit_chart"]) {
   return items.map((item): HabitChartDatum => ({
     date: item.date,
@@ -616,7 +651,8 @@ function chartData(items: DashboardSummary["weekly_habit_chart"]) {
 }
 
 function productivityData(items: DashboardSummary["weekly_productivity"]) {
-  return items.map((item) => ({
+  return items.map((item): MiniChartDatum => ({
+    date: item.date,
     day: shortDay(item.date),
     tasks: item.tasks_done,
     focus: item.focus_minutes,
