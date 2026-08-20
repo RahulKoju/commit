@@ -21,6 +21,7 @@ export const habitSchema = z.object({
   category_id: z.string().uuid(),
   category_name: z.string(),
   name: z.string(),
+  icon: z.string().nullable(),
   description: z.string(),
   type: habitTypeSchema,
   target_value: z.number().nullable(),
@@ -133,6 +134,7 @@ export type UpdateHabitCategoryInput = {
 export type CreateHabitInput = {
   category_id: string
   name: string
+  icon?: string
   description: string
   type: HabitType
   target_value?: number
@@ -148,6 +150,7 @@ export type CreateHabitInput = {
 export type UpdateHabitInput = {
   category_id?: string
   name?: string
+  icon?: string
   description?: string
   type?: HabitType
   target_value?: number

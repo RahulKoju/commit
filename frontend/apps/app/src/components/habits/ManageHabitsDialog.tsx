@@ -29,6 +29,7 @@ import {
   useUpdateHabitCategory,
 } from "@/hooks/useHabits"
 import type { CreateHabitInput, Habit, HabitComparisonOperator, HabitType } from "@/types/habit.types"
+import { HabitIcon } from "./HabitIcon"
 
 const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const
 const COMPARISON_OPTIONS: Array<{ value: HabitComparisonOperator; label: string }> = [
@@ -105,14 +106,17 @@ export function ManageHabitsDialog({
                 }
                 return (
                   <div key={habit.id} className="flex items-center justify-between gap-3 rounded-lg border p-3 text-sm">
-                    <div className="min-w-0">
-                      <p className="truncate font-medium">{habit.name}</p>
-                      <p className="truncate text-xs text-muted-foreground">
-                        {habit.category_name} · {habit.type}
-                        {habit.frequency_type === "weekly"
-                          ? ` · ${habit.frequency_days.length} day(s)/week`
-                          : ""}
-                      </p>
+                    <div className="flex min-w-0 items-center gap-3">
+                      <HabitIcon habit={habit} />
+                      <div className="min-w-0">
+                        <p className="truncate font-medium">{habit.name}</p>
+                        <p className="truncate text-xs text-muted-foreground">
+                          {habit.category_name} · {habit.type}
+                          {habit.frequency_type === "weekly"
+                            ? ` · ${habit.frequency_days.length} day(s)/week`
+                            : ""}
+                        </p>
+                      </div>
                     </div>
                     <div className="flex shrink-0 gap-1">
                       <button type="button" onClick={() => setEditingId(habit.id)} className="rounded p-1 text-muted-foreground hover:text-foreground" title="Edit">
@@ -196,6 +200,7 @@ function EditHabitRow({ habit, onDone }: { habit: Habit; onDone: () => void }) {
   const updateHabit = useUpdateHabit()
   const categoriesQuery = useHabitCategories()
   const [name, setName] = useState(habit.name)
+  const [icon, setIcon] = useState(habit.icon ?? "")
   const [description, setDescription] = useState(habit.description)
   const [categoryId, setCategoryId] = useState(habit.category_id)
   const [type, setType] = useState<HabitType>(habit.type)
@@ -222,6 +227,7 @@ function EditHabitRow({ habit, onDone }: { habit: Habit; onDone: () => void }) {
         habitId: habit.id,
         input: {
           name: name !== habit.name ? name : undefined,
+          icon: icon !== (habit.icon ?? "") ? icon : undefined,
           description: description !== habit.description ? description : undefined,
           category_id: categoryId !== habit.category_id ? categoryId : undefined,
           type: type !== habit.type ? type : undefined,
@@ -250,6 +256,18 @@ function EditHabitRow({ habit, onDone }: { habit: Habit; onDone: () => void }) {
       <div className="grid gap-2">
         <Label htmlFor={`edit-name-${habit.id}`}>Name</Label>
         <Input id={`edit-name-${habit.id}`} value={name} onChange={(e) => setName(e.target.value)} required />
+      </div>
+
+      <div className="grid gap-2">
+        <Label htmlFor={`edit-icon-${habit.id}`}>Icon (optional)</Label>
+        <Input
+          id={`edit-icon-${habit.id}`}
+          value={icon}
+          onChange={(e) => setIcon(e.target.value)}
+          maxLength={8}
+          placeholder="e.g. 🏃"
+          title="A single emoji shown as the habit's compact label in the matrix"
+        />
       </div>
 
       <div className="grid gap-2">
@@ -404,6 +422,18 @@ function HabitForm({ onDone }: { onDone: () => void }) {
       <div className="grid gap-2">
         <Label htmlFor="new-habit-name">Name</Label>
         <input id="new-habit-name" name="name" required placeholder="Meditate" className="h-9 rounded-md border bg-background px-3 text-sm" />
+      </div>
+
+      <div className="grid gap-2">
+        <Label htmlFor="new-habit-icon">Icon (optional)</Label>
+        <input
+          id="new-habit-icon"
+          name="icon"
+          maxLength={8}
+          placeholder="e.g. 🧘"
+          title="A single emoji shown as the habit's compact label in the matrix"
+          className="h-9 rounded-md border bg-background px-3 text-sm"
+        />
       </div>
 
       <div className="grid gap-2">
@@ -679,6 +709,7 @@ function habitInputFromFormData(formData: FormData): CreateHabitInput {
   return {
     category_id: String(formData.get("category_id") ?? ""),
     name: String(formData.get("name") ?? ""),
+    icon: String(formData.get("icon") ?? "").trim() || undefined,
     description: String(formData.get("description") ?? ""),
     type: habitType,
     target_value: habitType === "numeric" ? targetValue : undefined,

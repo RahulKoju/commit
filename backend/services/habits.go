@@ -28,6 +28,7 @@ type CreateHabitInput struct {
 	UserID             string
 	CategoryID         string
 	Name               string
+	Icon               *string
 	Description        string
 	Type               string
 	TargetValue        *float64
@@ -45,6 +46,7 @@ type UpdateHabitInput struct {
 	ID                 string
 	CategoryID         *string
 	Name               *string
+	Icon               *string
 	Description        *string
 	Type               *string
 	TargetValue        *float64
@@ -116,6 +118,7 @@ func (service HabitService) UpdateHabit(ctx context.Context, input UpdateHabitIn
 		ID:                 input.ID,
 		CategoryID:         current.CategoryID,
 		Name:               current.Name,
+		Icon:               current.Icon,
 		Description:        current.Description,
 		Type:               current.Type,
 		TargetValue:        current.TargetValue,
@@ -132,6 +135,14 @@ func (service HabitService) UpdateHabit(ctx context.Context, input UpdateHabitIn
 	}
 	if input.Name != nil {
 		params.Name = strings.TrimSpace(*input.Name)
+	}
+	if input.Icon != nil {
+		icon := strings.TrimSpace(*input.Icon)
+		if icon == "" {
+			params.Icon = nil
+		} else {
+			params.Icon = &icon
+		}
 	}
 	if input.Description != nil {
 		params.Description = *input.Description
@@ -252,6 +263,13 @@ func createHabitParams(input CreateHabitInput) (models.CreateHabitParams, error)
 	if err := validateHabit(name, categoryID, habitType, input.TargetValue, input.TargetValueMax, comparisonOperator, weeklyGoal); err != nil {
 		return models.CreateHabitParams{}, err
 	}
+	var icon *string
+	if input.Icon != nil {
+		value := strings.TrimSpace(*input.Icon)
+		if value != "" {
+			icon = &value
+		}
+	}
 	var unit *string
 	if input.TargetUnit != nil {
 		value := strings.TrimSpace(*input.TargetUnit)
@@ -266,6 +284,7 @@ func createHabitParams(input CreateHabitInput) (models.CreateHabitParams, error)
 		UserID:             input.UserID,
 		CategoryID:         categoryID,
 		Name:               name,
+		Icon:               icon,
 		Description:        input.Description,
 		Type:               habitType,
 		TargetValue:        input.TargetValue,

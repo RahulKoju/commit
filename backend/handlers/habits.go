@@ -25,6 +25,7 @@ type habitCategoryRequest struct {
 type habitRequest struct {
 	CategoryID         string   `json:"category_id" binding:"required"`
 	Name               string   `json:"name" binding:"required"`
+	Icon               *string  `json:"icon"`
 	Description        string   `json:"description"`
 	Type               string   `json:"type" binding:"required"`
 	TargetValue        *float64 `json:"target_value"`
@@ -40,6 +41,7 @@ type habitRequest struct {
 type updateHabitRequest struct {
 	CategoryID         *string  `json:"category_id"`
 	Name               *string  `json:"name"`
+	Icon               *string  `json:"icon"`
 	Description        *string  `json:"description"`
 	Type               *string  `json:"type"`
 	TargetValue        *float64 `json:"target_value"`
@@ -190,6 +192,7 @@ func (handler HabitHandler) CreateHabit(c *gin.Context) {
 		UserID:             userID,
 		CategoryID:         request.CategoryID,
 		Name:               request.Name,
+		Icon:               request.Icon,
 		Description:        request.Description,
 		Type:               request.Type,
 		TargetValue:        request.TargetValue,
@@ -225,6 +228,7 @@ func (handler HabitHandler) UpdateHabit(c *gin.Context) {
 		ID:                 c.Param("id"),
 		CategoryID:         request.CategoryID,
 		Name:               request.Name,
+		Icon:               request.Icon,
 		Description:        request.Description,
 		Type:               request.Type,
 		TargetValue:        request.TargetValue,
