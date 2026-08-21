@@ -1,0 +1,29 @@
+{
+    "$schema": "https://unpkg.com/syncpack@15.3.3/schema.json",
+    "versionGroups": [
+        {
+            "label": "Use workspace protocol for local packages",
+            "dependencies": [
+                "@workspace/**"
+            ],
+            "dependencyTypes": [
+                "dev",
+                "prod",
+                "peer"
+            ],
+            "pinVersion": "workspace:*"
+        }
+    ],
+    "semverGroups": [
+        {
+            "label": "Enforce caret ranges for all dependencies",
+            "range": "^",
+            "dependencies": [
+                "**"
+            ],
+            "packages": [
+                "**"
+            ]
+        }
+    ]
+}
