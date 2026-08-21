@@ -1,6 +1,6 @@
 import DOMPurify from "dompurify"
 import { Edit3, Eye, Link2, Plus, Trash2 } from "lucide-react"
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react"
+import { useEffect, useRef, useState, type FormEvent } from "react"
 import { Button } from "@workspace/ui/components/button"
 import { RichTextEditor } from "@workspace/ui/components/rich-text-editor"
 
@@ -12,13 +12,10 @@ export function NotesPage() {
   const [search, setSearch] = useState("")
   const notesQuery = useNotes(search)
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null)
-  const [editingNoteId, setEditingNoteId] = useState<string | null>("new")
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null)
   const [preview, setPreview] = useState(true)
   const notes = notesQuery.data?.data ?? []
-  const selectedNote = useMemo(
-    () => notes.find((note) => note.id === selectedNoteId) ?? notes[0] ?? null,
-    [notes, selectedNoteId]
-  )
+  const selectedNote = notes.find((note) => note.id === selectedNoteId) ?? notes[0] ?? null
   const activeNote = editingNoteId === "new" ? null : notes.find((note) => note.id === editingNoteId) ?? selectedNote
   const deleteNote = useDeleteNote()
 
@@ -31,7 +28,7 @@ export function NotesPage() {
       setEditingNoteId(remaining[0].id)
     } else {
       setSelectedNoteId(null)
-      setEditingNoteId("new")
+      setEditingNoteId(null)
     }
     setPreview(true)
   }
@@ -45,7 +42,7 @@ export function NotesPage() {
             Search, edit, and preview developer notes.
           </p>
         </div>
-        <Button type="button" onClick={() => { setEditingNoteId("new"); setPreview(false) }}>
+        <Button type="button" onClick={() => { setSelectedNoteId(null); setEditingNoteId("new"); setPreview(false) }}>
           <Plus className="size-4" />
           New note
         </Button>
@@ -64,7 +61,7 @@ export function NotesPage() {
                 key={note.id}
                 type="button"
                 className={`rounded-lg border p-3 text-left text-sm ${
-                  selectedNote?.id === note.id ? "bg-muted" : "bg-background hover:bg-muted/50"
+                  activeNote?.id === note.id ? "bg-muted" : "bg-background hover:bg-muted/50"
                 }`}
                 onClick={() => {
                   setSelectedNoteId(note.id)
@@ -122,8 +119,9 @@ export function NotesPage() {
           </div>
           {preview && activeNote ? (
             <NotePreview note={activeNote} />
-          ) : (
+          ) : editingNoteId === "new" || activeNote ? (
             <NoteForm
+              key={editingNoteId === "new" ? "new" : activeNote?.id}
               note={editingNoteId === "new" ? null : activeNote}
               onSaved={(note) => {
                 setSelectedNoteId(note.id)
@@ -131,6 +129,10 @@ export function NotesPage() {
                 setPreview(true)
               }}
             />
+          ) : (
+            <div className="rounded-lg border border-dashed bg-muted/20 p-6 text-sm text-muted-foreground">
+              Select a note to view, or adjust your search to find a matching note.
+            </div>
           )}
         </div>
       </div>
