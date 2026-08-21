@@ -1,5 +1,14 @@
 import DOMPurify from "dompurify"
-import { AlertTriangle, CalendarPlus, Clock, Pencil, Play, Plus, Repeat, Trash2 } from "lucide-react"
+import {
+  AlertTriangle,
+  CalendarPlus,
+  Clock,
+  Pencil,
+  Play,
+  Plus,
+  Repeat,
+  Trash2,
+} from "lucide-react"
 import { useMemo, useRef, useState, type FormEvent } from "react"
 import { useNavigate } from "react-router-dom"
 import { Button } from "@workspace/ui/components/button"
@@ -50,7 +59,10 @@ export function TasksPage() {
   const [view, setView] = useState<TaskView>("today")
   const [priority, setPriority] = useState<TaskPriority | "">("")
   const [status, setStatus] = useState<TaskStatus | "">("")
-  const filters = useMemo(() => ({ view, priority, status: view === "today" ? "" : status }), [view, priority, status])
+  const filters = useMemo(
+    () => ({ view, priority, status: view === "today" ? "" : status }),
+    [view, priority, status]
+  )
   const tasksQuery = useTasks(filters)
 
   function selectView(nextView: TaskView) {
@@ -89,7 +101,9 @@ export function TasksPage() {
           <select
             className="h-9 rounded-md border bg-background px-3"
             value={priority}
-            onChange={(event) => setPriority(event.target.value as TaskPriority | "")}
+            onChange={(event) =>
+              setPriority(event.target.value as TaskPriority | "")
+            }
           >
             <option value="">Any</option>
             {priorities.map((item) => (
@@ -99,13 +113,15 @@ export function TasksPage() {
             ))}
           </select>
         </label>
-        {view === "today" ? null : (
+        {view === "today" || view === "completed" ? null : (
           <label className="grid gap-1 text-sm">
             <span className="font-medium">Status</span>
             <select
               className="h-9 rounded-md border bg-background px-3"
               value={status}
-              onChange={(event) => setStatus(event.target.value as TaskStatus | "")}
+              onChange={(event) =>
+                setStatus(event.target.value as TaskStatus | "")
+              }
             >
               <option value="">Any</option>
               {statuses.map((item) => (
@@ -139,7 +155,7 @@ function CreateTaskPanel() {
         New task
       </Button>
       {open ? (
-        <div className="fixed inset-x-4 top-24 z-20 max-h-[calc(100vh-7rem)] overflow-y-auto rounded-xl border bg-background p-4 shadow-xl sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 sm:w-[32rem] sm:max-w-[calc(100vw-2rem)]">
+        <div className="fixed inset-x-4 top-24 z-20 max-h-[calc(100vh-7rem)] overflow-y-auto rounded-xl border bg-background p-4 shadow-xl sm:absolute sm:inset-x-auto sm:top-full sm:right-0 sm:mt-2 sm:w-[32rem] sm:max-w-[calc(100vw-2rem)]">
           <TaskForm onDone={() => setOpen(false)} />
         </div>
       ) : null}
@@ -165,7 +181,11 @@ export function TaskForm({ onDone }: { onDone: () => void }) {
       setResetToken(String(Date.now()))
       onDone()
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : "Unable to create task")
+      setError(
+        submitError instanceof Error
+          ? submitError.message
+          : "Unable to create task"
+      )
     }
   }
 
@@ -185,7 +205,11 @@ export function TaskForm({ onDone }: { onDone: () => void }) {
       <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
         <label className="grid gap-2 text-sm">
           <span className="font-medium whitespace-nowrap">Priority</span>
-          <select name="priority" defaultValue="medium" className="h-9 w-full rounded-md border bg-background px-3">
+          <select
+            name="priority"
+            defaultValue="medium"
+            className="h-9 w-full rounded-md border bg-background px-3"
+          >
             {priorities.map((item) => (
               <option key={item.value} value={item.value}>
                 {item.label}
@@ -195,7 +219,11 @@ export function TaskForm({ onDone }: { onDone: () => void }) {
         </label>
         <label className="grid gap-2 text-sm">
           <span className="font-medium whitespace-nowrap">Status</span>
-          <select name="status" defaultValue="todo" className="h-9 w-full rounded-md border bg-background px-3">
+          <select
+            name="status"
+            defaultValue="todo"
+            className="h-9 w-full rounded-md border bg-background px-3"
+          >
             {statuses.map((item) => (
               <option key={item.value} value={item.value}>
                 {item.label}
@@ -205,20 +233,34 @@ export function TaskForm({ onDone }: { onDone: () => void }) {
         </label>
         <label className="grid gap-2 text-sm">
           <span className="font-medium whitespace-nowrap">Due date</span>
-          <input name="scheduled_date" type="date" className="h-9 w-full rounded-md border bg-background px-3" />
+          <input
+            name="scheduled_date"
+            type="date"
+            className="h-9 w-full rounded-md border bg-background px-3"
+          />
         </label>
         <label className="grid gap-2 text-sm">
           <span className="font-medium whitespace-nowrap">Repeat</span>
-          <select name="recurrence_rule" className="h-9 w-full rounded-md border bg-background px-3">
+          <select
+            name="recurrence_rule"
+            className="h-9 w-full rounded-md border bg-background px-3"
+          >
             <option value="">Never</option>
             {Object.entries(recurrenceLabels).map(([value, label]) => (
-              <option key={value} value={value}>{label}</option>
+              <option key={value} value={value}>
+                {label}
+              </option>
             ))}
           </select>
         </label>
         <label className="grid gap-2 text-sm">
           <span className="font-medium whitespace-nowrap">Est. time (min)</span>
-          <input name="estimated_minutes" type="number" min={1} className="h-9 w-full rounded-md border bg-background px-3" />
+          <input
+            name="estimated_minutes"
+            type="number"
+            min={1}
+            className="h-9 w-full rounded-md border bg-background px-3"
+          />
         </label>
       </div>
       <RichTextEditor
@@ -263,7 +305,9 @@ function TaskCard({ task }: { task: Task }) {
   const navigate = useNavigate()
   const updateTask = useUpdateTask()
   const deleteTask = useDeleteTask()
-  const [editingField, setEditingField] = useState<"title" | "description" | null>(null)
+  const [editingField, setEditingField] = useState<
+    "title" | "description" | null
+  >(null)
   const [editValue, setEditValue] = useState("")
   const titleInputRef = useRef<HTMLInputElement>(null)
   const today = new Date().toISOString().slice(0, 10)
@@ -274,7 +318,10 @@ function TaskCard({ task }: { task: Task }) {
   }
 
   async function moveToToday() {
-    await updateTask.mutateAsync({ id: task.id, input: { scheduled_date: today } })
+    await updateTask.mutateAsync({
+      id: task.id,
+      input: { scheduled_date: today },
+    })
   }
 
   async function deleteCurrentTask() {
@@ -282,7 +329,11 @@ function TaskCard({ task }: { task: Task }) {
   }
 
   function startEdit(field: "title" | "description") {
-    setEditValue(field === "title" ? task.title : DOMPurify.sanitize(task.description, { ALLOWED_TAGS: [] }))
+    setEditValue(
+      field === "title"
+        ? task.title
+        : DOMPurify.sanitize(task.description, { ALLOWED_TAGS: [] })
+    )
     setEditingField(field)
   }
 
@@ -294,7 +345,10 @@ function TaskCard({ task }: { task: Task }) {
     if (field === "title") {
       await updateTask.mutateAsync({ id: task.id, input: { title: trimmed } })
     } else {
-      await updateTask.mutateAsync({ id: task.id, input: { description: trimmed } })
+      await updateTask.mutateAsync({
+        id: task.id,
+        input: { description: trimmed },
+      })
     }
   }
 
@@ -303,7 +357,11 @@ function TaskCard({ task }: { task: Task }) {
       event.preventDefault()
       saveEdit()
     }
-    if (event.key === "Enter" && (event.ctrlKey || event.metaKey) && editingField === "description") {
+    if (
+      event.key === "Enter" &&
+      (event.ctrlKey || event.metaKey) &&
+      editingField === "description"
+    ) {
       event.preventDefault()
       saveEdit()
     }
@@ -313,25 +371,29 @@ function TaskCard({ task }: { task: Task }) {
   }
 
   const statusColors: Record<TaskStatus, string> = {
-    "todo": "bg-muted text-muted-foreground border-muted-foreground/30",
-    "in-progress": "bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/30 dark:text-amber-400",
-    "done": "bg-green-100 text-green-800 border-green-300 dark:bg-green-900/30 dark:text-green-400",
+    todo: "bg-muted text-muted-foreground border-muted-foreground/30",
+    "in-progress":
+      "bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/30 dark:text-amber-400",
+    done: "bg-green-100 text-green-800 border-green-300 dark:bg-green-900/30 dark:text-green-400",
   }
 
   const priorityColors: Record<TaskPriority, string> = {
-    "high": "bg-red-100 text-red-800 border-red-300 dark:bg-red-900/30 dark:text-red-400",
-    "medium": "bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/30 dark:text-amber-400",
-    "low": "bg-muted text-muted-foreground border-muted-foreground/30",
+    high: "bg-red-100 text-red-800 border-red-300 dark:bg-red-900/30 dark:text-red-400",
+    medium:
+      "bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/30 dark:text-amber-400",
+    low: "bg-muted text-muted-foreground border-muted-foreground/30",
   }
 
   const priorityBorders: Record<TaskPriority, string> = {
-    "high": "border-l-red-500 dark:border-l-red-400",
-    "medium": "border-l-amber-500 dark:border-l-amber-400",
-    "low": "border-l-muted-foreground/30",
+    high: "border-l-red-500 dark:border-l-red-400",
+    medium: "border-l-amber-500 dark:border-l-amber-400",
+    low: "border-l-muted-foreground/30",
   }
 
   return (
-    <article className={`group rounded-xl border bg-background p-4 border-l-4 ${priorityBorders[task.priority]}`}>
+    <article
+      className={`group rounded-xl border border-l-4 bg-background p-4 ${priorityBorders[task.priority]}`}
+    >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1 space-y-1">
           <div className="flex flex-wrap items-center gap-2">
@@ -351,13 +413,17 @@ function TaskCard({ task }: { task: Task }) {
                 onClick={() => startEdit("title")}
               >
                 {task.title}
-                <Pencil className="size-3.5 opacity-0 transition-opacity group-hover/title:opacity-100 text-muted-foreground" />
+                <Pencil className="size-3.5 text-muted-foreground opacity-0 transition-opacity group-hover/title:opacity-100" />
               </h2>
             )}
-            <span className={`rounded-full border px-2 py-0.5 text-xs capitalize ${priorityColors[task.priority]}`}>
+            <span
+              className={`rounded-full border px-2 py-0.5 text-xs capitalize ${priorityColors[task.priority]}`}
+            >
               {task.priority}
             </span>
-            <span className={`rounded-full border px-2 py-0.5 text-xs ${statusColors[task.status]}`}>
+            <span
+              className={`rounded-full border px-2 py-0.5 text-xs ${statusColors[task.status]}`}
+            >
               {statusLabel(task.status)}
             </span>
           </div>
@@ -379,21 +445,30 @@ function TaskCard({ task }: { task: Task }) {
             {task.recurrence_rule ? (
               <span className="flex items-center gap-1">
                 <Repeat className="size-3" />
-                {recurrenceLabels[task.recurrence_rule as RecurrenceRule] ?? task.recurrence_rule}
+                {recurrenceLabels[task.recurrence_rule as RecurrenceRule] ??
+                  task.recurrence_rule}
               </span>
             ) : null}
             {task.estimated_minutes ? (
               <span className="flex items-center gap-1">
-                <Clock className="size-3" />
-                ~{task.estimated_minutes} min
+                <Clock className="size-3" />~{task.estimated_minutes} min
               </span>
             ) : null}
-            {task.completed_at ? <span>Completed {new Date(task.completed_at).toLocaleDateString()}</span> : null}
+            {task.completed_at ? (
+              <span>
+                Completed {new Date(task.completed_at).toLocaleDateString()}
+              </span>
+            ) : null}
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
           {isNotToday && task.status !== "done" ? (
-            <Button type="button" variant="outline" size="sm" onClick={moveToToday}>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={moveToToday}
+            >
               <CalendarPlus className="size-3.5" />
               Today
             </Button>
@@ -403,7 +478,11 @@ function TaskCard({ task }: { task: Task }) {
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => navigate("/focus", { state: { taskId: task.id, taskTitle: task.title } })}
+              onClick={() =>
+                navigate("/focus", {
+                  state: { taskId: task.id, taskTitle: task.title },
+                })
+              }
             >
               <Play className="size-3.5" />
               Focus
@@ -423,7 +502,13 @@ function TaskCard({ task }: { task: Task }) {
               </Button>
             ))}
           </div>
-          <Button type="button" variant="outline" size="icon" aria-label="Delete task" onClick={deleteCurrentTask}>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            aria-label="Delete task"
+            onClick={deleteCurrentTask}
+          >
             <Trash2 className="size-4" />
           </Button>
         </div>
@@ -439,19 +524,30 @@ function TaskCard({ task }: { task: Task }) {
             autoFocus
           />
           <div className="flex justify-end gap-2">
-            <Button type="button" size="sm" variant="outline" onClick={() => setEditingField(null)}>Cancel</Button>
-            <Button type="button" size="sm" onClick={saveEdit}>Save</Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => setEditingField(null)}
+            >
+              Cancel
+            </Button>
+            <Button type="button" size="sm" onClick={saveEdit}>
+              Save
+            </Button>
           </div>
         </div>
       ) : task.description ? (
         <div className="group/desc relative">
           <div
             className="prose prose-sm mt-3 max-w-none text-sm text-muted-foreground"
-            dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(task.description) }}
+            dangerouslySetInnerHTML={{
+              __html: DOMPurify.sanitize(task.description),
+            }}
           />
           <button
             type="button"
-            className="absolute right-0 top-0 opacity-0 transition-opacity group-hover/desc:opacity-100 text-muted-foreground hover:text-foreground"
+            className="absolute top-0 right-0 text-muted-foreground opacity-0 transition-opacity group-hover/desc:opacity-100 hover:text-foreground"
             onClick={() => startEdit("description")}
           >
             <Pencil className="size-3.5" />
@@ -460,7 +556,7 @@ function TaskCard({ task }: { task: Task }) {
       ) : (
         <button
           type="button"
-          className="mt-3 flex items-center gap-1 text-xs text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100"
+          className="mt-3 flex items-center gap-1 text-xs text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:text-foreground"
           onClick={() => startEdit("description")}
         >
           <Pencil className="size-3" />
@@ -481,7 +577,8 @@ function taskInputFromFormData(formData: FormData): CreateTaskInput {
     scheduled_date: String(formData.get("scheduled_date") ?? ""),
     status: String(formData.get("status") ?? "todo") as TaskStatus,
     recurrence_rule: String(formData.get("recurrence_rule") ?? ""),
-    estimated_minutes: estimatedMinutes && estimatedMinutes > 0 ? estimatedMinutes : null,
+    estimated_minutes:
+      estimatedMinutes && estimatedMinutes > 0 ? estimatedMinutes : null,
   }
 }
 
