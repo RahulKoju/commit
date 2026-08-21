@@ -343,7 +343,8 @@ function ReminderForm({
           type="button"
           onClick={() => setType("recurring")}
           disabled={!!existing}
-          className={`rounded-md border px-3 py-1 text-sm ${type === "recurring" ? "bg-muted font-medium" : "text-muted-foreground"}`}
+          title={existing ? "Type can't be changed after creation. Delete and recreate to switch." : undefined}
+          className={`rounded-md border px-3 py-1 text-sm ${type === "recurring" ? "bg-muted font-medium" : "text-muted-foreground"} ${existing ? "cursor-not-allowed opacity-60" : ""}`}
         >
           Recurring
         </button>
@@ -351,11 +352,17 @@ function ReminderForm({
           type="button"
           onClick={() => setType("one_time")}
           disabled={!!existing}
-          className={`rounded-md border px-3 py-1 text-sm ${type === "one_time" ? "bg-muted font-medium" : "text-muted-foreground"}`}
+          title={existing ? "Type can't be changed after creation. Delete and recreate to switch." : undefined}
+          className={`rounded-md border px-3 py-1 text-sm ${type === "one_time" ? "bg-muted font-medium" : "text-muted-foreground"} ${existing ? "cursor-not-allowed opacity-60" : ""}`}
         >
           One time
         </button>
       </div>
+      {existing ? (
+        <p className="text-xs text-muted-foreground">
+          Reminder type can&apos;t be changed after creation. Delete and recreate to switch.
+        </p>
+      ) : null}
 
       {type === "recurring" ? (
         <div className="space-y-3">

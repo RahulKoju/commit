@@ -5,7 +5,7 @@ import { apiFetch } from "@/lib/api"
 import { useCurrentUser } from "@/hooks/useAuth"
 import { useTheme } from "@/components/theme-context"
 
-export function TopBar() {
+export function TopBar({ onOpenNav }: { onOpenNav?: () => void }) {
   const { data } = useCurrentUser()
   const user = data?.user ?? null
   const { theme, toggleTheme } = useTheme()
@@ -17,7 +17,7 @@ export function TopBar() {
 
   return (
     <header className="flex h-16 items-center justify-between border-b bg-background px-4 lg:px-6">
-      <Button type="button" variant="outline" size="icon" aria-label="Open navigation" className="lg:hidden">
+      <Button type="button" variant="outline" size="icon" aria-label="Open navigation" className="lg:hidden" onClick={onOpenNav}>
         <Menu className="size-4" />
       </Button>
       <div>

@@ -28,6 +28,7 @@ const (
 	TaskViewBacklog   TaskView = "backlog"
 	TaskViewCompleted TaskView = "completed"
 	TaskViewAll       TaskView = "all"
+	TaskViewActive    TaskView = "active"
 )
 
 type Task struct {
@@ -104,6 +105,7 @@ func (model TaskModel) List(ctx context.Context, params ListTasksParams) ([]Task
 		    OR ($2 = 'today' AND status <> 'done' AND scheduled_date IS NOT NULL AND scheduled_date <= CURRENT_DATE)
 		    OR ($2 = 'backlog' AND status <> 'done' AND scheduled_date IS NULL)
 		    OR ($2 = 'completed' AND status = 'done')
+		    OR ($2 = 'active' AND status <> 'done')
 		  )
 		  AND ($3 = '' OR priority = $3)
 		  AND ($4 = '' OR status = $4)
@@ -141,6 +143,7 @@ func (model TaskModel) CountTasks(ctx context.Context, params ListTasksParams) (
 		    OR ($2 = 'today' AND status <> 'done' AND scheduled_date IS NOT NULL AND scheduled_date <= CURRENT_DATE)
 		    OR ($2 = 'backlog' AND status <> 'done' AND scheduled_date IS NULL)
 		    OR ($2 = 'completed' AND status = 'done')
+		    OR ($2 = 'active' AND status <> 'done')
 		  )
 		  AND ($3 = '' OR priority = $3)
 		  AND ($4 = '' OR status = $4)

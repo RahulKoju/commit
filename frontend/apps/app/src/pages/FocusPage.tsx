@@ -1,12 +1,14 @@
-import { BarChart3, Clock, Maximize2, Minimize2, Pause, Play, RotateCcw, Square, Target, TrendingUp } from "lucide-react"
+import { BarChart3, Check, ChevronsUpDown, Clock, Maximize2, Minimize2, Pause, Play, RotateCcw, Search, Square, Target, TrendingUp } from "lucide-react"
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react"
 import { useLocation } from "react-router-dom"
 import { Button } from "@workspace/ui/components/button"
+import { Popover, PopoverContent, PopoverTrigger } from "@workspace/ui/components/popover"
 
 import { useActiveFocusSession, useCompleteActiveFocusSession, useDiscardActiveFocusSession, useFocusSessions, useFocusStats, usePauseActiveFocusSession, useResumeActiveFocusSession, useStartActiveFocusSession } from "@/hooks/useFocus"
 import { useTasks } from "@/hooks/useTasks"
 import { useFocusStore, sessionTypeLabel } from "@/store/useFocusStore"
 import type { ActiveFocusSession, FocusSessionFilters } from "@/types/focus.types"
+import type { Task } from "@/types/task.types"
 
 const defaultDurations = {
   work: 25,
@@ -64,7 +66,7 @@ export function FocusPage() {
   const resumeActive = useResumeActiveFocusSession()
   const completeActive = useCompleteActiveFocusSession()
   const discardActive = useDiscardActiveFocusSession()
-  const tasksQuery = useTasks({ view: "all", status: "" })
+  const tasksQuery = useTasks({ view: "active", status: "" }, { limit: 100 })
   const filters = useMemo<FocusSessionFilters>(() => ({ dateFrom, dateTo }), [dateFrom, dateTo])
   const sessionsQuery = useFocusSessions(filters)
   const statsQuery = useFocusStats()
@@ -313,21 +315,12 @@ export function FocusPage() {
           <div className="grid gap-4">
             <label className="grid gap-2 text-sm">
               <span className="font-medium">Task</span>
-              <select
-                className="h-10 rounded-md border bg-background px-3"
+              <TaskPicker
+                tasks={tasksQuery.data?.data ?? []}
                 value={selectedTaskId}
-                onChange={(event) => setSelectedTaskId(event.target.value)}
+                onChange={setSelectedTaskId}
                 disabled={!!active}
-              >
-                <option value="">Select a task</option>
-                {tasksQuery.data?.data
-                  .filter((task) => task.status !== "done")
-                  .map((task) => (
-                    <option key={task.id} value={task.id}>
-                      {task.title}
-                    </option>
-                  ))}
-              </select>
+              />
             </label>
 
             <div className="rounded-xl border bg-muted/40 p-8 text-center">
@@ -514,6 +507,119 @@ export function FocusPage() {
   )
 
   return content
+}
+
+function TaskPicker({
+  tasks,
+  value,
+  onChange,
+  disabled,
+}: {
+  tasks: Task[]
+  value: string
+  onChange: (value: string) => void
+  disabled?: boolean
+}) {
+  const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState("")
+  const [highlighted, setHighlighted] = useState(0)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  const selected = tasks.find((task) => task.id === value) ?? null
+
+  const filtered = useMemo(() => {
+    const normalized = query.trim().toLowerCase()
+    if (!normalized) return tasks
+    return tasks.filter((task) => task.title.toLowerCase().includes(normalized))
+  }, [tasks, query])
+
+  useEffect(() => {
+    if (!open) return
+    const focusTimer = window.setTimeout(() => inputRef.current?.focus(), 0)
+    return () => window.clearTimeout(focusTimer)
+  }, [open])
+
+  function handleOpenChange(nextOpen: boolean) {
+    setOpen(nextOpen)
+    if (nextOpen) {
+      setQuery("")
+      setHighlighted(0)
+    }
+  }
+
+  function selectTask(task: Task) {
+    onChange(task.id)
+    setOpen(false)
+  }
+
+  return (
+    <Popover open={open} onOpenChange={handleOpenChange}>
+      <PopoverTrigger asChild disabled={disabled}>
+        <Button
+          type="button"
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          className="h-10 w-full justify-between font-normal"
+          disabled={disabled}
+        >
+          <span className="truncate">{selected ? selected.title : "Select a task"}</span>
+          <ChevronsUpDown className="size-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="start"
+        className="w-[var(--radix-popover-trigger-width)] p-0"
+        onOpenAutoFocus={(event) => event.preventDefault()}
+      >
+        <div className="flex items-center gap-2 border-b px-3">
+          <Search className="size-4 shrink-0 text-muted-foreground" />
+          <input
+            ref={inputRef}
+            value={query}
+            onChange={(event) => {
+              setQuery(event.target.value)
+              setHighlighted(0)
+            }}
+            placeholder="Type to search tasks..."
+            className="h-10 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+            onKeyDown={(event) => {
+              if (event.key === "ArrowDown") {
+                event.preventDefault()
+                setHighlighted((current) => Math.min(current + 1, filtered.length - 1))
+              } else if (event.key === "ArrowUp") {
+                event.preventDefault()
+                setHighlighted((current) => Math.max(current - 1, 0))
+              } else if (event.key === "Enter" && filtered[highlighted]) {
+                event.preventDefault()
+                selectTask(filtered[highlighted])
+              }
+            }}
+          />
+        </div>
+        <div className="max-h-60 overflow-y-auto p-1">
+          {filtered.length === 0 ? (
+            <p className="px-3 py-4 text-center text-sm text-muted-foreground">No tasks match.</p>
+          ) : (
+            filtered.map((task, index) => (
+              <button
+                key={task.id}
+                type="button"
+                onClick={() => selectTask(task)}
+                onMouseEnter={() => setHighlighted(index)}
+                className={`flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm ${
+                  index === highlighted ? "bg-muted" : ""
+                }`}
+              >
+                <span className="min-w-0 flex-1 truncate">{task.title}</span>
+                {task.id === value ? <Check className="size-4 shrink-0 text-primary" /> : null}
+              </button>
+            ))
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
+  )
 }
 
 function NumberField({

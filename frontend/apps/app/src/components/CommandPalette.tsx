@@ -3,25 +3,30 @@ import { Search } from "lucide-react"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
 
-const pages = [
+import { useCurrentUser } from "@/hooks/useAuth"
+
+const basePages = [
   { to: "/dashboard", label: "Dashboard", keywords: "home main" },
   { to: "/focus", label: "Focus", keywords: "pomodoro timer" },
   { to: "/tasks", label: "Tasks", keywords: "todo checklist" },
   { to: "/habits", label: "Habits", keywords: "routine tracker" },
   { to: "/notes", label: "Notes", keywords: "writing docs" },
-  { to: "/admin/users", label: "Admin", keywords: "users manage" },
 ]
 
-const fuse = new Fuse(pages, {
-  keys: ["label", "keywords"],
-  threshold: 0.4,
-})
+const adminPage = { to: "/admin/users", label: "Admin", keywords: "users manage" }
+
+type PageItem = { to: string; label: string; keywords: string }
 
 export function CommandPalette() {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState("")
   const inputRef = useRef<HTMLInputElement>(null)
   const navigate = useNavigate()
+  const currentUser = useCurrentUser()
+  const isAdmin = currentUser.data?.user.role === "admin"
+
+  const pages = useMemo<PageItem[]>(() => (isAdmin ? [...basePages, adminPage] : basePages), [isAdmin])
+  const fuse = useMemo(() => new Fuse(pages, { keys: ["label", "keywords"], threshold: 0.4 }), [pages])
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -48,9 +53,9 @@ export function CommandPalette() {
   const results = useMemo(() => {
     if (!query.trim()) return pages
     return fuse.search(query).map((r) => r.item)
-  }, [query])
+  }, [query, pages, fuse])
 
-  function handleSelect(item: (typeof pages)[number]) {
+  function handleSelect(item: PageItem) {
     navigate(item.to)
     setOpen(false)
   }

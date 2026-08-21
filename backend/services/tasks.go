@@ -203,6 +203,8 @@ func parseTaskView(value string) (models.TaskView, error) {
 		return models.TaskViewCompleted, nil
 	case models.TaskViewAll:
 		return models.TaskViewAll, nil
+	case models.TaskViewActive:
+		return models.TaskViewActive, nil
 	default:
 		return "", fmt.Errorf("invalid task view")
 	}

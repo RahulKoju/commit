@@ -3,7 +3,7 @@ import { paginatedResponseSchema } from "./common.types"
 
 export const taskStatusSchema = z.enum(["todo", "in-progress", "done"])
 export const taskPrioritySchema = z.enum(["low", "medium", "high"])
-export const taskViewSchema = z.enum(["today", "backlog", "completed", "all"])
+export const taskViewSchema = z.enum(["today", "backlog", "completed", "all", "active"])
 export const recurrenceRuleSchema = z.enum(["daily", "weekdays", "weekly", "monthly"])
 
 export const taskSchema = z.object({
