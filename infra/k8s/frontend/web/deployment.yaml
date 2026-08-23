@@ -26,7 +26,7 @@ spec:
 
       containers:
         - name: frontend-web
-          image: rahulkoju/commit-web:69d3c40a9ac9cbb39c09829f475c7f6256ea5c79
+          image: rahulkoju/commit-web:f5bfa7cd3a6e5b13380be4cf1114e31f8f7ca41a
 
           securityContext:
             readOnlyRootFilesystem: true
