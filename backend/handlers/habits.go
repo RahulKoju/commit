@@ -23,29 +23,35 @@ type habitCategoryRequest struct {
 }
 
 type habitRequest struct {
-	CategoryID    string   `json:"category_id" binding:"required"`
-	Name          string   `json:"name" binding:"required"`
-	Description   string   `json:"description"`
-	Type          string   `json:"type" binding:"required"`
-	TargetValue   *float64 `json:"target_value"`
-	TargetUnit    *string  `json:"target_unit"`
-	FrequencyType string   `json:"frequency_type"`
-	FrequencyDays []int    `json:"frequency_days"`
-	WeeklyGoal    int      `json:"weekly_goal"`
-	SortOrder     int      `json:"sort_order"`
+	CategoryID         string   `json:"category_id" binding:"required"`
+	Name               string   `json:"name" binding:"required"`
+	Icon               *string  `json:"icon"`
+	Description        string   `json:"description"`
+	Type               string   `json:"type" binding:"required"`
+	TargetValue        *float64 `json:"target_value"`
+	TargetValueMax     *float64 `json:"target_value_max"`
+	ComparisonOperator string   `json:"comparison_operator"`
+	TargetUnit         *string  `json:"target_unit"`
+	FrequencyType      string   `json:"frequency_type"`
+	FrequencyDays      []int    `json:"frequency_days"`
+	WeeklyGoal         int      `json:"weekly_goal"`
+	SortOrder          int      `json:"sort_order"`
 }
 
 type updateHabitRequest struct {
-	CategoryID    *string  `json:"category_id"`
-	Name          *string  `json:"name"`
-	Description   *string  `json:"description"`
-	Type          *string  `json:"type"`
-	TargetValue   *float64 `json:"target_value"`
-	TargetUnit    *string  `json:"target_unit"`
-	FrequencyType *string  `json:"frequency_type"`
-	FrequencyDays *[]int   `json:"frequency_days"`
-	WeeklyGoal    *int     `json:"weekly_goal"`
-	SortOrder     *int     `json:"sort_order"`
+	CategoryID         *string  `json:"category_id"`
+	Name               *string  `json:"name"`
+	Icon               *string  `json:"icon"`
+	Description        *string  `json:"description"`
+	Type               *string  `json:"type"`
+	TargetValue        *float64 `json:"target_value"`
+	TargetValueMax     *float64 `json:"target_value_max"`
+	ComparisonOperator *string  `json:"comparison_operator"`
+	TargetUnit         *string  `json:"target_unit"`
+	FrequencyType      *string  `json:"frequency_type"`
+	FrequencyDays      *[]int   `json:"frequency_days"`
+	WeeklyGoal         *int     `json:"weekly_goal"`
+	SortOrder          *int     `json:"sort_order"`
 }
 
 type habitLogRequest struct {
@@ -183,17 +189,20 @@ func (handler HabitHandler) CreateHabit(c *gin.Context) {
 	}
 
 	habit, err := handler.habits.CreateHabit(c.Request.Context(), services.CreateHabitInput{
-		UserID:        userID,
-		CategoryID:    request.CategoryID,
-		Name:          request.Name,
-		Description:   request.Description,
-		Type:          request.Type,
-		TargetValue:   request.TargetValue,
-		TargetUnit:    request.TargetUnit,
-		FrequencyType: request.FrequencyType,
-		FrequencyDays: request.FrequencyDays,
-		WeeklyGoal:    request.WeeklyGoal,
-		SortOrder:     request.SortOrder,
+		UserID:             userID,
+		CategoryID:         request.CategoryID,
+		Name:               request.Name,
+		Icon:               request.Icon,
+		Description:        request.Description,
+		Type:               request.Type,
+		TargetValue:        request.TargetValue,
+		TargetValueMax:     request.TargetValueMax,
+		ComparisonOperator: request.ComparisonOperator,
+		TargetUnit:         request.TargetUnit,
+		FrequencyType:      request.FrequencyType,
+		FrequencyDays:      request.FrequencyDays,
+		WeeklyGoal:         request.WeeklyGoal,
+		SortOrder:          request.SortOrder,
 	})
 	if err != nil {
 		writeHabitError(c, err)
@@ -215,18 +224,21 @@ func (handler HabitHandler) UpdateHabit(c *gin.Context) {
 	}
 
 	habit, err := handler.habits.UpdateHabit(c.Request.Context(), services.UpdateHabitInput{
-		UserID:        userID,
-		ID:            c.Param("id"),
-		CategoryID:    request.CategoryID,
-		Name:          request.Name,
-		Description:   request.Description,
-		Type:          request.Type,
-		TargetValue:   request.TargetValue,
-		TargetUnit:    request.TargetUnit,
-		FrequencyType: request.FrequencyType,
-		FrequencyDays: request.FrequencyDays,
-		WeeklyGoal:    request.WeeklyGoal,
-		SortOrder:     request.SortOrder,
+		UserID:             userID,
+		ID:                 c.Param("id"),
+		CategoryID:         request.CategoryID,
+		Name:               request.Name,
+		Icon:               request.Icon,
+		Description:        request.Description,
+		Type:               request.Type,
+		TargetValue:        request.TargetValue,
+		TargetValueMax:     request.TargetValueMax,
+		ComparisonOperator: request.ComparisonOperator,
+		TargetUnit:         request.TargetUnit,
+		FrequencyType:      request.FrequencyType,
+		FrequencyDays:      request.FrequencyDays,
+		WeeklyGoal:         request.WeeklyGoal,
+		SortOrder:          request.SortOrder,
 	})
 	if err != nil {
 		writeHabitError(c, err)
@@ -246,6 +258,34 @@ func (handler HabitHandler) DeleteHabit(c *gin.Context) {
 		return
 	}
 	c.Status(http.StatusNoContent)
+}
+
+type reorderHabitsRequest struct {
+	HabitIDs []string `json:"habit_ids" binding:"required"`
+}
+
+func (handler HabitHandler) ReorderHabits(c *gin.Context) {
+	userID, ok := currentUserID(c)
+	if !ok {
+		return
+	}
+
+	var request reorderHabitsRequest
+	if err := c.ShouldBindJSON(&request); err != nil || len(request.HabitIDs) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid reorder request"})
+		return
+	}
+
+	if err := handler.habits.ReorderHabits(c.Request.Context(), userID, request.HabitIDs); err != nil {
+		writeHabitError(c, err)
+		return
+	}
+	habits, err := handler.habits.ListHabits(c.Request.Context(), userID)
+	if err != nil {
+		writeServerError(c, "failed to list habits", err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"habits": habits})
 }
 
 func (handler HabitHandler) LogHabit(c *gin.Context) {
@@ -290,6 +330,20 @@ func (handler HabitHandler) Analytics(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"analytics": analytics})
+}
+
+func (handler HabitHandler) Matrix(c *gin.Context) {
+	userID, ok := currentUserID(c)
+	if !ok {
+		return
+	}
+
+	matrix, err := handler.habits.Matrix(c.Request.Context(), userID, c.Query("start"), c.Query("end"))
+	if err != nil {
+		writeHabitError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"habits": matrix.Habits, "logs": matrix.Logs})
 }
 
 func formatFloat(value float64) string {

@@ -24,20 +24,16 @@ type ListNotesInput struct {
 }
 
 type CreateNoteInput struct {
-	UserID   string
-	Title    string
-	Body     string
-	TopicIDs []string
-	Tags     []string
+	UserID string
+	Title  string
+	Body   string
 }
 
 type UpdateNoteInput struct {
-	UserID   string
-	ID       string
-	Title    *string
-	Body     *string
-	TopicIDs *[]string
-	Tags     *[]string
+	UserID string
+	ID     string
+	Title  *string
+	Body   *string
 }
 
 func NewNoteService(notes models.NoteModel) NoteService {
@@ -68,11 +64,9 @@ func (service NoteService) Create(ctx context.Context, input CreateNoteInput) (m
 	body := sanitizer.Sanitize(input.Body)
 
 	return service.notes.Create(ctx, models.CreateNoteParams{
-		UserID:   input.UserID,
-		Title:    title,
-		Body:     body,
-		TopicIDs: normalizeTopicIDs(input.TopicIDs),
-		Tags:     normalizeTags(input.Tags),
+		UserID: input.UserID,
+		Title:  title,
+		Body:   body,
 	})
 }
 
@@ -83,24 +77,16 @@ func (service NoteService) Update(ctx context.Context, input UpdateNoteInput) (m
 	}
 
 	params := models.UpdateNoteParams{
-		UserID:   input.UserID,
-		ID:       input.ID,
-		Title:    current.Title,
-		Body:     current.Body,
-		TopicIDs: noteTopicIDs(current.Topics),
-		Tags:     current.Tags,
+		UserID: input.UserID,
+		ID:     input.ID,
+		Title:  current.Title,
+		Body:   current.Body,
 	}
 	if input.Title != nil {
 		params.Title = strings.TrimSpace(*input.Title)
 	}
 	if input.Body != nil {
 		params.Body = sanitizer.Sanitize(*input.Body)
-	}
-	if input.TopicIDs != nil {
-		params.TopicIDs = normalizeTopicIDs(*input.TopicIDs)
-	}
-	if input.Tags != nil {
-		params.Tags = normalizeTags(*input.Tags)
 	}
 	if params.Title == "" {
 		return models.Note{}, fmt.Errorf("title is required")
@@ -115,28 +101,6 @@ func (service NoteService) GetBacklinks(ctx context.Context, userID string, note
 
 func (service NoteService) Delete(ctx context.Context, userID string, id string) error {
 	return service.notes.Delete(ctx, userID, id)
-}
-
-func normalizeTopicIDs(values []string) []string {
-	seen := make(map[string]bool)
-	result := make([]string, 0)
-	for _, value := range values {
-		topicID := strings.TrimSpace(value)
-		if topicID == "" || seen[topicID] {
-			continue
-		}
-		seen[topicID] = true
-		result = append(result, topicID)
-	}
-	return result
-}
-
-func noteTopicIDs(topics []models.NoteTopic) []string {
-	result := make([]string, 0, len(topics))
-	for _, topic := range topics {
-		result = append(result, topic.ID)
-	}
-	return result
 }
 
 func normalizeTags(values []string) []string {

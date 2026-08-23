@@ -16,7 +16,6 @@ type TaskService struct {
 type ListTasksInput struct {
 	UserID   string
 	View     string
-	TopicID  string
 	Priority string
 	Status   string
 	Limit    int
@@ -25,7 +24,6 @@ type ListTasksInput struct {
 
 type CreateTaskInput struct {
 	UserID           string
-	TopicID          string
 	Title            string
 	Description      string
 	Priority         string
@@ -38,7 +36,6 @@ type CreateTaskInput struct {
 type UpdateTaskInput struct {
 	UserID           string
 	ID               string
-	TopicID          *string
 	Title            *string
 	Description      *string
 	Priority         *string
@@ -56,7 +53,6 @@ func (service TaskService) Count(ctx context.Context, input ListTasksInput) (int
 	return service.tasks.CountTasks(ctx, models.ListTasksParams{
 		UserID:   input.UserID,
 		View:     models.TaskView(input.View),
-		TopicID:  strings.TrimSpace(input.TopicID),
 		Priority: strings.TrimSpace(input.Priority),
 		Status:   strings.TrimSpace(input.Status),
 	})
@@ -81,7 +77,6 @@ func (service TaskService) List(ctx context.Context, input ListTasksInput) ([]mo
 	return service.tasks.List(ctx, models.ListTasksParams{
 		UserID:   input.UserID,
 		View:     view,
-		TopicID:  strings.TrimSpace(input.TopicID),
 		Priority: strings.TrimSpace(input.Priority),
 		Status:   strings.TrimSpace(input.Status),
 		Limit:    input.Limit,
@@ -113,7 +108,6 @@ func (service TaskService) Create(ctx context.Context, input CreateTaskInput) (m
 
 	return service.tasks.Create(ctx, models.CreateTaskParams{
 		UserID:           input.UserID,
-		TopicID:          strings.TrimSpace(input.TopicID),
 		Title:            title,
 		Description:      description,
 		Priority:         priority,
@@ -138,14 +132,10 @@ func (service TaskService) Update(ctx context.Context, input UpdateTaskInput) (m
 		Priority:         current.Priority,
 		Status:           current.Status,
 		ScheduledDate:    optionalStringValue(current.ScheduledDate),
-		TopicID:          optionalStringValue(current.TopicID),
 		RecurrenceRule:   current.RecurrenceRule,
 		EstimatedMinutes: current.EstimatedMinutes,
 	}
 
-	if input.TopicID != nil {
-		params.TopicID = strings.TrimSpace(*input.TopicID)
-	}
 	if input.Title != nil {
 		params.Title = strings.TrimSpace(*input.Title)
 	}
@@ -213,6 +203,8 @@ func parseTaskView(value string) (models.TaskView, error) {
 		return models.TaskViewCompleted, nil
 	case models.TaskViewAll:
 		return models.TaskViewAll, nil
+	case models.TaskViewActive:
+		return models.TaskViewActive, nil
 	default:
 		return "", fmt.Errorf("invalid task view")
 	}
@@ -275,7 +267,6 @@ func (service TaskService) createRecurringTask(ctx context.Context, original mod
 
 	return service.tasks.Create(ctx, models.CreateTaskParams{
 		UserID:         original.UserID,
-		TopicID:        optionalStringValue(original.TopicID),
 		Title:          original.Title,
 		Description:    original.Description,
 		Priority:       original.Priority,

@@ -2,15 +2,16 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 
 import { apiFetch } from "@/lib/api"
 import {
-  activityHeatmapResponseSchema,
+  dashboardHeatmapResponseSchema,
   dashboardLayoutResponseSchema,
   dashboardSummaryResponseSchema,
-  type ActivityHeatmapResponse,
+  type DashboardHeatmapResponse,
   type DashboardLayoutResponse,
   type DashboardSummaryResponse,
 } from "@/types/dashboard.types"
 
 export const dashboardQueryKeys = {
+  all: ["dashboard"] as const,
   summary: ["dashboard", "summary"] as const,
   activityHeatmap: ["dashboard", "activity-heatmap"] as const,
   layout: ["dashboard", "layout"] as const,
@@ -26,13 +27,16 @@ export function useDashboardSummary() {
   })
 }
 
-export function useActivityHeatmap() {
+export function useActivityHeatmap(year?: number) {
   return useQuery({
-    queryKey: dashboardQueryKeys.activityHeatmap,
+    queryKey: [...dashboardQueryKeys.activityHeatmap, year ?? null],
     queryFn: () =>
-      apiFetch<ActivityHeatmapResponse>("/api/v1/dashboard/activity-heatmap", {
-        schema: activityHeatmapResponseSchema,
-      }),
+      apiFetch<DashboardHeatmapResponse>(
+        year ? `/api/v1/dashboard/activity-heatmap?year=${year}` : "/api/v1/dashboard/activity-heatmap",
+        {
+          schema: dashboardHeatmapResponseSchema,
+        },
+      ),
   })
 }
 

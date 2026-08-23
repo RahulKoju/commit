@@ -3,13 +3,12 @@ import { paginatedResponseSchema } from "./common.types"
 
 export const taskStatusSchema = z.enum(["todo", "in-progress", "done"])
 export const taskPrioritySchema = z.enum(["low", "medium", "high"])
-export const taskViewSchema = z.enum(["today", "backlog", "completed", "all"])
+export const taskViewSchema = z.enum(["today", "backlog", "completed", "all", "active"])
 export const recurrenceRuleSchema = z.enum(["daily", "weekdays", "weekly", "monthly"])
 
 export const taskSchema = z.object({
   id: z.string().uuid(),
   user_id: z.string().uuid(),
-  topic_id: z.string().uuid().nullable(),
   title: z.string(),
   description: z.string(),
   priority: taskPrioritySchema,
@@ -38,13 +37,11 @@ export type TaskResponse = z.infer<typeof taskResponseSchema>
 
 export type TaskFilters = {
   view: TaskView
-  topicId?: string
   priority?: TaskPriority | ""
   status?: TaskStatus | ""
 }
 
 export type CreateTaskInput = {
-  topic_id?: string
   title: string
   description: string
   priority: TaskPriority

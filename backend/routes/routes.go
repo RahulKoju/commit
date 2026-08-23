@@ -19,12 +19,10 @@ type Dependencies struct {
 	AdminService              services.AdminService
 	TaskService               services.TaskService
 	FocusService              services.FocusService
-	LearnService              services.LearnService
 	NoteService               services.NoteService
+	ReminderService           services.ReminderService
 	HabitService              services.HabitService
-	ReviewService             services.ReviewService
 	DashboardService          services.DashboardService
-	FlashcardService          services.FlashcardService
 	CookieDomain              string
 	FocusDailyMinimumMinute   int
 }
@@ -35,12 +33,10 @@ func Register(router *gin.Engine, deps Dependencies) {
 	adminHandler := handlers.NewAdminHandler(deps.AdminService)
 	taskHandler := handlers.NewTaskHandler(deps.TaskService)
 	focusHandler := handlers.NewFocusHandler(deps.FocusService, deps.FocusDailyMinimumMinute)
-	learnHandler := handlers.NewLearnHandler(deps.LearnService)
 	noteHandler := handlers.NewNoteHandler(deps.NoteService)
+	reminderHandler := handlers.NewReminderHandler(deps.ReminderService)
 	habitHandler := handlers.NewHabitHandler(deps.HabitService)
-	reviewHandler := handlers.NewReviewHandler(deps.ReviewService)
 	dashboardHandler := handlers.NewDashboardHandler(deps.DashboardService)
-	flashcardHandler := handlers.NewFlashcardHandler(deps.FlashcardService)
 
 	router.GET("/healthz", healthHandler.Health)
 	router.GET("/metrics", gin.WrapH(promhttp.Handler()))
@@ -73,24 +69,25 @@ func Register(router *gin.Engine, deps Dependencies) {
 	protected.POST("/tasks", taskHandler.Create)
 	protected.PATCH("/tasks/:id", taskHandler.Update)
 	protected.DELETE("/tasks/:id", taskHandler.Delete)
+	protected.GET("/focus/active", focusHandler.GetActive)
 	protected.GET("/focus/sessions", focusHandler.List)
-	protected.POST("/focus/sessions", focusHandler.Create)
+	protected.POST("/focus/sessions/start", focusHandler.Start)
+	protected.POST("/focus/sessions/pause", focusHandler.Pause)
+	protected.POST("/focus/sessions/resume", focusHandler.Resume)
+	protected.POST("/focus/sessions/heartbeat", focusHandler.Heartbeat)
+	protected.POST("/focus/sessions/complete", focusHandler.Complete)
+	protected.POST("/focus/sessions/discard", focusHandler.Discard)
 	protected.GET("/focus/stats", focusHandler.Stats)
-	protected.GET("/learn/entries", learnHandler.ListEntries)
-	protected.POST("/learn/entries", learnHandler.CreateEntry)
-	protected.PATCH("/learn/entries/:id", learnHandler.UpdateEntry)
-	protected.DELETE("/learn/entries/:id", learnHandler.DeleteEntry)
-	protected.GET("/learn/topics", learnHandler.ListTopics)
-	protected.POST("/learn/topics", learnHandler.CreateTopic)
-	protected.PATCH("/learn/topics/:id", learnHandler.UpdateTopic)
-	protected.DELETE("/learn/topics/:id", learnHandler.DeleteTopic)
-	protected.GET("/learn/weakspots", learnHandler.WeakSpots)
-	protected.GET("/learn/summary", learnHandler.Summary)
 	protected.GET("/notes", noteHandler.List)
 	protected.POST("/notes", noteHandler.Create)
 	protected.PATCH("/notes/:id", noteHandler.Update)
 	protected.GET("/notes/:id/backlinks", noteHandler.GetBacklinks)
 	protected.DELETE("/notes/:id", noteHandler.Delete)
+	protected.GET("/notes/:id/reminders", reminderHandler.ListByNote)
+	protected.POST("/notes/:id/reminders", reminderHandler.Create)
+	protected.PATCH("/notes/:id/reminders/:reminderId", reminderHandler.Update)
+	protected.DELETE("/notes/:id/reminders/:reminderId", reminderHandler.Delete)
+	protected.GET("/reminders/due", reminderHandler.Due)
 	protected.GET("/habit-categories", habitHandler.ListCategories)
 	protected.POST("/habit-categories", habitHandler.CreateCategory)
 	protected.PATCH("/habit-categories/:id", habitHandler.UpdateCategory)
@@ -98,19 +95,12 @@ func Register(router *gin.Engine, deps Dependencies) {
 	protected.GET("/habits", habitHandler.ListHabits)
 	protected.POST("/habits", habitHandler.CreateHabit)
 	protected.GET("/habits/export", habitHandler.ExportCSV)
+	protected.GET("/habits/matrix", habitHandler.Matrix)
+	protected.PATCH("/habits/reorder", habitHandler.ReorderHabits)
 	protected.PATCH("/habits/:id", habitHandler.UpdateHabit)
 	protected.DELETE("/habits/:id", habitHandler.DeleteHabit)
 	protected.POST("/habits/:id/log", habitHandler.LogHabit)
 	protected.GET("/habits/:id/analytics", habitHandler.Analytics)
-	protected.GET("/reviews", reviewHandler.List)
-	protected.POST("/reviews", reviewHandler.Create)
-	protected.GET("/reviews/:id", reviewHandler.Get)
-	protected.GET("/flashcards", flashcardHandler.List)
-	protected.GET("/flashcards/due", flashcardHandler.Due)
-	protected.POST("/flashcards", flashcardHandler.Create)
-	protected.PATCH("/flashcards/:id", flashcardHandler.Update)
-	protected.DELETE("/flashcards/:id", flashcardHandler.Delete)
-	protected.POST("/flashcards/:id/review", flashcardHandler.Review)
 
 	admin := protected.Group("/admin")
 	admin.Use(middleware.RequireRole(models.RoleAdmin))

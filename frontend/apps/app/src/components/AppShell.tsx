@@ -4,14 +4,18 @@ import { Outlet } from "react-router-dom"
 import { Button } from "@workspace/ui/components/button"
 
 import { CommandPalette } from "@/components/CommandPalette"
+import { MobileNav } from "@/components/MobileNav"
 import { Sidebar } from "@/components/Sidebar"
 import { TopBar } from "@/components/TopBar"
 import { useCurrentUser } from "@/hooks/useAuth"
+import { useReminderNotifications } from "@/hooks/useReminderNotifications"
 import { TaskForm } from "@/pages/TasksPage"
 
 export function AppShell() {
   const { isLoading, isError } = useCurrentUser()
   const [quickAddOpen, setQuickAddOpen] = useState(false)
+  const [mobileNavOpen, setMobileNavOpen] = useState(false)
+  useReminderNotifications(!isLoading && !isError)
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -45,7 +49,7 @@ export function AppShell() {
     <div className="flex min-h-svh bg-muted/30">
       <Sidebar />
       <div className="flex min-w-0 flex-1 flex-col">
-        <TopBar />
+        <TopBar onOpenNav={() => setMobileNavOpen(true)} />
         <main className="flex-1 p-4 lg:p-6">
           <Outlet />
         </main>
@@ -72,6 +76,7 @@ export function AppShell() {
           </div>
         </div>
       ) : null}
+      <MobileNav open={mobileNavOpen} onOpenChange={setMobileNavOpen} />
       <CommandPalette />
     </div>
   )

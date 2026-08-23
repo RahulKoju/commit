@@ -131,3 +131,25 @@
     @apply bg-background text-foreground;
     }
 }
+
+@layer utilities {
+  .habit-matrix-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+
+  .habit-matrix-scroll::-webkit-scrollbar {
+    height: 0.625rem;
+  }
+
+  .habit-matrix-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .habit-matrix-scroll::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border: 0.1875rem solid transparent;
+    border-radius: 999px;
+    background-clip: content-box;
+  }
+}

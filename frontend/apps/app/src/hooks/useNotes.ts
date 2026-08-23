@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 
 import { apiFetch } from "@/lib/api"
+import { dashboardQueryKeys } from "@/hooks/useDashboard"
 import { appendPagination, type PaginationParams } from "@/types/common.types"
 import {
   backlinksResponseSchema,
@@ -37,7 +38,10 @@ export function useCreateNote() {
         body: input,
         schema: noteResponseSchema,
       }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: noteQueryKeys.all }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: noteQueryKeys.all })
+      queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.all })
+    },
   })
 }
 
@@ -50,7 +54,10 @@ export function useUpdateNote() {
         body: input,
         schema: noteResponseSchema,
       }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: noteQueryKeys.all }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: noteQueryKeys.all })
+      queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.all })
+    },
   })
 }
 
@@ -58,7 +65,10 @@ export function useDeleteNote() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (id: string) => apiFetch<undefined>(`/api/v1/notes/${id}`, { method: "DELETE" }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: noteQueryKeys.all }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: noteQueryKeys.all })
+      queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.all })
+    },
   })
 }
 

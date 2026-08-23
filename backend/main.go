@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"time"
+	_ "time/tzdata"
 
 	"commit/backend/config"
 	"commit/backend/db"
@@ -47,23 +48,19 @@ func main() {
 	userModel := models.NewUserModel(pool)
 	taskModel := models.NewTaskModel(pool)
 	focusModel := models.NewFocusModel(pool)
-	learnModel := models.NewLearnModel(pool)
+	activeFocusModel := models.NewActiveFocusModel(pool)
 	noteModel := models.NewNoteModel(pool)
+	reminderModel := models.NewReminderModel(pool)
 	habitModel := models.NewHabitModel(pool)
-	reviewModel := models.NewReviewModel(pool)
-	flashcardModel := models.NewFlashcardModel(pool)
 	refreshTokenModel := models.NewRefreshTokenModel(pool)
 	passwordResetTokenModel := models.NewPasswordResetTokenModel(pool)
-	dashboardModel := models.NewDashboardModel(pool, learnModel)
+	dashboardModel := models.NewDashboardModel(pool)
 	adminService := services.NewAdminService(userModel)
 	taskService := services.NewTaskService(taskModel)
-	focusService := services.NewFocusService(focusModel)
-	learnService := services.NewLearnService(learnModel)
+	focusService := services.NewFocusService(focusModel, activeFocusModel)
 	noteService := services.NewNoteService(noteModel)
 	habitService := services.NewHabitService(habitModel)
-	reviewService := services.NewReviewService(reviewModel)
 	dashboardService := services.NewDashboardService(dashboardModel, userModel)
-	flashcardService := services.NewFlashcardService(flashcardModel)
 
 	var emailSender services.EmailSender
 	if cfg.ResendAPIKey != "" {
@@ -72,26 +69,28 @@ func main() {
 		emailSender = services.NewLogSender()
 	}
 
+	reminderService := services.NewReminderService(reminderModel, emailSender, cfg.AppURL)
+
 	authService := services.NewAuthService(userModel, refreshTokenModel, passwordResetTokenModel, emailSender, cfg.AppURL, habitService, cfg.JWTSecret, cfg.JWTExpiryHours, cfg.JWTExpiryMinutes)
 
 	router := gin.New()
 	router.Use(middleware.Logger(), gin.Recovery(), middleware.CORS(cfg.AllowedOrigins), metrics.Middleware())
 	routes.Register(router, routes.Dependencies{
-		AuthService:               authService,
-		AdminService:              adminService,
-		TaskService:               taskService,
-		FocusService:              focusService,
-		LearnService:              learnService,
-		NoteService:               noteService,
-		HabitService:              habitService,
-		ReviewService:             reviewService,
-		DashboardService:          dashboardService,
-		FlashcardService:          flashcardService,
-		CookieDomain:              cfg.CookieDomain,
-		FocusDailyMinimumMinute:   cfg.FocusDailyMinimumMinute,
+		AuthService:             authService,
+		AdminService:            adminService,
+		TaskService:             taskService,
+		FocusService:            focusService,
+		NoteService:             noteService,
+		ReminderService:         reminderService,
+		HabitService:            habitService,
+		DashboardService:        dashboardService,
+		CookieDomain:            cfg.CookieDomain,
+		FocusDailyMinimumMinute: cfg.FocusDailyMinimumMinute,
 	})
 
 	metrics.StartDBStatsCollector(pool)
+	services.StartReminderScheduler(reminderService)
+	services.StartFocusHeartbeatScheduler(focusService)
 
 	if err := router.Run(":" + cfg.Port); err != nil {
 		log.Fatalf("run server: %v", err)

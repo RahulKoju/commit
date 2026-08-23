@@ -28,12 +28,12 @@ const (
 	TaskViewBacklog   TaskView = "backlog"
 	TaskViewCompleted TaskView = "completed"
 	TaskViewAll       TaskView = "all"
+	TaskViewActive    TaskView = "active"
 )
 
 type Task struct {
 	ID               string       `json:"id"`
 	UserID           string       `json:"user_id"`
-	TopicID          *string      `json:"topic_id"`
 	Title            string       `json:"title"`
 	Description      string       `json:"description"`
 	Priority         TaskPriority `json:"priority"`
@@ -58,7 +58,6 @@ const (
 type ListTasksParams struct {
 	UserID   string
 	View     TaskView
-	TopicID  string
 	Priority string
 	Status   string
 	Limit    int
@@ -67,7 +66,6 @@ type ListTasksParams struct {
 
 type CreateTaskParams struct {
 	UserID           string
-	TopicID          string
 	Title            string
 	Description      string
 	Priority         TaskPriority
@@ -80,7 +78,6 @@ type CreateTaskParams struct {
 type UpdateTaskParams struct {
 	UserID           string
 	ID               string
-	TopicID          string
 	Title            string
 	Description      string
 	Priority         TaskPriority
@@ -100,7 +97,7 @@ func NewTaskModel(pool *pgxpool.Pool) TaskModel {
 
 func (model TaskModel) List(ctx context.Context, params ListTasksParams) ([]Task, error) {
 	rows, err := model.pool.Query(ctx, `
-		SELECT id, user_id, topic_id, title, description, priority, scheduled_date, status, recurrence_rule, estimated_minutes, completed_at, created_at, updated_at
+		SELECT id, user_id, title, description, priority, scheduled_date, status, recurrence_rule, estimated_minutes, completed_at, created_at, updated_at
 		FROM tasks
 		WHERE user_id = $1
 		  AND (
@@ -108,16 +105,16 @@ func (model TaskModel) List(ctx context.Context, params ListTasksParams) ([]Task
 		    OR ($2 = 'today' AND status <> 'done' AND scheduled_date IS NOT NULL AND scheduled_date <= CURRENT_DATE)
 		    OR ($2 = 'backlog' AND status <> 'done' AND scheduled_date IS NULL)
 		    OR ($2 = 'completed' AND status = 'done')
+		    OR ($2 = 'active' AND status <> 'done')
 		  )
-		  AND ($3 = '' OR topic_id = $3::uuid)
-		  AND ($4 = '' OR priority = $4)
-		  AND ($5 = '' OR status = $5)
+		  AND ($3 = '' OR priority = $3)
+		  AND ($4 = '' OR status = $4)
 		ORDER BY
 		  CASE WHEN status = 'done' THEN completed_at END DESC NULLS LAST,
 		  scheduled_date ASC NULLS LAST,
 		  created_at DESC
-		LIMIT $6 OFFSET $7
-	`, params.UserID, params.View, params.TopicID, params.Priority, params.Status, params.Limit, params.Offset)
+		LIMIT $5 OFFSET $6
+	`, params.UserID, params.View, params.Priority, params.Status, params.Limit, params.Offset)
 	if err != nil {
 		return nil, err
 	}
@@ -146,11 +143,11 @@ func (model TaskModel) CountTasks(ctx context.Context, params ListTasksParams) (
 		    OR ($2 = 'today' AND status <> 'done' AND scheduled_date IS NOT NULL AND scheduled_date <= CURRENT_DATE)
 		    OR ($2 = 'backlog' AND status <> 'done' AND scheduled_date IS NULL)
 		    OR ($2 = 'completed' AND status = 'done')
+		    OR ($2 = 'active' AND status <> 'done')
 		  )
-		  AND ($3 = '' OR topic_id = $3::uuid)
-		  AND ($4 = '' OR priority = $4)
-		  AND ($5 = '' OR status = $5)
-	`, params.UserID, params.View, params.TopicID, params.Priority, params.Status).Scan(&count)
+		  AND ($3 = '' OR priority = $3)
+		  AND ($4 = '' OR status = $4)
+	`, params.UserID, params.View, params.Priority, params.Status).Scan(&count)
 	if err != nil {
 		return 0, err
 	}
@@ -159,7 +156,7 @@ func (model TaskModel) CountTasks(ctx context.Context, params ListTasksParams) (
 
 func (model TaskModel) GetByID(ctx context.Context, userID string, id string) (Task, error) {
 	row := model.pool.QueryRow(ctx, `
-		SELECT id, user_id, topic_id, title, description, priority, scheduled_date, status, recurrence_rule, estimated_minutes, completed_at, created_at, updated_at
+		SELECT id, user_id, title, description, priority, scheduled_date, status, recurrence_rule, estimated_minutes, completed_at, created_at, updated_at
 		FROM tasks
 		WHERE user_id = $1 AND id = $2
 	`, userID, id)
@@ -173,10 +170,10 @@ func (model TaskModel) GetByID(ctx context.Context, userID string, id string) (T
 
 func (model TaskModel) Create(ctx context.Context, params CreateTaskParams) (Task, error) {
 	row := model.pool.QueryRow(ctx, `
-		INSERT INTO tasks (user_id, topic_id, title, description, priority, scheduled_date, status, recurrence_rule, estimated_minutes, completed_at)
-		VALUES ($1, NULLIF($2, '')::uuid, $3, $4, $5, NULLIF($6, '')::date, $7, $8, $9, CASE WHEN $7 = 'done' THEN now() ELSE NULL END)
-		RETURNING id, user_id, topic_id, title, description, priority, scheduled_date, status, recurrence_rule, estimated_minutes, completed_at, created_at, updated_at
-	`, params.UserID, params.TopicID, params.Title, params.Description, params.Priority, params.ScheduledDate, params.Status, params.RecurrenceRule, params.EstimatedMinutes)
+		INSERT INTO tasks (user_id, title, description, priority, scheduled_date, status, recurrence_rule, estimated_minutes, completed_at)
+		VALUES ($1, $2, $3, $4, NULLIF($5, '')::date, $6, $7, $8, CASE WHEN $6 = 'done' THEN now() ELSE NULL END)
+		RETURNING id, user_id, title, description, priority, scheduled_date, status, recurrence_rule, estimated_minutes, completed_at, created_at, updated_at
+	`, params.UserID, params.Title, params.Description, params.Priority, params.ScheduledDate, params.Status, params.RecurrenceRule, params.EstimatedMinutes)
 
 	return scanTask(row)
 }
@@ -184,23 +181,22 @@ func (model TaskModel) Create(ctx context.Context, params CreateTaskParams) (Tas
 func (model TaskModel) Update(ctx context.Context, params UpdateTaskParams) (Task, error) {
 	row := model.pool.QueryRow(ctx, `
 		UPDATE tasks
-		SET topic_id = NULLIF($3, '')::uuid,
-		    title = $4,
-		    description = $5,
-		    priority = $6,
-		    scheduled_date = NULLIF($7, '')::date,
-		    status = $8,
-		    recurrence_rule = $9,
-		    estimated_minutes = $10,
+		SET title = $3,
+		    description = $4,
+		    priority = $5,
+		    scheduled_date = NULLIF($6, '')::date,
+		    status = $7,
+		    recurrence_rule = $8,
+		    estimated_minutes = $9,
 		    completed_at = CASE
-		      WHEN $8 = 'done' AND completed_at IS NULL THEN now()
-		      WHEN $8 <> 'done' THEN NULL
+		      WHEN $7 = 'done' AND completed_at IS NULL THEN now()
+		      WHEN $7 <> 'done' THEN NULL
 		      ELSE completed_at
 		    END,
 		    updated_at = now()
 		WHERE user_id = $1 AND id = $2
-		RETURNING id, user_id, topic_id, title, description, priority, scheduled_date, status, recurrence_rule, estimated_minutes, completed_at, created_at, updated_at
-	`, params.UserID, params.ID, params.TopicID, params.Title, params.Description, params.Priority, params.ScheduledDate, params.Status, params.RecurrenceRule, params.EstimatedMinutes)
+		RETURNING id, user_id, title, description, priority, scheduled_date, status, recurrence_rule, estimated_minutes, completed_at, created_at, updated_at
+	`, params.UserID, params.ID, params.Title, params.Description, params.Priority, params.ScheduledDate, params.Status, params.RecurrenceRule, params.EstimatedMinutes)
 
 	task, err := scanTask(row)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -210,6 +206,19 @@ func (model TaskModel) Update(ctx context.Context, params UpdateTaskParams) (Tas
 }
 
 func (model TaskModel) Delete(ctx context.Context, userID string, id string) error {
+	var activeCount int
+	err := model.pool.QueryRow(ctx, `
+		SELECT COUNT(*)
+		FROM active_focus_sessions
+		WHERE user_id = $1 AND task_id = $2 AND status IN ('running', 'paused')
+	`, userID, id).Scan(&activeCount)
+	if err != nil {
+		return err
+	}
+	if activeCount > 0 {
+		return fmt.Errorf("%w: finish or discard the active focus session first", ErrActiveFocusConflict)
+	}
+
 	commandTag, err := model.pool.Exec(ctx, "DELETE FROM tasks WHERE user_id = $1 AND id = $2", userID, id)
 	if err != nil {
 		return err
@@ -226,14 +235,12 @@ type taskScanner interface {
 
 func scanTask(scanner taskScanner) (Task, error) {
 	var task Task
-	var topicID pgtype.UUID
 	var scheduledDate pgtype.Date
 	var completedAt pgtype.Timestamptz
 
 	err := scanner.Scan(
 		&task.ID,
 		&task.UserID,
-		&topicID,
 		&task.Title,
 		&task.Description,
 		&task.Priority,
@@ -249,10 +256,6 @@ func scanTask(scanner taskScanner) (Task, error) {
 		return Task{}, err
 	}
 
-	if topicID.Valid {
-		value := formatUUID(topicID.Bytes)
-		task.TopicID = &value
-	}
 	if scheduledDate.Valid {
 		value := scheduledDate.Time.Format("2006-01-02")
 		task.ScheduledDate = &value
@@ -263,8 +266,4 @@ func scanTask(scanner taskScanner) (Task, error) {
 	}
 
 	return task, nil
-}
-
-func formatUUID(bytes [16]byte) string {
-	return fmt.Sprintf("%x-%x-%x-%x-%x", bytes[0:4], bytes[4:6], bytes[6:8], bytes[8:10], bytes[10:16])
 }

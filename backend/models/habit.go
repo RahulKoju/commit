@@ -14,6 +14,7 @@ import (
 
 type HabitType string
 type HabitFrequencyType string
+type HabitComparisonOperator string
 
 const (
 	HabitTypeBoolean HabitType = "boolean"
@@ -21,6 +22,11 @@ const (
 
 	HabitFrequencyDaily  HabitFrequencyType = "daily"
 	HabitFrequencyWeekly HabitFrequencyType = "weekly"
+
+	HabitComparisonGTE     HabitComparisonOperator = "gte"
+	HabitComparisonLTE     HabitComparisonOperator = "lte"
+	HabitComparisonEQ      HabitComparisonOperator = "eq"
+	HabitComparisonBetween HabitComparisonOperator = "between"
 )
 
 type HabitCategory struct {
@@ -32,25 +38,28 @@ type HabitCategory struct {
 }
 
 type Habit struct {
-	ID            string             `json:"id"`
-	UserID        string             `json:"user_id"`
-	CategoryID    string             `json:"category_id"`
-	CategoryName  string             `json:"category_name"`
-	Name          string             `json:"name"`
-	Description   string             `json:"description"`
-	Type          HabitType          `json:"type"`
-	TargetValue   *float64           `json:"target_value"`
-	TargetUnit    *string            `json:"target_unit"`
-	FrequencyType HabitFrequencyType `json:"frequency_type"`
-	FrequencyDays []int              `json:"frequency_days"`
-	WeeklyGoal    int                `json:"weekly_goal"`
-	SortOrder     int                `json:"sort_order"`
-	TodayLog      *HabitLog          `json:"today_log"`
-	CurrentStreak int                `json:"current_streak"`
-	LongestStreak int                `json:"longest_streak"`
-	CreatedAt     time.Time          `json:"created_at"`
-	UpdatedAt     time.Time          `json:"updated_at"`
-	DeletedAt     *time.Time         `json:"deleted_at"`
+	ID                 string                  `json:"id"`
+	UserID             string                  `json:"user_id"`
+	CategoryID         string                  `json:"category_id"`
+	CategoryName       string                  `json:"category_name"`
+	Name               string                  `json:"name"`
+	Icon               *string                 `json:"icon"`
+	Description        string                  `json:"description"`
+	Type               HabitType               `json:"type"`
+	TargetValue        *float64                `json:"target_value"`
+	TargetValueMax     *float64                `json:"target_value_max"`
+	ComparisonOperator HabitComparisonOperator `json:"comparison_operator"`
+	TargetUnit         *string                 `json:"target_unit"`
+	FrequencyType      HabitFrequencyType      `json:"frequency_type"`
+	FrequencyDays      []int                   `json:"frequency_days"`
+	WeeklyGoal         int                     `json:"weekly_goal"`
+	SortOrder          int                     `json:"sort_order"`
+	TodayLog           *HabitLog               `json:"today_log"`
+	CurrentStreak      int                     `json:"current_streak"`
+	LongestStreak      int                     `json:"longest_streak"`
+	CreatedAt          time.Time               `json:"created_at"`
+	UpdatedAt          time.Time               `json:"updated_at"`
+	DeletedAt          *time.Time              `json:"deleted_at"`
 }
 
 type HabitLog struct {
@@ -79,6 +88,7 @@ type HabitDayStatus struct {
 	Date      string  `json:"date"`
 	Value     float64 `json:"value"`
 	Completed bool    `json:"completed"`
+	Scheduled bool    `json:"scheduled"`
 }
 
 type CreateHabitCategoryParams struct {
@@ -87,32 +97,38 @@ type CreateHabitCategoryParams struct {
 }
 
 type CreateHabitParams struct {
-	UserID        string
-	CategoryID    string
-	Name          string
-	Description   string
-	Type          HabitType
-	TargetValue   *float64
-	TargetUnit    *string
-	FrequencyType HabitFrequencyType
-	FrequencyDays []int
-	WeeklyGoal    int
-	SortOrder     int
+	UserID             string
+	CategoryID         string
+	Name               string
+	Icon               *string
+	Description        string
+	Type               HabitType
+	TargetValue        *float64
+	TargetValueMax     *float64
+	ComparisonOperator HabitComparisonOperator
+	TargetUnit         *string
+	FrequencyType      HabitFrequencyType
+	FrequencyDays      []int
+	WeeklyGoal         int
+	SortOrder          int
 }
 
 type UpdateHabitParams struct {
-	UserID        string
-	ID            string
-	CategoryID    string
-	Name          string
-	Description   string
-	Type          HabitType
-	TargetValue   *float64
-	TargetUnit    *string
-	FrequencyType HabitFrequencyType
-	FrequencyDays []int
-	WeeklyGoal    int
-	SortOrder     int
+	UserID             string
+	ID                 string
+	CategoryID         string
+	Name               string
+	Icon               *string
+	Description        string
+	Type               HabitType
+	TargetValue        *float64
+	TargetValueMax     *float64
+	ComparisonOperator HabitComparisonOperator
+	TargetUnit         *string
+	FrequencyType      HabitFrequencyType
+	FrequencyDays      []int
+	WeeklyGoal         int
+	SortOrder          int
 }
 
 type UpdateHabitCategoryParams struct {
@@ -208,12 +224,13 @@ func (model HabitModel) DeleteCategory(ctx context.Context, userID string, id st
 
 func (model HabitModel) ListHabits(ctx context.Context, userID string) ([]Habit, error) {
 	rows, err := model.pool.Query(ctx, `
-		SELECT h.id, h.user_id, h.category_id, c.name, h.name, h.description, h.type, h.target_value, h.target_unit,
+		SELECT h.id, h.user_id, h.category_id, c.name, h.name, h.icon, h.description, h.type, h.target_value,
+		       h.target_value_max, h.comparison_operator, h.target_unit,
 		       h.frequency_type, h.frequency_days, h.weekly_goal, h.sort_order, h.created_at, h.updated_at
 		FROM habits h
 		INNER JOIN habit_categories c ON c.id = h.category_id AND c.user_id = h.user_id
 		WHERE h.user_id = $1 AND h.deleted_at IS NULL
-		ORDER BY c.name, h.sort_order, h.name
+		ORDER BY h.sort_order, h.name
 	`, userID)
 	if err != nil {
 		return nil, err
@@ -237,7 +254,8 @@ func (model HabitModel) ListHabits(ctx context.Context, userID string) ([]Habit,
 
 func (model HabitModel) GetHabitByID(ctx context.Context, userID string, id string) (Habit, error) {
 	row := model.pool.QueryRow(ctx, `
-		SELECT h.id, h.user_id, h.category_id, c.name, h.name, h.description, h.type, h.target_value, h.target_unit,
+		SELECT h.id, h.user_id, h.category_id, c.name, h.name, h.icon, h.description, h.type, h.target_value,
+		       h.target_value_max, h.comparison_operator, h.target_unit,
 		       h.frequency_type, h.frequency_days, h.weekly_goal, h.sort_order, h.created_at, h.updated_at
 		FROM habits h
 		INNER JOIN habit_categories c ON c.id = h.category_id AND c.user_id = h.user_id
@@ -256,14 +274,18 @@ func (model HabitModel) CreateHabit(ctx context.Context, params CreateHabitParam
 	if frequencyDays == nil {
 		frequencyDays = []int{}
 	}
+	comparisonOperator := params.ComparisonOperator
+	if comparisonOperator == "" {
+		comparisonOperator = HabitComparisonGTE
+	}
 	row := model.pool.QueryRow(ctx, `
-		INSERT INTO habits (user_id, category_id, name, description, type, target_value, target_unit, frequency_type, frequency_days, weekly_goal, sort_order)
-		SELECT $1, c.id, $3, $4, $5, $6, $7, $8, $9, $10, $11
+		INSERT INTO habits (user_id, category_id, name, icon, description, type, target_value, target_value_max, comparison_operator, target_unit, frequency_type, frequency_days, weekly_goal, sort_order)
+		SELECT $1, c.id, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
 		FROM habit_categories c
 		WHERE c.user_id = $1 AND c.id = $2
 		ON CONFLICT (user_id, name) DO UPDATE SET updated_at = now(), deleted_at = NULL
 		RETURNING id
-	`, params.UserID, params.CategoryID, params.Name, params.Description, params.Type, params.TargetValue, params.TargetUnit, params.FrequencyType, frequencyDays, params.WeeklyGoal, params.SortOrder)
+	`, params.UserID, params.CategoryID, params.Name, params.Icon, params.Description, params.Type, params.TargetValue, params.TargetValueMax, comparisonOperator, params.TargetUnit, params.FrequencyType, frequencyDays, params.WeeklyGoal, params.SortOrder)
 
 	var id string
 	if err := row.Scan(&id); err != nil {
@@ -280,19 +302,22 @@ func (model HabitModel) UpdateHabit(ctx context.Context, params UpdateHabitParam
 		UPDATE habits h
 		SET category_id = c.id,
 		    name = $3,
-		    description = $4,
-		    type = $5,
-		    target_value = $6,
-		    target_unit = $7,
-		    frequency_type = $8,
-		    frequency_days = $9,
-		    weekly_goal = $10,
-		    sort_order = $11,
+		    icon = $4,
+		    description = $5,
+		    type = $6,
+		    target_value = $7,
+		    target_value_max = $8,
+		    comparison_operator = $9,
+		    target_unit = $10,
+		    frequency_type = $11,
+		    frequency_days = $12,
+		    weekly_goal = $13,
+		    sort_order = $14,
 		    updated_at = now()
 		FROM habit_categories c
-		WHERE h.user_id = $1 AND h.id = $2 AND c.user_id = $1 AND c.id = $12
+		WHERE h.user_id = $1 AND h.id = $2 AND c.user_id = $1 AND c.id = $15
 		RETURNING h.id
-	`, params.UserID, params.ID, params.Name, params.Description, params.Type, params.TargetValue, params.TargetUnit, params.FrequencyType, params.FrequencyDays, params.WeeklyGoal, params.SortOrder, params.CategoryID)
+	`, params.UserID, params.ID, params.Name, params.Icon, params.Description, params.Type, params.TargetValue, params.TargetValueMax, params.ComparisonOperator, params.TargetUnit, params.FrequencyType, params.FrequencyDays, params.WeeklyGoal, params.SortOrder, params.CategoryID)
 
 	var id string
 	if err := row.Scan(&id); err != nil {
@@ -315,7 +340,73 @@ func (model HabitModel) DeleteHabit(ctx context.Context, userID string, id strin
 	return nil
 }
 
+// ReorderHabits atomically assigns sort_order 1..N to the user's active
+// habits following the given ID order. The ID list must exactly match the
+// user's current non-deleted habit IDs; otherwise ErrReorderMismatch is
+// returned and no rows are modified.
+func (model HabitModel) ReorderHabits(ctx context.Context, userID string, orderedIDs []string) error {
+	if len(orderedIDs) == 0 {
+		return ErrReorderMismatch
+	}
+
+	rows, err := model.pool.Query(ctx, `
+		SELECT id FROM habits
+		WHERE user_id = $1 AND deleted_at IS NULL
+	`, userID)
+	if err != nil {
+		return err
+	}
+	current := map[string]struct{}{}
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return err
+		}
+		current[id] = struct{}{}
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	rows.Close()
+
+	if len(current) != len(orderedIDs) {
+		return ErrReorderMismatch
+	}
+	seen := make(map[string]struct{}, len(orderedIDs))
+	for _, id := range orderedIDs {
+		if _, exists := current[id]; !exists {
+			return ErrReorderMismatch
+		}
+		if _, duplicate := seen[id]; duplicate {
+			return ErrReorderMismatch
+		}
+		seen[id] = struct{}{}
+	}
+
+	tx, err := model.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	for index, id := range orderedIDs {
+		if _, err := tx.Exec(ctx, `
+			UPDATE habits SET sort_order = $3, updated_at = now()
+			WHERE user_id = $1 AND id = $2 AND deleted_at IS NULL
+		`, userID, id, index+1); err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit(ctx)
+}
+
 func (model HabitModel) LogHabit(ctx context.Context, params LogHabitParams) (HabitLog, error) {
+	if err := model.ensureScheduledDay(ctx, params); err != nil {
+		return HabitLog{}, err
+	}
+
 	row := model.pool.QueryRow(ctx, `
 		INSERT INTO habit_logs (user_id, habit_id, logged_date, value, note)
 		SELECT $1, h.id, $3::date, $4, $5
@@ -331,6 +422,46 @@ func (model HabitModel) LogHabit(ctx context.Context, params LogHabitParams) (Ha
 		return HabitLog{}, ErrNotFound
 	}
 	return log, err
+}
+
+// ensureScheduledDay rejects logs written for a weekday that falls outside a
+// weekday-restricted habit's frequency_days (1=Monday .. 7=Sunday). Daily
+// habits are always scheduled, so they pass unconditionally.
+func (model HabitModel) ensureScheduledDay(ctx context.Context, params LogHabitParams) error {
+	row := model.pool.QueryRow(ctx, `
+		SELECT h.frequency_type, h.frequency_days
+		FROM habits h
+		WHERE h.user_id = $1 AND h.id = $2 AND h.deleted_at IS NULL
+	`, params.UserID, params.HabitID)
+
+	var frequencyType HabitFrequencyType
+	var frequencyDays []int32
+	if err := row.Scan(&frequencyType, &frequencyDays); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrNotFound
+		}
+		return err
+	}
+
+	if frequencyType != HabitFrequencyWeekly {
+		return nil
+	}
+
+	loggedDate, err := time.Parse("2006-01-02", params.LoggedDate)
+	if err != nil {
+		return err
+	}
+
+	weekday := int(loggedDate.Weekday())
+	if weekday == 0 {
+		weekday = 7
+	}
+	for _, day := range frequencyDays {
+		if int(day) == weekday {
+			return nil
+		}
+	}
+	return ErrHabitNotScheduled
 }
 
 func (model HabitModel) Analytics(ctx context.Context, userID string, habitID string) (HabitAnalytics, error) {
@@ -354,6 +485,17 @@ func (model HabitModel) Analytics(ctx context.Context, userID string, habitID st
 		DailyCompletion:    days,
 		CategoryCompletion: completionRate(days),
 	}, nil
+}
+
+type HabitMatrixLog struct {
+	HabitID    string  `json:"habit_id"`
+	LoggedDate string  `json:"logged_date"`
+	Value      float64 `json:"value"`
+}
+
+type HabitMatrix struct {
+	Habits []Habit          `json:"habits"`
+	Logs   []HabitMatrixLog `json:"logs"`
 }
 
 type HabitExportRow struct {
@@ -387,6 +529,65 @@ func (model HabitModel) ExportLogs(ctx context.Context, userID string) ([]HabitE
 		result = append(result, row)
 	}
 	return result, rows.Err()
+}
+
+// Matrix returns the flat habit list plus every habit log within [start, end]
+// (inclusive) in one call, so the frontend can render the date×habit table
+// without N+1 log queries. Habits carry their scheduling metadata
+// (frequency_type/frequency_days) so the client can gate cells and compute
+// weekday-aware averages.
+func (model HabitModel) Matrix(ctx context.Context, userID string, start string, end string) (HabitMatrix, error) {
+	habitRows, err := model.pool.Query(ctx, `
+		SELECT h.id, h.user_id, h.category_id, c.name, h.name, h.icon, h.description, h.type, h.target_value,
+		       h.target_value_max, h.comparison_operator, h.target_unit,
+		       h.frequency_type, h.frequency_days, h.weekly_goal, h.sort_order, h.created_at, h.updated_at
+		FROM habits h
+		INNER JOIN habit_categories c ON c.id = h.category_id AND c.user_id = h.user_id
+		WHERE h.user_id = $1 AND h.deleted_at IS NULL
+		ORDER BY h.sort_order, h.name
+	`, userID)
+	if err != nil {
+		return HabitMatrix{}, err
+	}
+
+	matrix := HabitMatrix{Habits: make([]Habit, 0), Logs: make([]HabitMatrixLog, 0)}
+	for habitRows.Next() {
+		habit, err := scanHabit(habitRows)
+		if err != nil {
+			habitRows.Close()
+			return HabitMatrix{}, err
+		}
+		matrix.Habits = append(matrix.Habits, habit)
+	}
+	if err := habitRows.Err(); err != nil {
+		habitRows.Close()
+		return HabitMatrix{}, err
+	}
+	habitRows.Close()
+
+	logRows, err := model.pool.Query(ctx, `
+		SELECT habit_id, logged_date::text, value::float8
+		FROM habit_logs
+		WHERE user_id = $1 AND logged_date BETWEEN $2::date AND $3::date
+		ORDER BY logged_date, habit_id
+	`, userID, start, end)
+	if err != nil {
+		return HabitMatrix{}, err
+	}
+	defer logRows.Close()
+
+	for logRows.Next() {
+		var log HabitMatrixLog
+		if err := logRows.Scan(&log.HabitID, &log.LoggedDate, &log.Value); err != nil {
+			return HabitMatrix{}, err
+		}
+		matrix.Logs = append(matrix.Logs, log)
+	}
+	if err := logRows.Err(); err != nil {
+		return HabitMatrix{}, err
+	}
+
+	return matrix, nil
 }
 
 func (model HabitModel) SeedDefaults(ctx context.Context, userID string) error {
@@ -501,6 +702,7 @@ func (model HabitModel) attachStreaks(ctx context.Context, habits []Habit, index
 				Date:      date,
 				Value:     value,
 				Completed: habitCompleted(h, value),
+				Scheduled: habitScheduledOn(h, date),
 			})
 		}
 		h.CurrentStreak = currentStreak(days)
@@ -548,10 +750,34 @@ func (model HabitModel) habitDayStatuses(ctx context.Context, habit Habit, days 
 			Date:      date,
 			Value:     value,
 			Completed: habitCompleted(habit, value),
+			Scheduled: habitScheduledOn(habit, date),
 		})
 	}
 
 	return result, nil
+}
+
+// habitScheduledOn reports whether a habit is scheduled on a given date.
+// Daily habits are scheduled every day. Weekday-restricted (weekly) habits are
+// scheduled only on weekdays in frequency_days (1=Monday .. 7=Sunday).
+func habitScheduledOn(habit Habit, date string) bool {
+	if habit.FrequencyType != HabitFrequencyWeekly {
+		return true
+	}
+	parsed, err := time.Parse("2006-01-02", date)
+	if err != nil {
+		return true
+	}
+	weekday := int(parsed.Weekday())
+	if weekday == 0 {
+		weekday = 7
+	}
+	for _, day := range habit.FrequencyDays {
+		if day == weekday {
+			return true
+		}
+	}
+	return false
 }
 
 type habitScanner interface {
@@ -561,6 +787,7 @@ type habitScanner interface {
 func scanHabit(scanner habitScanner) (Habit, error) {
 	var habit Habit
 	var targetValue pgtype.Numeric
+	var targetValueMax pgtype.Numeric
 	var targetUnit *string
 	var frequencyDays []int32
 
@@ -570,9 +797,12 @@ func scanHabit(scanner habitScanner) (Habit, error) {
 		&habit.CategoryID,
 		&habit.CategoryName,
 		&habit.Name,
+		&habit.Icon,
 		&habit.Description,
 		&habit.Type,
 		&targetValue,
+		&targetValueMax,
+		&habit.ComparisonOperator,
 		&targetUnit,
 		&habit.FrequencyType,
 		&frequencyDays,
@@ -589,6 +819,12 @@ func scanHabit(scanner habitScanner) (Habit, error) {
 		value, err := targetValue.Float64Value()
 		if err == nil && value.Valid {
 			habit.TargetValue = &value.Float64
+		}
+	}
+	if targetValueMax.Valid {
+		value, err := targetValueMax.Float64Value()
+		if err == nil && value.Valid {
+			habit.TargetValueMax = &value.Float64
 		}
 	}
 	habit.TargetUnit = targetUnit
@@ -616,25 +852,45 @@ func habitCompleted(habit Habit, value float64) bool {
 	if habit.TargetValue == nil {
 		return value > 0
 	}
-	return value >= *habit.TargetValue
+	switch habit.ComparisonOperator {
+	case HabitComparisonLTE:
+		return value <= *habit.TargetValue
+	case HabitComparisonEQ:
+		return value == *habit.TargetValue
+	case HabitComparisonBetween:
+		if habit.TargetValueMax == nil {
+			return false
+		}
+		return value >= *habit.TargetValue && value <= *habit.TargetValueMax
+	default:
+		return value >= *habit.TargetValue
+	}
 }
 
 func completionRate(days []HabitDayStatus) float64 {
-	if len(days) == 0 {
-		return 0
-	}
 	completed := 0
+	scheduled := 0
 	for _, day := range days {
+		if !day.Scheduled {
+			continue
+		}
+		scheduled++
 		if day.Completed {
 			completed++
 		}
 	}
-	return math.Round((float64(completed)/float64(len(days)))*1000) / 10
+	if scheduled == 0 {
+		return 0
+	}
+	return math.Round((float64(completed)/float64(scheduled))*1000) / 10
 }
 
 func currentStreak(days []HabitDayStatus) int {
 	streak := 0
 	for index := len(days) - 1; index >= 0; index-- {
+		if !days[index].Scheduled {
+			continue
+		}
 		if !days[index].Completed {
 			break
 		}
@@ -647,6 +903,9 @@ func longestStreak(days []HabitDayStatus) int {
 	longest := 0
 	current := 0
 	for _, day := range days {
+		if !day.Scheduled {
+			continue
+		}
 		if day.Completed {
 			current++
 			if current > longest {
@@ -667,69 +926,157 @@ func bestWeek(days []HabitDayStatus) int {
 			end = len(days)
 		}
 		completed := 0
+		scheduled := 0
 		for _, day := range days[index:end] {
+			if !day.Scheduled {
+				continue
+			}
+			scheduled++
 			if day.Completed {
 				completed++
 			}
 		}
-		if completed > best {
-			best = completed
+		if scheduled == 0 {
+			continue
+		}
+		weekRate := int(math.Round((float64(completed) / float64(scheduled)) * 100))
+		if weekRate > best {
+			best = weekRate
 		}
 	}
 	return best
 }
 
 type defaultHabit struct {
-	categoryID    string
-	name          string
-	description   string
-	habitType     HabitType
-	targetValue   *float64
-	targetUnit    *string
-	frequencyType HabitFrequencyType
-	frequencyDays []int
-	weeklyGoal    int
-	sortOrder     int
+	categoryID         string
+	name               string
+	icon               string
+	description        string
+	habitType          HabitType
+	targetValue        *float64
+	targetValueMax     *float64
+	targetUnit         *string
+	frequencyType      HabitFrequencyType
+	frequencyDays      []int
+	weeklyGoal         int
+	comparisonOperator HabitComparisonOperator
+	sortOrder          int
 }
 
 func (habit defaultHabit) withUser(userID string) CreateHabitParams {
+	var icon *string
+	if habit.icon != "" {
+		icon = &habit.icon
+	}
 	return CreateHabitParams{
-		UserID:        userID,
-		CategoryID:    habit.categoryID,
-		Name:          habit.name,
-		Description:   habit.description,
-		Type:          habit.habitType,
-		TargetValue:   habit.targetValue,
-		TargetUnit:    habit.targetUnit,
-		FrequencyType: habit.frequencyType,
-		FrequencyDays: habit.frequencyDays,
-		WeeklyGoal:    habit.weeklyGoal,
-		SortOrder:     habit.sortOrder,
+		UserID:             userID,
+		CategoryID:         habit.categoryID,
+		Name:               habit.name,
+		Icon:               icon,
+		Description:        habit.description,
+		Type:               habit.habitType,
+		TargetValue:        habit.targetValue,
+		TargetValueMax:     habit.targetValueMax,
+		ComparisonOperator: habit.comparisonOperator,
+		TargetUnit:         habit.targetUnit,
+		FrequencyType:      habit.frequencyType,
+		FrequencyDays:      habit.frequencyDays,
+		WeeklyGoal:         habit.weeklyGoal,
+		SortOrder:          habit.sortOrder,
 	}
 }
 
 func defaultHabits(categories map[string]string) []defaultHabit {
-	steps := 6000.0
-	glasses := 8.0
-	dwGoal := 3.0
-	screenTimeGoal := 2.0
+	steps := 5000.0
+	water := 4.0
+	deepWork := 3.0
+	screenTime := 3.0
+	caffeineMin := 1.0
+	caffeineMax := 3.0
+
 	stepsUnit := "steps/day"
-	glassesUnit := "glasses/day"
-	dwUnit := "sessions/day"
-	screenTimeUnit := "hours (max 3)"
+	waterUnit := "liters/day"
+	deepWorkUnit := "sessions/day"
+	screenTimeUnit := "hours/day"
+	caffeineUnit := "cups/day"
+
+	screenTimeOp := HabitComparisonLTE
+	caffeineOp := HabitComparisonBetween
+
 	return []defaultHabit{
-		{categoryID: categories["Exercise"], name: "Steps walked", habitType: HabitTypeNumeric, targetValue: &steps, targetUnit: &stepsUnit, frequencyType: HabitFrequencyDaily, weeklyGoal: 7, sortOrder: 1},
-		{categoryID: categories["Health"], name: "Water intake", habitType: HabitTypeNumeric, targetValue: &glasses, targetUnit: &glassesUnit, frequencyType: HabitFrequencyDaily, weeklyGoal: 7, sortOrder: 2},
-		{categoryID: categories["Deep Work"], name: "Deep Work Session", habitType: HabitTypeNumeric, targetValue: &dwGoal, targetUnit: &dwUnit, frequencyType: HabitFrequencyDaily, weeklyGoal: 7, sortOrder: 3},
-		{categoryID: categories["Communication"], name: "Formal Vocabulary", habitType: HabitTypeBoolean, frequencyType: HabitFrequencyDaily, weeklyGoal: 7, sortOrder: 4},
-		{categoryID: categories["Communication"], name: "Interview & Intro Prep", habitType: HabitTypeBoolean, frequencyType: HabitFrequencyDaily, weeklyGoal: 7, sortOrder: 5},
-		{categoryID: categories["Technical"], name: "Commit to Side Project", habitType: HabitTypeBoolean, frequencyType: HabitFrequencyDaily, weeklyGoal: 7, sortOrder: 6},
-		{categoryID: categories["Digital Health"], name: "Posture & Ergonomics", habitType: HabitTypeBoolean, frequencyType: HabitFrequencyDaily, weeklyGoal: 7, sortOrder: 7},
-		{categoryID: categories["Digital Health"], name: "Eye Rest (20-20-20)", habitType: HabitTypeBoolean, frequencyType: HabitFrequencyDaily, weeklyGoal: 7, sortOrder: 8},
-		{categoryID: categories["Digital Health"], name: "Less Instagram / Screen Time", habitType: HabitTypeNumeric, targetValue: &screenTimeGoal, targetUnit: &screenTimeUnit, frequencyType: HabitFrequencyDaily, weeklyGoal: 7, sortOrder: 9},
-		{categoryID: categories["Technical"], name: "Read Tech Blog/Paper", habitType: HabitTypeBoolean, frequencyType: HabitFrequencyDaily, weeklyGoal: 7, sortOrder: 10},
-		{categoryID: categories["Exercise"], name: "Gym", habitType: HabitTypeBoolean, frequencyType: HabitFrequencyWeekly, frequencyDays: []int{1, 2, 3, 4, 5, 6, 7}, weeklyGoal: 4, sortOrder: 11},
-		{categoryID: categories["Learning"], name: "Read", habitType: HabitTypeBoolean, frequencyType: HabitFrequencyDaily, weeklyGoal: 7, sortOrder: 12},
-		{categoryID: categories["Health"], name: "Sleep by midnight", habitType: HabitTypeBoolean, frequencyType: HabitFrequencyDaily, weeklyGoal: 7, sortOrder: 13},
+		{
+			categoryID: categories["Exercise"], name: "Steps walked", icon: "🏃‍➡️",
+			description: "Hit at least 5,000 steps today.",
+			habitType: HabitTypeNumeric, targetValue: &steps, targetUnit: &stepsUnit,
+			frequencyType: HabitFrequencyDaily, weeklyGoal: 7, sortOrder: 1,
+		},
+		{
+			categoryID: categories["Health"], name: "Water intake", icon: "🥤💧",
+			description: "Drink at least 4 liters of water.",
+			habitType: HabitTypeNumeric, targetValue: &water, targetUnit: &waterUnit,
+			frequencyType: HabitFrequencyDaily, weeklyGoal: 7, sortOrder: 2,
+		},
+		{
+			categoryID: categories["Deep Work"], name: "Deep Work Session", icon: "💻",
+			description: "Complete at least 3 focused deep work sessions.",
+			habitType: HabitTypeNumeric, targetValue: &deepWork, targetUnit: &deepWorkUnit,
+			frequencyType: HabitFrequencyDaily, weeklyGoal: 6, sortOrder: 3,
+		},
+		{
+			categoryID: categories["Communication"], name: "Interview & Intro Prep", icon: "🗣️",
+			description: "Practice interview answers or self-introduction.",
+			habitType: HabitTypeBoolean,
+			frequencyType: HabitFrequencyDaily, weeklyGoal: 4, sortOrder: 4,
+		},
+		{
+			categoryID: categories["Technical"], name: "Commit to Side Project", icon: "🚀🔥",
+			description: "Make progress on your side project.",
+			habitType: HabitTypeBoolean,
+			frequencyType: HabitFrequencyDaily, weeklyGoal: 4, sortOrder: 5,
+		},
+		{
+			categoryID: categories["Digital Health"], name: "Posture & Ergonomics", icon: "🧘",
+			description: "Check your posture and desk ergonomics.",
+			habitType: HabitTypeBoolean,
+			frequencyType: HabitFrequencyDaily, weeklyGoal: 7, sortOrder: 6,
+		},
+		{
+			categoryID: categories["Digital Health"], name: "Eye Rest (20-20-20)", icon: "👀",
+			description: "Every 20 minutes, look at something 20 feet away for 20 seconds.",
+			habitType: HabitTypeBoolean,
+			frequencyType: HabitFrequencyDaily, weeklyGoal: 7, sortOrder: 7,
+		},
+		{
+			categoryID: categories["Digital Health"], name: "Less Instagram / Screen Time", icon: "📵",
+			description: "Keep screen time at 3 hours or less.",
+			habitType: HabitTypeNumeric, comparisonOperator: screenTimeOp,
+			targetValue: &screenTime, targetUnit: &screenTimeUnit,
+			frequencyType: HabitFrequencyDaily, weeklyGoal: 6, sortOrder: 8,
+		},
+		{
+			categoryID: categories["Exercise"], name: "Gym/Boxing", icon: "🥊👊",
+			description: "Gym or boxing session.",
+			habitType: HabitTypeBoolean,
+			frequencyType: HabitFrequencyWeekly, frequencyDays: []int{1, 2, 3, 4, 5, 7}, weeklyGoal: 4, sortOrder: 9,
+		},
+		{
+			categoryID: categories["Learning"], name: "Read", icon: "📖📚",
+			description: "Read for at least 20-30 minutes.",
+			habitType: HabitTypeBoolean,
+			frequencyType: HabitFrequencyDaily, weeklyGoal: 5, sortOrder: 10,
+		},
+		{
+			categoryID: categories["Health"], name: "Sleep by midnight", icon: "😴🕛🛌",
+			description: "Be asleep by midnight.",
+			habitType: HabitTypeBoolean,
+			frequencyType: HabitFrequencyDaily, weeklyGoal: 7, sortOrder: 11,
+		},
+		{
+			categoryID: categories["Health"], name: "Caffeine intake", icon: "☕",
+			description: "Keep caffeine between 1-3 cups.",
+			habitType: HabitTypeNumeric, comparisonOperator: caffeineOp,
+			targetValue: &caffeineMin, targetValueMax: &caffeineMax, targetUnit: &caffeineUnit,
+			frequencyType: HabitFrequencyDaily, weeklyGoal: 7, sortOrder: 12,
+		},
 	}
 }

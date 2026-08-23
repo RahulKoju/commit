@@ -1,8 +1,8 @@
 # Commit
 
-Track your tasks, habits, learning, focus, and reflections — all in one place.
+Track your tasks, habits, notes, reminders, and focus sessions — all in one place.
 
-Commit is a full-stack personal productivity application that helps you manage your daily workflow through task management, habit tracking, note taking, learning logging, focus session timers, and periodic self-reviews. Built with a Go backend and a React frontend, it runs as a pnpm monorepo with a shared component library.
+Commit is a full-stack personal productivity application that helps you manage your daily workflow through task management, habit tracking with comparison-based targets, note taking with attached reminders, and persistent focus session timers. Built with a Go backend and a React frontend, it runs as a pnpm monorepo with a shared component library.
 
 ## Tech Stack
 
@@ -73,8 +73,8 @@ Commit is a full-stack personal productivity application that helps you manage y
 | [Overview](docs/application/overview.md) | App description, 10 features, tech stack, monorepo structure |
 | [Getting Started](docs/application/getting-started.md) | Prerequisites, setup, running locally, troubleshooting |
 | [Architecture](docs/application/architecture.md) | Backend startup, middleware pipeline, auth flow, common patterns |
-| [API Reference](docs/application/api.md) | All 50+ endpoints across 10 modules with request/response shapes |
-| [Database Schema](docs/application/database.md) | All 18 tables, columns, indexes, constraints, relationships |
+| [API Reference](docs/application/api.md) | All endpoints across 8 modules with request/response shapes |
+| [Database Schema](docs/application/database.md) | All 14 tables, columns, indexes, constraints, relationships |
 | [Environment Variables](docs/application/environment.md) | Backend and frontend env vars, defaults, examples |
 | [Frontend](docs/application/frontend.md) | Monorepo layout, routing, state management, UI system, shortcuts |
 

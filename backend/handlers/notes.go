@@ -17,17 +17,13 @@ type NoteHandler struct {
 }
 
 type noteRequest struct {
-	Title    string   `json:"title" binding:"required"`
-	Body     string   `json:"body"`
-	TopicIDs []string `json:"topic_ids"`
-	Tags     []string `json:"tags"`
+	Title string `json:"title" binding:"required"`
+	Body  string `json:"body"`
 }
 
 type updateNoteRequest struct {
-	Title    *string   `json:"title"`
-	Body     *string   `json:"body"`
-	TopicIDs *[]string `json:"topic_ids"`
-	Tags     *[]string `json:"tags"`
+	Title *string `json:"title"`
+	Body  *string `json:"body"`
 }
 
 func NewNoteHandler(notes services.NoteService) NoteHandler {
@@ -83,11 +79,9 @@ func (handler NoteHandler) Create(c *gin.Context) {
 	}
 
 	note, err := handler.notes.Create(c.Request.Context(), services.CreateNoteInput{
-		UserID:   userID,
-		Title:    request.Title,
-		Body:     request.Body,
-		TopicIDs: request.TopicIDs,
-		Tags:     request.Tags,
+		UserID: userID,
+		Title:  request.Title,
+		Body:   request.Body,
 	})
 	if err != nil {
 		writeNoteError(c, err)
@@ -112,12 +106,10 @@ func (handler NoteHandler) Update(c *gin.Context) {
 	}
 
 	note, err := handler.notes.Update(c.Request.Context(), services.UpdateNoteInput{
-		UserID:   userID,
-		ID:       c.Param("id"),
-		Title:    request.Title,
-		Body:     request.Body,
-		TopicIDs: request.TopicIDs,
-		Tags:     request.Tags,
+		UserID: userID,
+		ID:     c.Param("id"),
+		Title:  request.Title,
+		Body:   request.Body,
 	})
 	if err != nil {
 		writeNoteError(c, err)

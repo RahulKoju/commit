@@ -1,26 +1,37 @@
 import DOMPurify from "dompurify"
-import { Edit3, Eye, Link2, Plus, Trash2, X } from "lucide-react"
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react"
+import { Edit3, Eye, Link2, Plus, Trash2 } from "lucide-react"
+import { useEffect, useRef, useState, type FormEvent } from "react"
 import { Button } from "@workspace/ui/components/button"
 import { RichTextEditor } from "@workspace/ui/components/rich-text-editor"
 
-import { useLearningTopics } from "@/hooks/useLearn"
 import { useCreateNote, useDeleteNote, useNoteBacklinks, useNotes, useUpdateNote } from "@/hooks/useNotes"
+import { RemindersSection } from "@/components/RemindersSection"
 import type { CreateNoteInput, Note } from "@/types/note.types"
 
 export function NotesPage() {
   const [search, setSearch] = useState("")
   const notesQuery = useNotes(search)
-  const topicsQuery = useLearningTopics()
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null)
-  const [editingNoteId, setEditingNoteId] = useState<string | null>("new")
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null)
   const [preview, setPreview] = useState(true)
   const notes = notesQuery.data?.data ?? []
-  const selectedNote = useMemo(
-    () => notes.find((note) => note.id === selectedNoteId) ?? notes[0] ?? null,
-    [notes, selectedNoteId]
-  )
+  const selectedNote = notes.find((note) => note.id === selectedNoteId) ?? notes[0] ?? null
   const activeNote = editingNoteId === "new" ? null : notes.find((note) => note.id === editingNoteId) ?? selectedNote
+  const deleteNote = useDeleteNote()
+
+  async function handleDelete() {
+    if (!activeNote) return
+    await deleteNote.mutateAsync(activeNote.id)
+    const remaining = notes.filter((note) => note.id !== activeNote.id)
+    if (remaining.length > 0) {
+      setSelectedNoteId(remaining[0].id)
+      setEditingNoteId(remaining[0].id)
+    } else {
+      setSelectedNoteId(null)
+      setEditingNoteId(null)
+    }
+    setPreview(true)
+  }
 
   return (
     <section className="space-y-6">
@@ -28,10 +39,10 @@ export function NotesPage() {
         <div>
           <h1 className="text-2xl font-semibold">Notes</h1>
           <p className="text-sm text-muted-foreground">
-            Search, tag, edit, and preview developer notes.
+            Search, edit, and preview developer notes.
           </p>
         </div>
-        <Button type="button" onClick={() => { setEditingNoteId("new"); setPreview(false) }}>
+        <Button type="button" onClick={() => { setSelectedNoteId(null); setEditingNoteId("new"); setPreview(false) }}>
           <Plus className="size-4" />
           New note
         </Button>
@@ -50,7 +61,7 @@ export function NotesPage() {
                 key={note.id}
                 type="button"
                 className={`rounded-lg border p-3 text-left text-sm ${
-                  selectedNote?.id === note.id ? "bg-muted" : "bg-background hover:bg-muted/50"
+                  activeNote?.id === note.id ? "bg-muted" : "bg-background hover:bg-muted/50"
                 }`}
                 onClick={() => {
                   setSelectedNoteId(note.id)
@@ -60,18 +71,6 @@ export function NotesPage() {
               >
                 <p className="font-medium">{note.title}</p>
                 <p className="text-xs text-muted-foreground">{new Date(note.updated_at).toLocaleString()}</p>
-                <div className="mt-2 flex flex-wrap gap-1">
-                  {note.topics.map((topic) => (
-                    <span key={topic.id} className="rounded-full border px-2 py-0.5 text-xs">
-                      {topic.name}
-                    </span>
-                  ))}
-                  {note.tags.map((tag) => (
-                    <span key={tag} className="rounded-full border bg-muted/50 px-2 py-0.5 text-xs text-muted-foreground">
-                      #{tag}
-                    </span>
-                  ))}
-                </div>
               </button>
             ))}
           </div>
@@ -79,38 +78,64 @@ export function NotesPage() {
 
         <div className="rounded-xl border bg-background p-4">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <h2 className="font-semibold">{editingNoteId === "new" ? "New note" : activeNote?.title ?? "Note"}</h2>
-            <div className="flex gap-2">
-              <Button type="button" variant={preview ? "default" : "outline"} onClick={() => setPreview(true)}>
-                <Eye className="size-4" />
-                Preview
-              </Button>
-              <Button type="button" variant={!preview ? "default" : "outline"} onClick={() => setPreview(false)}>
-                <Edit3 className="size-4" />
-                Edit
-              </Button>
+            <div>
+              <h2 className="text-xl font-semibold">
+                {editingNoteId === "new" ? "New note" : activeNote?.title ?? "Note"}
+              </h2>
+              {activeNote ? (
+                <p className="text-sm text-muted-foreground">
+                  Updated {new Date(activeNote.updated_at).toLocaleString()}
+                </p>
+              ) : null}
             </div>
-          </div>
-          <div className="grid gap-4 xl:grid-cols-2">
-            {!preview || !activeNote ? (
-              <div className={activeNote && preview ? "xl:col-span-1" : "xl:col-span-2"}>
-                <NoteForm
-                  note={editingNoteId === "new" ? null : activeNote}
-                  topics={topicsQuery.data?.topics ?? []}
-                  onSaved={(note) => {
-                    setSelectedNoteId(note.id)
-                    setEditingNoteId(note.id)
-                    setPreview(true)
-                  }}
-                />
+            {activeNote ? (
+              <div className="flex items-center gap-2">
+                <div className="flex h-7 items-center overflow-hidden rounded-md border bg-background">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={preview ? "default" : "ghost"}
+                    className={`rounded-none ${preview ? "" : "text-muted-foreground"}`}
+                    onClick={() => setPreview(true)}
+                  >
+                    <Eye className="size-4" />
+                    View
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={!preview ? "default" : "ghost"}
+                    className={`rounded-none ${!preview ? "" : "text-muted-foreground"}`}
+                    onClick={() => setPreview(false)}
+                  >
+                    <Edit3 className="size-4" />
+                    Edit
+                  </Button>
+                </div>
+                <Button type="button" variant="outline" onClick={handleDelete}>
+                  <Trash2 className="size-4" />
+                  Delete
+                </Button>
               </div>
             ) : null}
-            {preview && activeNote ? (
-              <div className={!preview || !activeNote ? "xl:col-span-2" : "xl:col-span-1"}>
-                <NotePreview note={activeNote} onEdit={() => setPreview(false)} />
-              </div>
-            ) : null}
           </div>
+          {preview && activeNote ? (
+            <NotePreview note={activeNote} />
+          ) : editingNoteId === "new" || activeNote ? (
+            <NoteForm
+              key={editingNoteId === "new" ? "new" : activeNote?.id}
+              note={editingNoteId === "new" ? null : activeNote}
+              onSaved={(note) => {
+                setSelectedNoteId(note.id)
+                setEditingNoteId(note.id)
+                setPreview(true)
+              }}
+            />
+          ) : (
+            <div className="rounded-lg border border-dashed bg-muted/20 p-6 text-sm text-muted-foreground">
+              Select a note to view, or adjust your search to find a matching note.
+            </div>
+          )}
         </div>
       </div>
     </section>
@@ -138,37 +163,21 @@ function DebouncedSearch({ value, onChange }: { value: string; onChange: (value:
 
 function NoteForm({
   note,
-  topics,
   onSaved,
 }: {
   note: Note | null
-  topics: Array<{ id: string; name: string }>
   onSaved: (note: Note) => void
 }) {
   const createNote = useCreateNote()
   const updateNote = useUpdateNote()
   const [error, setError] = useState<string | null>(null)
-  const [tags, setTags] = useState<string[]>(note?.tags ?? [])
-  const [tagInput, setTagInput] = useState("")
   const resetToken = note?.id ?? "new"
-
-  function addTag() {
-    const tag = tagInput.trim().toLowerCase()
-    if (tag && !tags.includes(tag)) {
-      setTags([...tags, tag])
-    }
-    setTagInput("")
-  }
-
-  function removeTag(tag: string) {
-    setTags(tags.filter((t) => t !== tag))
-  }
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setError(null)
     const formData = new FormData(event.currentTarget)
-    const input = noteInputFromFormData(formData, tags)
+    const input = noteInputFromFormData(formData)
 
     try {
       const response = note
@@ -191,42 +200,6 @@ function NoteForm({
           className="h-10 rounded-md border bg-background px-3"
         />
       </label>
-      <div className="grid gap-2 text-sm">
-        <span className="font-medium">Topics</span>
-        <div className="flex flex-wrap gap-2">
-          {topics.map((topic) => (
-            <label key={topic.id} className="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs">
-              <input
-                type="checkbox"
-                name="topic_ids"
-                value={topic.id}
-                defaultChecked={note?.topics.some((item) => item.id === topic.id) ?? false}
-              />
-              {topic.name}
-            </label>
-          ))}
-        </div>
-      </div>
-      <div className="grid gap-2 text-sm">
-        <span className="font-medium">Tags</span>
-        <div className="flex flex-wrap gap-2">
-          {tags.map((tag) => (
-            <span key={tag} className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs">
-              {tag}
-              <button type="button" onClick={() => removeTag(tag)} className="text-muted-foreground hover:text-foreground">
-                <X className="size-3" />
-              </button>
-            </span>
-          ))}
-          <input
-            value={tagInput}
-            onChange={(e) => setTagInput(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addTag(); } }}
-            placeholder="Add a tag..."
-            className="h-7 min-w-24 rounded-md border bg-background px-2 text-xs"
-          />
-        </div>
-      </div>
       <RichTextEditor
         id="note-body"
         name="body"
@@ -245,44 +218,11 @@ function NoteForm({
   )
 }
 
-function NotePreview({ note, onEdit }: { note: Note; onEdit: () => void }) {
-  const deleteNote = useDeleteNote()
+function NotePreview({ note }: { note: Note }) {
   const backlinksQuery = useNoteBacklinks(note.id)
-
-  async function onDelete() {
-    await deleteNote.mutateAsync(note.id)
-  }
 
   return (
     <article className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h3 className="text-xl font-semibold">{note.title}</h3>
-          <p className="text-sm text-muted-foreground">Updated {new Date(note.updated_at).toLocaleString()}</p>
-        </div>
-        <div className="flex gap-2">
-          <Button type="button" variant="outline" onClick={onEdit}>
-            <Edit3 className="size-4" />
-            Edit
-          </Button>
-          <Button type="button" variant="outline" onClick={onDelete}>
-            <Trash2 className="size-4" />
-            Delete
-          </Button>
-        </div>
-      </div>
-      <div className="flex flex-wrap gap-2">
-        {note.topics.map((topic) => (
-          <span key={topic.id} className="rounded-full border px-2 py-1 text-xs">
-            {topic.name}
-          </span>
-        ))}
-        {note.tags.map((tag) => (
-          <span key={tag} className="rounded-full border bg-muted/50 px-2 py-1 text-xs text-muted-foreground">
-            #{tag}
-          </span>
-        ))}
-      </div>
       <div
         className="prose prose-sm max-w-none rounded-lg border bg-muted/30 p-4"
         dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(note.body) }}
@@ -310,15 +250,14 @@ function NotePreview({ note, onEdit }: { note: Note; onEdit: () => void }) {
           </div>
         </div>
       ) : null}
+      <RemindersSection noteId={note.id} />
     </article>
   )
 }
 
-function noteInputFromFormData(formData: FormData, tags: string[]): CreateNoteInput {
+function noteInputFromFormData(formData: FormData): CreateNoteInput {
   return {
     title: String(formData.get("title") ?? ""),
     body: String(formData.get("body") ?? ""),
-    topic_ids: formData.getAll("topic_ids").map((value) => String(value)),
-    tags,
   }
 }

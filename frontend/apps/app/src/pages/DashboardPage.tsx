@@ -1,5 +1,4 @@
 import {
-  BookOpen,
   CheckCircle2,
   Clock,
   Flame,
@@ -10,7 +9,7 @@ import {
   X,
 } from "lucide-react"
 import type { ComponentType } from "react"
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useMemo, useState } from "react"
 import { Link } from "react-router-dom"
 import {
   AreaChart,
@@ -19,7 +18,6 @@ import {
   YAxis,
   Tooltip,
   ResponsiveContainer,
-  Legend,
   ReferenceLine,
 } from "recharts"
 import { Button } from "@workspace/ui/components/button"
@@ -41,6 +39,9 @@ interface WidgetDef {
   Component: ComponentType<{
     summary: DashboardSummary
     heatmapQuery: ReturnType<typeof useActivityHeatmap>
+    year?: number
+    years?: number[]
+    onYearChange?: (year: number) => void
   }>
 }
 
@@ -49,6 +50,7 @@ const DEFAULT_WIDGET_ORDER = [
   "habit-chart",
   "productivity-chart",
   "activity-heatmap",
+  "overall-activity-heatmap",
   "recent-notes",
 ]
 
@@ -57,13 +59,18 @@ const WIDGET_REGISTRY: WidgetDef[] = [
   { id: "habit-chart", label: "Weekly habits", Component: HabitChartWidget },
   {
     id: "productivity-chart",
-    label: "Weekly productivity",
+    label: "Everything else",
     Component: ProductivityChartWidget,
   },
   {
     id: "activity-heatmap",
-    label: "Activity heatmap",
+    label: "Habits heatmap",
     Component: ActivityHeatmapWidget,
+  },
+  {
+    id: "overall-activity-heatmap",
+    label: "Overall activity heatmap",
+    Component: OverallActivityHeatmapWidget,
   },
   { id: "recent-notes", label: "Recent notes", Component: RecentNotesWidget },
 ]
@@ -76,7 +83,16 @@ export function DashboardPage() {
   const layoutQuery = useDashboardLayout()
   const saveLayout = useSaveDashboardLayout()
   const summary = dashboardQuery.data?.summary
-  const heatmapQuery = useActivityHeatmap()
+  const [heatmapYear, setHeatmapYear] = useState(() => new Date().getFullYear())
+  const heatmapQuery = useActivityHeatmap(heatmapYear)
+  const earliestHeatmapYear = heatmapQuery.data?.earliest_year ?? new Date().getFullYear()
+  const heatmapYears = useMemo(() => {
+    const years: number[] = []
+    for (let y = earliestHeatmapYear; y <= Math.max(new Date().getFullYear(), heatmapYear); y++) {
+      years.push(y)
+    }
+    return years
+  }, [earliestHeatmapYear, heatmapYear])
   const [customizing, setCustomizing] = useState(false)
   const [dragId, setDragId] = useState<string | null>(null)
 
@@ -91,10 +107,6 @@ export function DashboardPage() {
   }, [savedLayout])
 
   const [currentOrder, setCurrentOrder] = useState(order)
-
-  useEffect(() => {
-    setCurrentOrder(order)
-  }, [order])
 
   function onDragStart(id: string) {
     setDragId(id)
@@ -128,12 +140,18 @@ export function DashboardPage() {
     setCustomizing(false)
   }
 
+  function startCustomizing() {
+    setCurrentOrder(order)
+    setCustomizing(true)
+  }
+
+  const displayOrder = customizing ? currentOrder : order
   const widgets = useMemo(
     () =>
-      currentOrder
+      displayOrder
         .map((id) => WIDGET_REGISTRY.find((w) => w.id === id))
         .filter(Boolean) as WidgetDef[],
-    [currentOrder]
+    [displayOrder]
   )
 
   return (
@@ -166,7 +184,7 @@ export function DashboardPage() {
             <Button
               type="button"
               variant="outline"
-              onClick={() => setCustomizing(true)}
+              onClick={startCustomizing}
             >
               <LayoutGrid className="size-4" />
               Customize
@@ -201,7 +219,13 @@ export function DashboardPage() {
               onDragOver={onDragOver}
               onDrop={onDrop}
             >
-              <Component summary={summary} heatmapQuery={heatmapQuery} />
+              <Component
+                summary={summary}
+                heatmapQuery={heatmapQuery}
+                year={heatmapYear}
+                years={heatmapYears}
+                onYearChange={setHeatmapYear}
+              />
             </DraggableWidget>
           ))}
         </div>
@@ -274,13 +298,6 @@ function MetricCardsWidget({
         trend={trend(wc.habits_checked_this_week, wc.habits_checked_last_week)}
       />
       <MetricCard
-        icon={BookOpen}
-        label="Learning streak"
-        value={`${summary.learning_streak}`}
-        detail="consecutive study days"
-        href="/learn"
-      />
-      <MetricCard
         icon={Clock}
         label="Focus"
         value={
@@ -313,22 +330,15 @@ function HabitChartWidget({
         <ResponsiveContainer width="100%" height={160}>
           <AreaChart data={data}>
             <XAxis
-              dataKey="day"
+              dataKey="date"
+              tickFormatter={shortDay}
               tick={{ fontSize: 12 }}
               axisLine={false}
               tickLine={false}
             />
             <YAxis hide />
             <Tooltip
-              contentStyle={{
-                fontSize: 13,
-                borderRadius: 8,
-                border: "1px solid var(--color-border)",
-              }}
-              formatter={(value: any, name: any) => [
-                value,
-                name === "completed" ? "Completed" : "Total",
-              ]}
+              content={<HabitChartTooltip />}
             />
             <Area
               type="monotone"
@@ -339,7 +349,7 @@ function HabitChartWidget({
             />
             {separatorIndex > 0 ? (
               <ReferenceLine
-                x={data[separatorIndex]?.day}
+                x={data[separatorIndex]?.date}
                 stroke="var(--color-border)"
                 strokeDasharray="4 4"
               />
@@ -351,7 +361,7 @@ function HabitChartWidget({
   )
 }
 
-/* ─── Widget: Productivity chart ─── */
+/* ─── Widget: Everything else chart ─── */
 function ProductivityChartWidget({
   summary,
 }: {
@@ -359,87 +369,236 @@ function ProductivityChartWidget({
   heatmapQuery: ReturnType<typeof useActivityHeatmap>
 }) {
   const data = productivityData(summary.weekly_productivity)
-  const separatorIndex = data.length > 7 ? data.length - 7 : -1
   return (
     <div className="rounded-xl border bg-background p-4">
-      <h2 className="font-semibold">Productivity (last 14 days)</h2>
-      <p className="text-xs text-muted-foreground">Last week vs this week</p>
-      <div className="mt-4">
-        <ResponsiveContainer width="100%" height={200}>
-          <AreaChart data={data}>
-            <XAxis
-              dataKey="day"
-              tick={{ fontSize: 12 }}
-              axisLine={false}
-              tickLine={false}
-            />
-            <YAxis hide />
-            <Tooltip
-              contentStyle={{
-                fontSize: 13,
-                borderRadius: 8,
-                border: "1px solid var(--color-border)",
-              }}
-            />
-            <Legend wrapperStyle={{ fontSize: 12 }} />
-            <Area
-              type="monotone"
-              dataKey="tasks"
-              name="Tasks"
-              stackId="a"
-              stroke="var(--color-primary)"
-              fill="var(--color-primary)"
-              fillOpacity={0.4}
-            />
-            <Area
-              type="monotone"
-              dataKey="habits"
-              name="Habits"
-              stackId="a"
-              stroke="#22c55e"
-              fill="#22c55e"
-              fillOpacity={0.4}
-            />
-            <Area
-              type="monotone"
-              dataKey="learning"
-              name="Learning"
-              stackId="a"
-              stroke="#a855f7"
-              fill="#a855f7"
-              fillOpacity={0.3}
-            />
-            {separatorIndex > 0 ? (
-              <ReferenceLine
-                x={data[separatorIndex]?.day}
-                stroke="var(--color-border)"
-                strokeDasharray="4 4"
-              />
-            ) : null}
-          </AreaChart>
-        </ResponsiveContainer>
+      <h2 className="font-semibold">Everything else (last 14 days)</h2>
+      <p className="text-xs text-muted-foreground">
+        Tasks completed, focus minutes, notes &amp; reminders created
+      </p>
+      <div className="mt-4 grid gap-4 md:grid-cols-3">
+        <MiniAreaChart data={data} dataKey="tasks" label="Tasks completed" valueLabel="tasks completed" color="var(--color-primary)" />
+        <MiniAreaChart data={data} dataKey="focus" label="Focus minutes" valueLabel="focus minutes" color="#8b5cf6" />
+        <MiniAreaChart data={data} dataKey="created" label="Notes + reminders" valueLabel="notes/reminders created" color="#22c55e" />
       </div>
     </div>
   )
 }
 
-/* ─── Widget: Activity heatmap ─── */
+function MiniAreaChart({
+  data,
+  dataKey,
+  label,
+  valueLabel,
+  color,
+}: {
+  data: { date: string; day: string; [key: string]: string | number }[]
+  dataKey: string
+  label: string
+  valueLabel: string
+  color: string
+}) {
+  return (
+    <div>
+      <p className="mb-1 text-xs font-medium text-muted-foreground">{label}</p>
+      <ResponsiveContainer width="100%" height={140}>
+        <AreaChart data={data}>
+          <XAxis
+            dataKey="date"
+            tickFormatter={shortDay}
+            tick={{ fontSize: 11 }}
+            axisLine={false}
+            tickLine={false}
+          />
+          <YAxis hide />
+          <Tooltip
+            content={<MiniChartTooltip valueLabel={valueLabel} />}
+          />
+          <Area type="monotone" dataKey={dataKey} stroke={color} fill={color} fillOpacity={0.35} />
+        </AreaChart>
+      </ResponsiveContainer>
+    </div>
+  )
+}
+
+function MiniChartTooltip({
+  active,
+  payload,
+  valueLabel,
+}: {
+  active?: boolean
+  payload?: Array<{ payload?: MiniChartDatum; value?: number }>
+  valueLabel: string
+}) {
+  if (!active || !payload?.length) return null
+  const item = payload[0]?.payload
+  if (!item) return null
+  const value = payload[0]?.value ?? 0
+  return (
+    <div className="rounded-lg border bg-background px-3 py-2 text-sm shadow-sm">
+      <p className="font-medium">{formatDateKey(item.date)}</p>
+      <p className="text-muted-foreground">
+        {value} {valueLabel}
+      </p>
+    </div>
+  )
+}
+
+function HabitChartTooltip({
+  active,
+  payload,
+}: {
+  active?: boolean
+  payload?: Array<{ payload?: HabitChartDatum }>
+}) {
+  if (!active || !payload?.length) return null
+  const item = payload[0]?.payload
+  if (!item) return null
+  return (
+    <div className="rounded-lg border bg-background px-3 py-2 text-sm shadow-sm">
+      <p className="font-medium">{formatDateKey(item.date)}</p>
+      <p className="text-muted-foreground">
+        {item.completed}/{item.total} habits
+      </p>
+    </div>
+  )
+}
+
+/* ─── Widget: Habits heatmap ─── */
 function ActivityHeatmapWidget({
   heatmapQuery,
+  year,
+  years,
+  onYearChange,
 }: {
   summary: DashboardSummary
   heatmapQuery: ReturnType<typeof useActivityHeatmap>
+  year?: number
+  years?: number[]
+  onYearChange?: (year: number) => void
 }) {
+  const activeYear = year ?? heatmapQuery.data?.year
+  const checkIns = useMemo(
+    () => (heatmapQuery.data?.habit_heatmap ?? []).reduce((sum, item) => sum + item.completed, 0),
+    [heatmapQuery.data]
+  )
+  const items = useMemo(
+    () =>
+      (heatmapQuery.data?.habit_heatmap ?? []).map((item) => ({
+        date: item.date,
+        level: item.level,
+        title: `${item.date}: ${item.completed}/${item.total} habits`,
+      })),
+    [heatmapQuery.data]
+  )
   return (
     <div className="rounded-xl border bg-background p-4">
-      <h2 className="font-semibold">Activity</h2>
-      <div className="mt-4">
-        {heatmapQuery.isLoading ? (
-          <p className="text-sm text-muted-foreground">Loading heatmap...</p>
-        ) : heatmapQuery.data?.heatmap ? (
-          <ActivityHeatmap data={heatmapQuery.data.heatmap} />
+      <div>
+        <h2 className="font-semibold">Habits</h2>
+        {activeYear !== undefined ? (
+          <p className="text-xs text-muted-foreground">
+            {checkIns.toLocaleString()} habit check-ins in {activeYear}
+          </p>
         ) : null}
       </div>
+      <div className="mt-4 flex items-start gap-3">
+        <div className="min-w-0 flex-1">
+          {heatmapQuery.isLoading ? (
+            <p className="text-sm text-muted-foreground">Loading heatmap...</p>
+          ) : items.length > 0 ? (
+            <ActivityHeatmap data={items} />
+          ) : null}
+        </div>
+        {years && onYearChange && activeYear !== undefined ? (
+          <YearSwitcher years={years} value={activeYear} onChange={onYearChange} />
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
+/* ─── Widget: Overall activity heatmap ─── */
+function OverallActivityHeatmapWidget({
+  heatmapQuery,
+  year,
+  years,
+  onYearChange,
+}: {
+  summary: DashboardSummary
+  heatmapQuery: ReturnType<typeof useActivityHeatmap>
+  year?: number
+  years?: number[]
+  onYearChange?: (year: number) => void
+}) {
+  const activeYear = year ?? heatmapQuery.data?.year
+  const points = useMemo(
+    () => (heatmapQuery.data?.activity_heatmap ?? []).reduce((sum, item) => sum + item.points, 0),
+    [heatmapQuery.data]
+  )
+  const items = useMemo(
+    () =>
+      (heatmapQuery.data?.activity_heatmap ?? []).map((item) => ({
+        date: item.date,
+        level: item.level,
+        title: `${item.date}: ${item.points} points`,
+      })),
+    [heatmapQuery.data]
+  )
+  return (
+    <div className="rounded-xl border bg-background p-4">
+      <div>
+        <h2 className="font-semibold">Overall activity</h2>
+        <p className="text-xs text-muted-foreground">
+          Tasks, focus, notes &amp; reminders combined
+        </p>
+        {activeYear !== undefined ? (
+          <p className="text-xs text-muted-foreground">
+            {points.toLocaleString()} activity points in {activeYear}
+          </p>
+        ) : null}
+      </div>
+      <div className="mt-4 flex items-start gap-3">
+        <div className="min-w-0 flex-1">
+          {heatmapQuery.isLoading ? (
+            <p className="text-sm text-muted-foreground">Loading heatmap...</p>
+          ) : items.length > 0 ? (
+            <ActivityHeatmap data={items} />
+          ) : null}
+        </div>
+        {years && onYearChange && activeYear !== undefined ? (
+          <YearSwitcher years={years} value={activeYear} onChange={onYearChange} />
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
+/* ─── Shared heatmap year switcher ─── */
+function YearSwitcher({
+  years,
+  value,
+  onChange,
+}: {
+  years: number[]
+  value: number
+  onChange: (year: number) => void
+}) {
+  const sorted = [...years].sort((a, b) => b - a)
+  return (
+    <div className="flex shrink-0 flex-col items-end gap-1">
+      {sorted.map((y) => (
+        <button
+          key={y}
+          type="button"
+          onClick={() => onChange(y)}
+          className={
+            y === value
+              ? "rounded-md bg-primary px-2 py-1 text-xs font-medium text-primary-foreground"
+              : "rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
+          }
+        >
+          {y}
+        </button>
+      ))}
     </div>
   )
 }
@@ -539,7 +698,7 @@ function trend(
 }
 
 function formatDate(value: string | undefined): string {
-  const date = value ? new Date(value) : new Date()
+  const date = value ? parseDateKey(value) : new Date()
   return date.toLocaleDateString(undefined, {
     weekday: "long",
     month: "long",
@@ -548,21 +707,50 @@ function formatDate(value: string | undefined): string {
 }
 
 function shortDay(value: string): string {
-  return new Date(value).toLocaleDateString(undefined, { weekday: "short" })
+  return parseDateKey(value).toLocaleDateString(undefined, { weekday: "short" })
+}
+
+function formatDateKey(value: string): string {
+  return parseDateKey(value).toLocaleDateString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  })
+}
+
+function parseDateKey(value: string): Date {
+  const [year = 0, month = 1, day = 1] = value.split("-").map(Number)
+  return new Date(year, month - 1, day)
+}
+
+type HabitChartDatum = {
+  date: string
+  completed: number
+  total: number
+}
+
+type MiniChartDatum = {
+  date: string
+  day: string
+  tasks: number
+  focus: number
+  created: number
 }
 
 function chartData(items: DashboardSummary["weekly_habit_chart"]) {
-  return items.map((item) => ({
-    day: shortDay(item.date),
+  return items.map((item): HabitChartDatum => ({
+    date: item.date,
     completed: item.checked,
+    total: item.total,
   }))
 }
 
 function productivityData(items: DashboardSummary["weekly_productivity"]) {
-  return items.map((item) => ({
+  return items.map((item): MiniChartDatum => ({
+    date: item.date,
     day: shortDay(item.date),
     tasks: item.tasks_done,
-    habits: item.habits_checked,
-    learning: item.learning_sessions,
+    focus: item.focus_minutes,
+    created: item.notes_created + item.reminders_created,
   }))
 }

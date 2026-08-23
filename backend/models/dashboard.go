@@ -2,27 +2,30 @@ package models
 
 import (
 	"context"
+	"errors"
+	"log"
+	"math"
+	"sort"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type DashboardWeekComparison struct {
-	TasksDoneThisWeek       int `json:"tasks_done_this_week"`
-	TasksDoneLastWeek       int `json:"tasks_done_last_week"`
-	HabitsCheckedThisWeek   int `json:"habits_checked_this_week"`
-	HabitsCheckedLastWeek   int `json:"habits_checked_last_week"`
-	StudySessionsThisWeek   int `json:"study_sessions_this_week"`
-	StudySessionsLastWeek   int `json:"study_sessions_last_week"`
-	FocusMinutesThisWeek    int `json:"focus_minutes_this_week"`
-	FocusMinutesLastWeek    int `json:"focus_minutes_last_week"`
+	TasksDoneThisWeek     int `json:"tasks_done_this_week"`
+	TasksDoneLastWeek     int `json:"tasks_done_last_week"`
+	HabitsCheckedThisWeek int `json:"habits_checked_this_week"`
+	HabitsCheckedLastWeek int `json:"habits_checked_last_week"`
+	FocusMinutesThisWeek  int `json:"focus_minutes_this_week"`
+	FocusMinutesLastWeek  int `json:"focus_minutes_last_week"`
 }
 
 type DashboardSummary struct {
 	Today              string                           `json:"today"`
 	TaskSummary        DashboardTaskSummary             `json:"task_summary"`
 	HabitSummary       DashboardHabitSummary            `json:"habit_summary"`
-	LearningStreak     int                              `json:"learning_streak"`
 	RecentNotes        []DashboardNote                  `json:"recent_notes"`
 	WeeklyHabitChart   []DashboardHabitChartItem        `json:"weekly_habit_chart"`
 	WeeklyProductivity []DashboardProductivityChartItem `json:"weekly_productivity"`
@@ -33,8 +36,9 @@ type DashboardSummary struct {
 type DashboardProductivityChartItem struct {
 	Date             string `json:"date"`
 	TasksDone        int    `json:"tasks_done"`
-	HabitsChecked    int    `json:"habits_checked"`
-	LearningSessions int    `json:"learning_sessions"`
+	FocusMinutes     int    `json:"focus_minutes"`
+	NotesCreated     int    `json:"notes_created"`
+	RemindersCreated int    `json:"reminders_created"`
 }
 
 type DashboardTaskSummary struct {
@@ -68,12 +72,33 @@ type DashboardFocusSession struct {
 }
 
 type DashboardModel struct {
-	pool  *pgxpool.Pool
-	learn LearnModel
+	pool *pgxpool.Pool
 }
 
-func NewDashboardModel(pool *pgxpool.Pool, learn LearnModel) DashboardModel {
-	return DashboardModel{pool: pool, learn: learn}
+const dashboardTimezone = "Asia/Kathmandu"
+
+var dashboardLocation = loadDashboardLocation()
+
+func loadDashboardLocation() *time.Location {
+	location, err := time.LoadLocation(dashboardTimezone)
+	if err != nil {
+		log.Printf("load dashboard timezone %q: %v; falling back to UTC", dashboardTimezone, err)
+		return time.UTC
+	}
+	return location
+}
+
+func dashboardNow() time.Time {
+	return time.Now().In(dashboardLocation)
+}
+
+// DashboardYear returns the current calendar year in the dashboard timezone.
+func DashboardYear() int {
+	return dashboardNow().Year()
+}
+
+func NewDashboardModel(pool *pgxpool.Pool) DashboardModel {
+	return DashboardModel{pool: pool}
 }
 
 func (model DashboardModel) Summary(ctx context.Context, userID string) (DashboardSummary, error) {
@@ -82,10 +107,6 @@ func (model DashboardModel) Summary(ctx context.Context, userID string) (Dashboa
 		return DashboardSummary{}, err
 	}
 	habitSummary, err := model.habitSummary(ctx, userID)
-	if err != nil {
-		return DashboardSummary{}, err
-	}
-	streak, err := model.learn.StudyStreak(ctx, userID)
 	if err != nil {
 		return DashboardSummary{}, err
 	}
@@ -111,10 +132,9 @@ func (model DashboardModel) Summary(ctx context.Context, userID string) (Dashboa
 	}
 
 	return DashboardSummary{
-		Today:              time.Now().Format("2006-01-02"),
+		Today:              dashboardNow().Format("2006-01-02"),
 		TaskSummary:        taskSummary,
 		HabitSummary:       habitSummary,
-		LearningStreak:     streak,
 		RecentNotes:        recentNotes,
 		WeeklyHabitChart:   habitChart,
 		WeeklyProductivity: productivityChart,
@@ -130,29 +150,128 @@ func (model DashboardModel) taskSummary(ctx context.Context, userID string) (Das
 		       COUNT(*) FILTER (WHERE status = 'done')::int
 		FROM tasks
 		WHERE user_id = $1 AND (
-			scheduled_date = CURRENT_DATE
-			OR (status <> 'done' AND scheduled_date < CURRENT_DATE)
+			scheduled_date = (now() AT TIME ZONE $2)::date
+			OR (status <> 'done' AND scheduled_date < (now() AT TIME ZONE $2)::date)
 		)
-	`, userID).Scan(&summary.Total, &summary.Done)
+	`, userID, dashboardTimezone).Scan(&summary.Total, &summary.Done)
 	return summary, err
 }
 
+type habitDayCounts struct {
+	total   int
+	checked int
+}
+
+// habitDailyCounts returns per-day {total, checked} counts for the user's habits
+// over the inclusive date range. Total counts only habits scheduled on that day
+// and checked counts only completions among scheduled habits, so weekday-restricted
+// habits never inflate off-day stats. Reuses habitScheduledOn/habitCompleted from
+// habit.go to stay consistent with the habits matrix and analytics.
+func (model DashboardModel) habitDailyCounts(ctx context.Context, userID string, startDate, endDate string) (map[string]habitDayCounts, error) {
+	habitRows, err := model.pool.Query(ctx, `
+		SELECT id, type, target_value, target_value_max, comparison_operator, frequency_type, frequency_days
+		FROM habits
+		WHERE user_id = $1 AND deleted_at IS NULL
+	`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer habitRows.Close()
+
+	type habitMeta struct {
+		habit Habit
+	}
+	habits := make([]habitMeta, 0)
+	for habitRows.Next() {
+		var habit Habit
+		var targetValue pgtype.Numeric
+		var targetValueMax pgtype.Numeric
+		var frequencyDays []int32
+		if err := habitRows.Scan(&habit.ID, &habit.Type, &targetValue, &targetValueMax, &habit.ComparisonOperator, &habit.FrequencyType, &frequencyDays); err != nil {
+			return nil, err
+		}
+		if targetValue.Valid {
+			if value, err := targetValue.Float64Value(); err == nil && value.Valid {
+				habit.TargetValue = &value.Float64
+			}
+		}
+		if targetValueMax.Valid {
+			if value, err := targetValueMax.Float64Value(); err == nil && value.Valid {
+				habit.TargetValueMax = &value.Float64
+			}
+		}
+		habit.FrequencyDays = make([]int, 0, len(frequencyDays))
+		for _, day := range frequencyDays {
+			habit.FrequencyDays = append(habit.FrequencyDays, int(day))
+		}
+		habits = append(habits, habitMeta{habit: habit})
+	}
+	if err := habitRows.Err(); err != nil {
+		return nil, err
+	}
+
+	logRows, err := model.pool.Query(ctx, `
+		SELECT habit_id, logged_date::text, value::float8
+		FROM habit_logs
+		WHERE user_id = $1 AND logged_date BETWEEN $2::date AND $3::date
+	`, userID, startDate, endDate)
+	if err != nil {
+		return nil, err
+	}
+	defer logRows.Close()
+
+	logs := make(map[string]map[string]float64)
+	for logRows.Next() {
+		var habitID string
+		var date string
+		var value float64
+		if err := logRows.Scan(&habitID, &date, &value); err != nil {
+			return nil, err
+		}
+		if logs[habitID] == nil {
+			logs[habitID] = make(map[string]float64)
+		}
+		logs[habitID][date] = value
+	}
+	if err := logRows.Err(); err != nil {
+		return nil, err
+	}
+
+	start, err := time.Parse("2006-01-02", startDate)
+	if err != nil {
+		return nil, err
+	}
+	end, err := time.Parse("2006-01-02", endDate)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make(map[string]habitDayCounts)
+	for day := start; !day.After(end); day = day.AddDate(0, 0, 1) {
+		date := day.Format("2006-01-02")
+		var counts habitDayCounts
+		for _, meta := range habits {
+			if !habitScheduledOn(meta.habit, date) {
+				continue
+			}
+			counts.total++
+			if value, ok := logs[meta.habit.ID][date]; ok && habitCompleted(meta.habit, value) {
+				counts.checked++
+			}
+		}
+		result[date] = counts
+	}
+	return result, nil
+}
+
 func (model DashboardModel) habitSummary(ctx context.Context, userID string) (DashboardHabitSummary, error) {
-	var summary DashboardHabitSummary
-	err := model.pool.QueryRow(ctx, `
-		SELECT COUNT(h.id)::int,
-		       COUNT(h.id) FILTER (
-		         WHERE CASE
-		           WHEN h.type = 'boolean' THEN COALESCE(hl.value, 0) >= 1
-		           WHEN h.target_value IS NULL THEN COALESCE(hl.value, 0) > 0
-		           ELSE COALESCE(hl.value, 0) >= h.target_value
-		         END
-		       )::int
-		FROM habits h
-		LEFT JOIN habit_logs hl ON hl.habit_id = h.id AND hl.logged_date = CURRENT_DATE
-		WHERE h.user_id = $1 AND h.deleted_at IS NULL
-	`, userID).Scan(&summary.Total, &summary.Checked)
-	return summary, err
+	today := dashboardNow().Format("2006-01-02")
+	counts, err := model.habitDailyCounts(ctx, userID, today, today)
+	if err != nil {
+		return DashboardHabitSummary{}, err
+	}
+	summary := DashboardHabitSummary{Total: counts[today].total, Checked: counts[today].checked}
+	return summary, nil
 }
 
 func (model DashboardModel) recentNotes(ctx context.Context, userID string) ([]DashboardNote, error) {
@@ -180,81 +299,135 @@ func (model DashboardModel) recentNotes(ctx context.Context, userID string) ([]D
 }
 
 func (model DashboardModel) weeklyHabitChart(ctx context.Context, userID string) ([]DashboardHabitChartItem, error) {
-	rows, err := model.pool.Query(ctx, `
-		WITH days AS (
-			SELECT generate_series(CURRENT_DATE - INTERVAL '13 days', CURRENT_DATE, INTERVAL '1 day')::date AS day
-		)
-		SELECT d.day::text,
-		       COUNT(h.id)::int AS total,
-		       COUNT(h.id) FILTER (
-		         WHERE CASE
-		           WHEN h.type = 'boolean' THEN COALESCE(hl.value, 0) >= 1
-		           WHEN h.target_value IS NULL THEN COALESCE(hl.value, 0) > 0
-		           ELSE COALESCE(hl.value, 0) >= h.target_value
-		         END
-		       )::int AS checked
-		FROM days d
-		LEFT JOIN habits h ON h.user_id = $1 AND h.deleted_at IS NULL
-		LEFT JOIN habit_logs hl ON hl.habit_id = h.id AND hl.logged_date = d.day
-		GROUP BY d.day
-		ORDER BY d.day
-	`, userID)
+	now := dashboardNow()
+	end := now.Format("2006-01-02")
+	start := now.AddDate(0, 0, -13).Format("2006-01-02")
+	counts, err := model.habitDailyCounts(ctx, userID, start, end)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 
-	items := make([]DashboardHabitChartItem, 0)
-	for rows.Next() {
-		var item DashboardHabitChartItem
-		if err := rows.Scan(&item.Date, &item.Total, &item.Checked); err != nil {
-			return nil, err
-		}
-		items = append(items, item)
+	items := make([]DashboardHabitChartItem, 0, 14)
+	for day := now.AddDate(0, 0, -13); !day.After(now); day = day.AddDate(0, 0, 1) {
+		date := day.Format("2006-01-02")
+		items = append(items, DashboardHabitChartItem{
+			Date:    date,
+			Total:   counts[date].total,
+			Checked: counts[date].checked,
+		})
 	}
-	return items, rows.Err()
+	return items, nil
 }
 
-type ActivityHeatmapItem struct {
+type HabitHeatmapItem struct {
 	Date      string `json:"date"`
 	Total     int    `json:"total"`
 	Completed int    `json:"completed"`
+	Level     int    `json:"level"`
+}
+
+type ActivityHeatmapItem struct {
+	Date   string `json:"date"`
+	Points int    `json:"points"`
+	Level  int    `json:"level"`
+}
+
+type DashboardHeatmap struct {
+	Year         int                   `json:"year"`
+	EarliestYear int                   `json:"earliest_year"`
+	HabitHeatmap []HabitHeatmapItem    `json:"habit_heatmap"`
+	ActivityHeatmap []ActivityHeatmapItem `json:"activity_heatmap"`
+}
+
+// activityPoints caps each contributor so no single source dominates the daily
+// total (max ~28/day): tasks <= 10, focus <= 240min, notes <= 5, reminders <= 5.
+func activityPoints(tasks, focusMinutes, notes, reminders int) int {
+	return min(tasks, 10) + min(focusMinutes, 240)/30 + min(notes, 5) + min(reminders, 5)
+}
+
+// quantileBoundaries returns nearest-rank boundaries for the given percentages
+// over sorted non-zero points. Re-computed on every request over whatever window
+// of data actually exists (cold-start friendly: never errors, just coarser early).
+func quantileBoundaries(sorted []int, percentages []float64) []int {
+	n := len(sorted)
+	if n == 0 {
+		return make([]int, len(percentages))
+	}
+	boundaries := make([]int, len(percentages))
+	for i, p := range percentages {
+		index := int(math.Ceil(p/100*float64(n))) - 1
+		if index < 0 {
+			index = 0
+		}
+		if index >= n {
+			index = n - 1
+		}
+		boundaries[i] = sorted[index]
+	}
+	return boundaries
+}
+
+// activityLevel buckets a day's points into 0-4 using the user's own distribution.
+// Zero-activity days always render as level 0 regardless of the quantile math.
+func activityLevel(points int, boundaries []int) int {
+	if points <= 0 {
+		return 0
+	}
+	if points <= boundaries[0] {
+		return 1
+	}
+	if points <= boundaries[1] {
+		return 2
+	}
+	if points <= boundaries[2] {
+		return 3
+	}
+	if points <= boundaries[3] {
+		return 4
+	}
+	return 4
 }
 
 func (model DashboardModel) weeklyProductivity(ctx context.Context, userID string) ([]DashboardProductivityChartItem, error) {
+	now := dashboardNow()
+	start := now.AddDate(0, 0, -13).Format("2006-01-02")
+	end := now.Format("2006-01-02")
 	rows, err := model.pool.Query(ctx, `
 		WITH days AS (
-			SELECT generate_series(CURRENT_DATE - INTERVAL '13 days', CURRENT_DATE, INTERVAL '1 day')::date AS day
+			SELECT generate_series($2::date, $3::date, INTERVAL '1 day')::date AS day
 		)
 		SELECT d.day::text,
 		       COALESCE(t.done_count, 0)::int,
-		       COALESCE(h.checked_count, 0)::int,
-		       COALESCE(l.session_count, 0)::int
+		       COALESCE(f.minutes_sum, 0)::int,
+		       COALESCE(n.note_count, 0)::int,
+		       COALESCE(r.reminder_count, 0)::int
 		FROM days d
 		LEFT JOIN (
-			SELECT scheduled_date, COUNT(*)::int AS done_count
+			SELECT (completed_at AT TIME ZONE $4)::date AS day, COUNT(*)::int AS done_count
 			FROM tasks
-			WHERE user_id = $1 AND status = 'done'
-			  AND scheduled_date >= CURRENT_DATE - INTERVAL '13 days'
-			GROUP BY scheduled_date
-		) t ON t.scheduled_date = d.day
+			WHERE user_id = $1 AND status = 'done' AND completed_at IS NOT NULL
+			GROUP BY (completed_at AT TIME ZONE $4)::date
+		) t ON t.day = d.day
 		LEFT JOIN (
-			SELECT hl.logged_date, COUNT(*)::int AS checked_count
-			FROM habit_logs hl
-			INNER JOIN habits h ON h.id = hl.habit_id
-			WHERE h.user_id = $1 AND h.deleted_at IS NULL
-			  AND hl.logged_date >= CURRENT_DATE - INTERVAL '13 days'
-			GROUP BY hl.logged_date
-		) h ON h.logged_date = d.day
-		LEFT JOIN (
-			SELECT studied_at::date AS study_date, COUNT(*)::int AS session_count
-			FROM learn_entries
+			SELECT (start_time AT TIME ZONE $4)::date AS day, COALESCE(SUM(duration_minutes), 0)::int AS minutes_sum
+			FROM focus_sessions
 			WHERE user_id = $1
-			  AND studied_at >= CURRENT_DATE - INTERVAL '13 days'
-			GROUP BY studied_at::date
-		) l ON l.study_date = d.day
+			GROUP BY (start_time AT TIME ZONE $4)::date
+		) f ON f.day = d.day
+		LEFT JOIN (
+			SELECT (created_at AT TIME ZONE $4)::date AS day, COUNT(*)::int AS note_count
+			FROM notes
+			WHERE user_id = $1
+			GROUP BY (created_at AT TIME ZONE $4)::date
+		) n ON n.day = d.day
+		LEFT JOIN (
+			SELECT (created_at AT TIME ZONE $4)::date AS day, COUNT(*)::int AS reminder_count
+			FROM reminders
+			WHERE user_id = $1
+			GROUP BY (created_at AT TIME ZONE $4)::date
+		) r ON r.day = d.day
 		ORDER BY d.day
-	`, userID)
+	`, userID, start, end, dashboardTimezone)
 	if err != nil {
 		return nil, err
 	}
@@ -263,7 +436,7 @@ func (model DashboardModel) weeklyProductivity(ctx context.Context, userID strin
 	items := make([]DashboardProductivityChartItem, 0)
 	for rows.Next() {
 		var item DashboardProductivityChartItem
-		if err := rows.Scan(&item.Date, &item.TasksDone, &item.HabitsChecked, &item.LearningSessions); err != nil {
+		if err := rows.Scan(&item.Date, &item.TasksDone, &item.FocusMinutes, &item.NotesCreated, &item.RemindersCreated); err != nil {
 			return nil, err
 		}
 		items = append(items, item)
@@ -271,69 +444,174 @@ func (model DashboardModel) weeklyProductivity(ctx context.Context, userID strin
 	return items, rows.Err()
 }
 
-func (model DashboardModel) ActivityHeatmap(ctx context.Context, userID string, days int) ([]ActivityHeatmapItem, error) {
-	if days <= 0 {
-		days = 365
+// ActivityHeatmap renders a full calendar year (Jan 1 – Dec 31 in the
+// dashboard timezone) for the given year. Days after today within the current
+// year are included with zero counts so the grid covers the whole year.
+func (model DashboardModel) ActivityHeatmap(ctx context.Context, userID string, year int) (DashboardHeatmap, error) {
+	start := time.Date(year, time.January, 1, 0, 0, 0, 0, dashboardLocation)
+	end := time.Date(year, time.December, 31, 0, 0, 0, 0, dashboardLocation)
+	startDate := start.Format("2006-01-02")
+	endDate := end.Format("2006-01-02")
+
+	createdAt, err := model.accountCreatedAt(ctx, userID)
+	if err != nil {
+		return DashboardHeatmap{}, err
 	}
+
+	counts, err := model.habitDailyCounts(ctx, userID, startDate, endDate)
+	if err != nil {
+		return DashboardHeatmap{}, err
+	}
+
+	habitItems := make([]HabitHeatmapItem, 0, 366)
+	for day := start; !day.After(end); day = day.AddDate(0, 0, 1) {
+		date := day.Format("2006-01-02")
+		item := HabitHeatmapItem{Date: date}
+		// Days before the account existed have no scheduled habits.
+		if !day.Before(time.Date(createdAt.Year(), createdAt.Month(), createdAt.Day(), 0, 0, 0, 0, dashboardLocation)) {
+			item.Total = counts[date].total
+			item.Completed = counts[date].checked
+		}
+		habitItems = append(habitItems, item)
+	}
+
+	// Quantile-bucket completed counts over the user's own non-zero days so
+	// low-but-real activity never rounds down to an empty cell.
+	var completedSorted []int
+	for _, item := range habitItems {
+		if item.Completed > 0 {
+			completedSorted = append(completedSorted, item.Completed)
+		}
+	}
+	sort.Ints(completedSorted)
+	habitBoundaries := quantileBoundaries(completedSorted, []float64{20, 40, 60, 80})
+	for i := range habitItems {
+		habitItems[i].Level = activityLevel(habitItems[i].Completed, habitBoundaries)
+	}
+
 	rows, err := model.pool.Query(ctx, `
 		WITH dates AS (
-			SELECT generate_series(CURRENT_DATE - ($2::int - 1), CURRENT_DATE, INTERVAL '1 day')::date AS day
+			SELECT generate_series($2::date, $3::date, INTERVAL '1 day')::date AS day
 		)
 		SELECT d.day::text,
-		       COUNT(h.id)::int AS total,
-		       COUNT(h.id) FILTER (
-		         WHERE CASE
-		           WHEN h.type = 'boolean' THEN COALESCE(hl.value, 0) >= 1
-		           WHEN h.target_value IS NULL THEN COALESCE(hl.value, 0) > 0
-		           ELSE COALESCE(hl.value, 0) >= h.target_value
-		         END
-		       )::int AS completed
+		       COALESCE(t.done_count, 0)::int,
+		       COALESCE(f.minutes_sum, 0)::int,
+		       COALESCE(n.note_count, 0)::int,
+		       COALESCE(r.reminder_count, 0)::int
 		FROM dates d
-		LEFT JOIN habits h ON h.user_id = $1 AND h.deleted_at IS NULL
-		LEFT JOIN habit_logs hl ON hl.habit_id = h.id AND hl.logged_date = d.day
-		GROUP BY d.day
+		LEFT JOIN (
+			SELECT (completed_at AT TIME ZONE $4)::date AS day, COUNT(*)::int AS done_count
+			FROM tasks
+			WHERE user_id = $1 AND status = 'done' AND completed_at IS NOT NULL
+			GROUP BY (completed_at AT TIME ZONE $4)::date
+		) t ON t.day = d.day
+		LEFT JOIN (
+			SELECT (start_time AT TIME ZONE $4)::date AS day, COALESCE(SUM(duration_minutes), 0)::int AS minutes_sum
+			FROM focus_sessions
+			WHERE user_id = $1
+			GROUP BY (start_time AT TIME ZONE $4)::date
+		) f ON f.day = d.day
+		LEFT JOIN (
+			SELECT (created_at AT TIME ZONE $4)::date AS day, COUNT(*)::int AS note_count
+			FROM notes
+			WHERE user_id = $1
+			GROUP BY (created_at AT TIME ZONE $4)::date
+		) n ON n.day = d.day
+		LEFT JOIN (
+			SELECT (created_at AT TIME ZONE $4)::date AS day, COUNT(*)::int AS reminder_count
+			FROM reminders
+			WHERE user_id = $1
+			GROUP BY (created_at AT TIME ZONE $4)::date
+		) r ON r.day = d.day
 		ORDER BY d.day
-	`, userID, days)
+	`, userID, startDate, endDate, dashboardTimezone)
 	if err != nil {
-		return nil, err
+		return DashboardHeatmap{}, err
 	}
 	defer rows.Close()
 
-	items := make([]ActivityHeatmapItem, 0)
+	activityItems := make([]ActivityHeatmapItem, 0, 366)
+	var pointsByDate []int
 	for rows.Next() {
 		var item ActivityHeatmapItem
-		if err := rows.Scan(&item.Date, &item.Total, &item.Completed); err != nil {
-			return nil, err
+		var tasks, focusMinutes, notes, reminders int
+		if err := rows.Scan(&item.Date, &tasks, &focusMinutes, &notes, &reminders); err != nil {
+			return DashboardHeatmap{}, err
 		}
-		items = append(items, item)
+		item.Points = activityPoints(tasks, focusMinutes, notes, reminders)
+		if item.Points > 0 {
+			pointsByDate = append(pointsByDate, item.Points)
+		}
+		activityItems = append(activityItems, item)
 	}
-	return items, rows.Err()
+	if err := rows.Err(); err != nil {
+		return DashboardHeatmap{}, err
+	}
+
+	sorted := append([]int(nil), pointsByDate...)
+	sort.Ints(sorted)
+	boundaries := quantileBoundaries(sorted, []float64{20, 40, 60, 80})
+	for i := range activityItems {
+		activityItems[i].Level = activityLevel(activityItems[i].Points, boundaries)
+	}
+
+	return DashboardHeatmap{
+		Year:            year,
+		EarliestYear:    createdAt.Year(),
+		HabitHeatmap:    habitItems,
+		ActivityHeatmap: activityItems,
+	}, nil
+}
+
+// accountCreatedAt returns when the user's account was created, converted to
+// the dashboard timezone.
+func (model DashboardModel) accountCreatedAt(ctx context.Context, userID string) (time.Time, error) {
+	var createdAt time.Time
+	err := model.pool.QueryRow(ctx, `
+		SELECT created_at AT TIME ZONE $2 FROM users WHERE id = $1
+	`, userID, dashboardTimezone).Scan(&createdAt)
+	if err != nil {
+		return time.Time{}, err
+	}
+	return createdAt, nil
 }
 
 func (model DashboardModel) weekComparison(ctx context.Context, userID string) (DashboardWeekComparison, error) {
 	var comp DashboardWeekComparison
-	err := model.pool.QueryRow(ctx, `
+
+	now := dashboardNow()
+	thisWeekStart := now.AddDate(0, 0, -6).Format("2006-01-02")
+	thisWeekEnd := now.Format("2006-01-02")
+	lastWeekStart := now.AddDate(0, 0, -13).Format("2006-01-02")
+	lastWeekEnd := now.AddDate(0, 0, -7).Format("2006-01-02")
+
+	counts, err := model.habitDailyCounts(ctx, userID, lastWeekStart, thisWeekEnd)
+	if err != nil {
+		return comp, err
+	}
+	for date, c := range counts {
+		if date >= thisWeekStart && date <= thisWeekEnd {
+			comp.HabitsCheckedThisWeek += c.checked
+		}
+		if date >= lastWeekStart && date <= lastWeekEnd {
+			comp.HabitsCheckedLastWeek += c.checked
+		}
+	}
+
+	err = model.pool.QueryRow(ctx, `
 		WITH this_week AS (
-			SELECT CURRENT_DATE - INTERVAL '6 days' AS start_date, CURRENT_DATE AS end_date
+			SELECT $2::date AS start_date, $3::date AS end_date
 		), last_week AS (
-			SELECT CURRENT_DATE - INTERVAL '13 days' AS start_date, CURRENT_DATE - INTERVAL '7 days' AS end_date
+			SELECT $4::date AS start_date, $5::date AS end_date
 		)
 		SELECT
 			COALESCE((SELECT COUNT(*)::int FROM tasks WHERE user_id = $1 AND status = 'done' AND scheduled_date BETWEEN (SELECT start_date FROM this_week) AND (SELECT end_date FROM this_week)), 0),
 			COALESCE((SELECT COUNT(*)::int FROM tasks WHERE user_id = $1 AND status = 'done' AND scheduled_date BETWEEN (SELECT start_date FROM last_week) AND (SELECT end_date FROM last_week)), 0),
-			COALESCE((SELECT COUNT(*)::int FROM habit_logs hl INNER JOIN habits h ON h.id = hl.habit_id WHERE h.user_id = $1 AND h.deleted_at IS NULL AND hl.logged_date BETWEEN (SELECT start_date FROM this_week) AND (SELECT end_date FROM this_week)), 0),
-			COALESCE((SELECT COUNT(*)::int FROM habit_logs hl INNER JOIN habits h ON h.id = hl.habit_id WHERE h.user_id = $1 AND h.deleted_at IS NULL AND hl.logged_date BETWEEN (SELECT start_date FROM last_week) AND (SELECT end_date FROM last_week)), 0),
-			COALESCE((SELECT COUNT(*)::int FROM learn_entries WHERE user_id = $1 AND studied_at::date BETWEEN (SELECT start_date FROM this_week) AND (SELECT end_date FROM this_week)), 0),
-			COALESCE((SELECT COUNT(*)::int FROM learn_entries WHERE user_id = $1 AND studied_at::date BETWEEN (SELECT start_date FROM last_week) AND (SELECT end_date FROM last_week)), 0),
-			COALESCE((SELECT COALESCE(SUM(duration_minutes), 0)::int FROM focus_sessions WHERE user_id = $1 AND start_time::date BETWEEN (SELECT start_date FROM this_week) AND (SELECT end_date FROM this_week)), 0),
-			COALESCE((SELECT COALESCE(SUM(duration_minutes), 0)::int FROM focus_sessions WHERE user_id = $1 AND start_time::date BETWEEN (SELECT start_date FROM last_week) AND (SELECT end_date FROM last_week)), 0)
-	`, userID).Scan(
+			COALESCE((SELECT COALESCE(SUM(duration_minutes), 0)::int FROM focus_sessions WHERE user_id = $1 AND (start_time AT TIME ZONE $6)::date BETWEEN (SELECT start_date FROM this_week) AND (SELECT end_date FROM this_week)), 0),
+			COALESCE((SELECT COALESCE(SUM(duration_minutes), 0)::int FROM focus_sessions WHERE user_id = $1 AND (start_time AT TIME ZONE $6)::date BETWEEN (SELECT start_date FROM last_week) AND (SELECT end_date FROM last_week)), 0)
+	`, userID, thisWeekStart, thisWeekEnd, lastWeekStart, lastWeekEnd, dashboardTimezone).Scan(
 		&comp.TasksDoneThisWeek,
 		&comp.TasksDoneLastWeek,
-		&comp.HabitsCheckedThisWeek,
-		&comp.HabitsCheckedLastWeek,
-		&comp.StudySessionsThisWeek,
-		&comp.StudySessionsLastWeek,
 		&comp.FocusMinutesThisWeek,
 		&comp.FocusMinutesLastWeek,
 	)
@@ -341,27 +619,28 @@ func (model DashboardModel) weekComparison(ctx context.Context, userID string) (
 }
 
 func (model DashboardModel) activeFocusSession(ctx context.Context, userID string) (*DashboardFocusSession, error) {
-	rows, err := model.pool.Query(ctx, `
-		SELECT fs.id, fs.task_id, t.title, fs.start_time, fs.duration_minutes
-		FROM focus_sessions fs
-		INNER JOIN tasks t ON t.id = fs.task_id
-		WHERE fs.user_id = $1
-		  AND fs.start_time::date = CURRENT_DATE
-		ORDER BY fs.start_time DESC
+	row := model.pool.QueryRow(ctx, `
+		SELECT afs.id, afs.task_id, COALESCE(t.title, ''), afs.started_at,
+		       GREATEST(1, CEIL((afs.elapsed_seconds + COALESCE(EXTRACT(EPOCH FROM (now() - afs.segment_started_at)), 0)) / 60.0))::int
+		FROM active_focus_sessions afs
+		LEFT JOIN tasks t ON t.id = afs.task_id AND t.user_id = afs.user_id
+		WHERE afs.user_id = $1
+		  AND afs.status IN ('running', 'paused')
+		  AND (afs.started_at AT TIME ZONE $2)::date = (now() AT TIME ZONE $2)::date
+		ORDER BY afs.started_at DESC
 		LIMIT 1
-	`, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	if !rows.Next() {
-		return nil, rows.Err()
-	}
-
+	`, userID, dashboardTimezone)
 	var session DashboardFocusSession
-	if err := rows.Scan(&session.ID, &session.TaskID, &session.TaskTitle, &session.StartTime, &session.DurationMinutes); err != nil {
+	var taskID *string
+	err := row.Scan(&session.ID, &taskID, &session.TaskTitle, &session.StartTime, &session.DurationMinutes)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
 		return nil, err
 	}
-	return &session, rows.Err()
+	if taskID != nil {
+		session.TaskID = *taskID
+	}
+	return &session, nil
 }

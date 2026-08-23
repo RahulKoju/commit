@@ -25,8 +25,9 @@ export const dashboardHabitChartItemSchema = z.object({
 export const dashboardProductivityChartItemSchema = z.object({
   date: z.string(),
   tasks_done: z.number().int(),
-  habits_checked: z.number().int(),
-  learning_sessions: z.number().int(),
+  focus_minutes: z.number().int(),
+  notes_created: z.number().int(),
+  reminders_created: z.number().int(),
 })
 
 export const dashboardWeekComparisonSchema = z.object({
@@ -34,15 +35,13 @@ export const dashboardWeekComparisonSchema = z.object({
   tasks_done_last_week: z.number().int(),
   habits_checked_this_week: z.number().int(),
   habits_checked_last_week: z.number().int(),
-  study_sessions_this_week: z.number().int(),
-  study_sessions_last_week: z.number().int(),
   focus_minutes_this_week: z.number().int(),
   focus_minutes_last_week: z.number().int(),
 })
 
 export const dashboardFocusSessionSchema = z.object({
   id: z.string().uuid(),
-  task_id: z.string().uuid(),
+  task_id: z.string().uuid().nullable(),
   task_title: z.string(),
   start_time: z.string(),
   duration_minutes: z.number().int(),
@@ -52,7 +51,6 @@ export const dashboardSummarySchema = z.object({
   today: z.string(),
   task_summary: dashboardTaskSummarySchema,
   habit_summary: dashboardHabitSummarySchema,
-  learning_streak: z.number().int(),
   recent_notes: z.array(dashboardNoteSchema),
   weekly_habit_chart: z.array(dashboardHabitChartItemSchema),
   weekly_productivity: z.array(dashboardProductivityChartItemSchema),
@@ -64,20 +62,31 @@ export const dashboardSummaryResponseSchema = z.object({
   summary: dashboardSummarySchema,
 })
 
-export const activityHeatmapItemSchema = z.object({
+export const habitHeatmapItemSchema = z.object({
   date: z.string(),
   total: z.number().int(),
   completed: z.number().int(),
+  level: z.number().int(),
 })
 
-export const activityHeatmapResponseSchema = z.object({
-  heatmap: z.array(activityHeatmapItemSchema),
+export const activityHeatmapItemSchema = z.object({
+  date: z.string(),
+  points: z.number().int(),
+  level: z.number().int(),
+})
+
+export const dashboardHeatmapResponseSchema = z.object({
+  year: z.number().int(),
+  earliest_year: z.number().int(),
+  habit_heatmap: z.array(habitHeatmapItemSchema),
+  activity_heatmap: z.array(activityHeatmapItemSchema),
 })
 
 export type DashboardSummary = z.infer<typeof dashboardSummarySchema>
 export type DashboardSummaryResponse = z.infer<typeof dashboardSummaryResponseSchema>
+export type HabitHeatmapItem = z.infer<typeof habitHeatmapItemSchema>
 export type ActivityHeatmapItem = z.infer<typeof activityHeatmapItemSchema>
-export type ActivityHeatmapResponse = z.infer<typeof activityHeatmapResponseSchema>
+export type DashboardHeatmapResponse = z.infer<typeof dashboardHeatmapResponseSchema>
 
 export const dashboardLayoutResponseSchema = z.object({
   layout: z.array(z.string()).nullable(),

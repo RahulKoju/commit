@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 
 import { apiFetch } from "@/lib/api"
+import { dashboardQueryKeys } from "@/hooks/useDashboard"
 import { appendPagination, type PaginationParams } from "@/types/common.types"
 import {
   taskResponseSchema,
@@ -36,7 +37,10 @@ export function useCreateTask() {
         body: normalizeCreateTaskInput(input),
         schema: taskResponseSchema,
       }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: taskQueryKeys.all }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: taskQueryKeys.all })
+      queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.all })
+    },
   })
 }
 
@@ -49,7 +53,10 @@ export function useUpdateTask() {
         body: normalizeUpdateTaskInput(input),
         schema: taskResponseSchema,
       }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: taskQueryKeys.all }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: taskQueryKeys.all })
+      queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.all })
+    },
   })
 }
 
@@ -58,14 +65,16 @@ export function useDeleteTask() {
   return useMutation({
     mutationFn: (id: string) =>
       apiFetch<undefined>(`/api/v1/tasks/${id}`, { method: "DELETE" }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: taskQueryKeys.all }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: taskQueryKeys.all })
+      queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.all })
+    },
   })
 }
 
 function taskQueryString(filters: TaskFilters, pagination?: PaginationParams): string {
   const params = new URLSearchParams()
   params.set("view", filters.view)
-  if (filters.topicId) params.set("topic_id", filters.topicId)
   if (filters.priority) params.set("priority", filters.priority)
   if (filters.status) params.set("status", filters.status)
   return `?${appendPagination(params, pagination).toString()}`
@@ -74,7 +83,6 @@ function taskQueryString(filters: TaskFilters, pagination?: PaginationParams): s
 function normalizeCreateTaskInput(input: CreateTaskInput): CreateTaskInput {
   return {
     ...input,
-    topic_id: input.topic_id ?? "",
     scheduled_date: input.scheduled_date ?? "",
     recurrence_rule: input.recurrence_rule ?? "",
     estimated_minutes: input.estimated_minutes ?? null,
@@ -82,11 +90,7 @@ function normalizeCreateTaskInput(input: CreateTaskInput): CreateTaskInput {
 }
 
 function normalizeUpdateTaskInput(input: UpdateTaskInput): UpdateTaskInput {
-  return {
-    ...input,
-    topic_id: input.topic_id ?? "",
-    scheduled_date: input.scheduled_date ?? "",
-    recurrence_rule: input.recurrence_rule ?? "",
-    estimated_minutes: input.estimated_minutes ?? null,
-  }
+  return Object.fromEntries(
+    Object.entries(input).filter(([, value]) => value !== undefined)
+  ) as UpdateTaskInput
 }
