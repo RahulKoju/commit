@@ -198,6 +198,10 @@ func (service HabitService) DeleteHabit(ctx context.Context, userID string, id s
 	return service.habits.DeleteHabit(ctx, userID, id)
 }
 
+func (service HabitService) ReorderHabits(ctx context.Context, userID string, orderedIDs []string) error {
+	return service.habits.ReorderHabits(ctx, userID, orderedIDs)
+}
+
 func (service HabitService) LogHabit(ctx context.Context, input LogHabitInput) (models.HabitLog, error) {
 	if strings.TrimSpace(input.LoggedDate) == "" {
 		return models.HabitLog{}, fmt.Errorf("logged_date is required")

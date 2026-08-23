@@ -105,6 +105,10 @@ export const habitMatrixResponseSchema = z.object({
   logs: z.array(habitMatrixLogSchema),
 })
 
+export type ReorderHabitsInput = {
+  habit_ids: string[]
+}
+
 export type HabitType = z.infer<typeof habitTypeSchema>
 export type HabitFrequencyType = z.infer<typeof habitFrequencyTypeSchema>
 export type HabitComparisonOperator = z.infer<typeof habitComparisonOperatorSchema>

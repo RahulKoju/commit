@@ -39,6 +39,9 @@ interface WidgetDef {
   Component: ComponentType<{
     summary: DashboardSummary
     heatmapQuery: ReturnType<typeof useActivityHeatmap>
+    year?: number
+    years?: number[]
+    onYearChange?: (year: number) => void
   }>
 }
 
@@ -80,7 +83,16 @@ export function DashboardPage() {
   const layoutQuery = useDashboardLayout()
   const saveLayout = useSaveDashboardLayout()
   const summary = dashboardQuery.data?.summary
-  const heatmapQuery = useActivityHeatmap()
+  const [heatmapYear, setHeatmapYear] = useState(() => new Date().getFullYear())
+  const heatmapQuery = useActivityHeatmap(heatmapYear)
+  const earliestHeatmapYear = heatmapQuery.data?.earliest_year ?? new Date().getFullYear()
+  const heatmapYears = useMemo(() => {
+    const years: number[] = []
+    for (let y = earliestHeatmapYear; y <= Math.max(new Date().getFullYear(), heatmapYear); y++) {
+      years.push(y)
+    }
+    return years
+  }, [earliestHeatmapYear, heatmapYear])
   const [customizing, setCustomizing] = useState(false)
   const [dragId, setDragId] = useState<string | null>(null)
 
@@ -207,7 +219,13 @@ export function DashboardPage() {
               onDragOver={onDragOver}
               onDrop={onDrop}
             >
-              <Component summary={summary} heatmapQuery={heatmapQuery} />
+              <Component
+                summary={summary}
+                heatmapQuery={heatmapQuery}
+                year={heatmapYear}
+                years={heatmapYears}
+                onYearChange={setHeatmapYear}
+              />
             </DraggableWidget>
           ))}
         </div>
@@ -448,27 +466,50 @@ function HabitChartTooltip({
 /* ─── Widget: Habits heatmap ─── */
 function ActivityHeatmapWidget({
   heatmapQuery,
+  year,
+  years,
+  onYearChange,
 }: {
   summary: DashboardSummary
   heatmapQuery: ReturnType<typeof useActivityHeatmap>
+  year?: number
+  years?: number[]
+  onYearChange?: (year: number) => void
 }) {
+  const activeYear = year ?? heatmapQuery.data?.year
+  const checkIns = useMemo(
+    () => (heatmapQuery.data?.habit_heatmap ?? []).reduce((sum, item) => sum + item.completed, 0),
+    [heatmapQuery.data]
+  )
   const items = useMemo(
     () =>
       (heatmapQuery.data?.habit_heatmap ?? []).map((item) => ({
         date: item.date,
-        level: item.total > 0 ? Math.round((item.completed / item.total) * 4) : 0,
+        level: item.level,
         title: `${item.date}: ${item.completed}/${item.total} habits`,
       })),
     [heatmapQuery.data]
   )
   return (
     <div className="rounded-xl border bg-background p-4">
-      <h2 className="font-semibold">Habits</h2>
-      <div className="mt-4">
-        {heatmapQuery.isLoading ? (
-          <p className="text-sm text-muted-foreground">Loading heatmap...</p>
-        ) : items.length > 0 ? (
-          <ActivityHeatmap data={items} />
+      <div>
+        <h2 className="font-semibold">Habits</h2>
+        {activeYear !== undefined ? (
+          <p className="text-xs text-muted-foreground">
+            {checkIns.toLocaleString()} habit check-ins in {activeYear}
+          </p>
+        ) : null}
+      </div>
+      <div className="mt-4 flex items-start gap-3">
+        <div className="min-w-0 flex-1">
+          {heatmapQuery.isLoading ? (
+            <p className="text-sm text-muted-foreground">Loading heatmap...</p>
+          ) : items.length > 0 ? (
+            <ActivityHeatmap data={items} />
+          ) : null}
+        </div>
+        {years && onYearChange && activeYear !== undefined ? (
+          <YearSwitcher years={years} value={activeYear} onChange={onYearChange} />
         ) : null}
       </div>
     </div>
@@ -478,10 +519,21 @@ function ActivityHeatmapWidget({
 /* ─── Widget: Overall activity heatmap ─── */
 function OverallActivityHeatmapWidget({
   heatmapQuery,
+  year,
+  years,
+  onYearChange,
 }: {
   summary: DashboardSummary
   heatmapQuery: ReturnType<typeof useActivityHeatmap>
+  year?: number
+  years?: number[]
+  onYearChange?: (year: number) => void
 }) {
+  const activeYear = year ?? heatmapQuery.data?.year
+  const points = useMemo(
+    () => (heatmapQuery.data?.activity_heatmap ?? []).reduce((sum, item) => sum + item.points, 0),
+    [heatmapQuery.data]
+  )
   const items = useMemo(
     () =>
       (heatmapQuery.data?.activity_heatmap ?? []).map((item) => ({
@@ -493,17 +545,60 @@ function OverallActivityHeatmapWidget({
   )
   return (
     <div className="rounded-xl border bg-background p-4">
-      <h2 className="font-semibold">Overall activity</h2>
-      <p className="text-xs text-muted-foreground">
-        Tasks, focus, notes &amp; reminders combined
-      </p>
-      <div className="mt-4">
-        {heatmapQuery.isLoading ? (
-          <p className="text-sm text-muted-foreground">Loading heatmap...</p>
-        ) : items.length > 0 ? (
-          <ActivityHeatmap data={items} />
+      <div>
+        <h2 className="font-semibold">Overall activity</h2>
+        <p className="text-xs text-muted-foreground">
+          Tasks, focus, notes &amp; reminders combined
+        </p>
+        {activeYear !== undefined ? (
+          <p className="text-xs text-muted-foreground">
+            {points.toLocaleString()} activity points in {activeYear}
+          </p>
         ) : null}
       </div>
+      <div className="mt-4 flex items-start gap-3">
+        <div className="min-w-0 flex-1">
+          {heatmapQuery.isLoading ? (
+            <p className="text-sm text-muted-foreground">Loading heatmap...</p>
+          ) : items.length > 0 ? (
+            <ActivityHeatmap data={items} />
+          ) : null}
+        </div>
+        {years && onYearChange && activeYear !== undefined ? (
+          <YearSwitcher years={years} value={activeYear} onChange={onYearChange} />
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
+/* ─── Shared heatmap year switcher ─── */
+function YearSwitcher({
+  years,
+  value,
+  onChange,
+}: {
+  years: number[]
+  value: number
+  onChange: (year: number) => void
+}) {
+  const sorted = [...years].sort((a, b) => b - a)
+  return (
+    <div className="flex shrink-0 flex-col items-end gap-1">
+      {sorted.map((y) => (
+        <button
+          key={y}
+          type="button"
+          onClick={() => onChange(y)}
+          className={
+            y === value
+              ? "rounded-md bg-primary px-2 py-1 text-xs font-medium text-primary-foreground"
+              : "rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
+          }
+        >
+          {y}
+        </button>
+      ))}
     </div>
   )
 }

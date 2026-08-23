@@ -488,7 +488,7 @@ function TaskCard({ task }: { task: Task }) {
               Focus
             </Button>
           ) : null}
-          <div className="flex overflow-hidden rounded-lg border">
+          <div className="flex h-7 overflow-hidden rounded-lg border">
             {(["todo", "in-progress", "done"] as const).map((status) => (
               <Button
                 key={status}

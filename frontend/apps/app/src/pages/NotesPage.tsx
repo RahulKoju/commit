@@ -90,9 +90,10 @@ export function NotesPage() {
             </div>
             {activeNote ? (
               <div className="flex items-center gap-2">
-                <div className="flex items-center overflow-hidden rounded-md border bg-background">
+                <div className="flex h-7 items-center overflow-hidden rounded-md border bg-background">
                   <Button
                     type="button"
+                    size="sm"
                     variant={preview ? "default" : "ghost"}
                     className={`rounded-none ${preview ? "" : "text-muted-foreground"}`}
                     onClick={() => setPreview(true)}
@@ -102,6 +103,7 @@ export function NotesPage() {
                   </Button>
                   <Button
                     type="button"
+                    size="sm"
                     variant={!preview ? "default" : "ghost"}
                     className={`rounded-none ${!preview ? "" : "text-muted-foreground"}`}
                     onClick={() => setPreview(false)}

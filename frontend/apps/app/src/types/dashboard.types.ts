@@ -66,6 +66,7 @@ export const habitHeatmapItemSchema = z.object({
   date: z.string(),
   total: z.number().int(),
   completed: z.number().int(),
+  level: z.number().int(),
 })
 
 export const activityHeatmapItemSchema = z.object({
@@ -75,6 +76,8 @@ export const activityHeatmapItemSchema = z.object({
 })
 
 export const dashboardHeatmapResponseSchema = z.object({
+  year: z.number().int(),
+  earliest_year: z.number().int(),
   habit_heatmap: z.array(habitHeatmapItemSchema),
   activity_heatmap: z.array(activityHeatmapItemSchema),
 })

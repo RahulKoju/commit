@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"strconv"
 
 	"commit/backend/models"
 	"commit/backend/services"
@@ -38,7 +39,17 @@ func (handler DashboardHandler) ActivityHeatmap(c *gin.Context) {
 		return
 	}
 
-	heatmap, err := handler.dashboard.ActivityHeatmap(c.Request.Context(), userID, 365)
+	year := models.DashboardYear()
+	if raw := c.Query("year"); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil || parsed < 1970 || parsed > 2100 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid year, expected ?year=YYYY between 1970 and 2100"})
+			return
+		}
+		year = parsed
+	}
+
+	heatmap, err := handler.dashboard.ActivityHeatmap(c.Request.Context(), userID, year)
 	if err != nil {
 		writeServerError(c, "failed to load activity heatmap", err)
 		return

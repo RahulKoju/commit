@@ -69,6 +69,21 @@ export function defaultLogValueForHabit(habit: Habit): number {
   return habit.target_value
 }
 
+export function valueThatFailsHabit(habit: Habit): number {
+  if (habit.comparison_operator === "lte") return (habit.target_value ?? 0) + 1
+  if (
+    habit.comparison_operator === "eq" &&
+    habit.target_value !== null &&
+    habit.target_value !== undefined
+  ) {
+    return habit.target_value !== 0 ? 0 : 1
+  }
+  if (habit.comparison_operator === "between") {
+    return (habit.target_value_max ?? habit.target_value ?? 0) + 1
+  }
+  return 0
+}
+
 export function rangeLabel(range: DateRange, view: "week" | "month"): string {
   if (view === "week") {
     const start = parseDateKey(range.start)

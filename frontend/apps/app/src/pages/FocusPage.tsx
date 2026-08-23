@@ -281,7 +281,7 @@ export function FocusPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          <div className="flex overflow-hidden rounded-lg border">
+          <div className="flex h-7 overflow-hidden rounded-lg border">
             <Button
               type="button"
               size="sm"

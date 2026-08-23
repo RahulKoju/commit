@@ -13,6 +13,7 @@ export function HabitCell({
   habit,
   dateKey,
   value,
+  hasLog,
   disabled,
   onToggle,
   onLog,
@@ -20,11 +21,12 @@ export function HabitCell({
   habit: Habit
   dateKey: string
   value: number
+  hasLog: boolean
   disabled: boolean
   onToggle: () => void
   onLog: (value: number) => void
 }) {
-  const met = isHabitMet(habit, value)
+  const met = hasLog && isHabitMet(habit, value)
 
   if (disabled) {
     return (

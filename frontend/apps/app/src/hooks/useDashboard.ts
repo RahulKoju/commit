@@ -27,13 +27,16 @@ export function useDashboardSummary() {
   })
 }
 
-export function useActivityHeatmap() {
+export function useActivityHeatmap(year?: number) {
   return useQuery({
-    queryKey: dashboardQueryKeys.activityHeatmap,
+    queryKey: [...dashboardQueryKeys.activityHeatmap, year ?? null],
     queryFn: () =>
-      apiFetch<DashboardHeatmapResponse>("/api/v1/dashboard/activity-heatmap", {
-        schema: dashboardHeatmapResponseSchema,
-      }),
+      apiFetch<DashboardHeatmapResponse>(
+        year ? `/api/v1/dashboard/activity-heatmap?year=${year}` : "/api/v1/dashboard/activity-heatmap",
+        {
+          schema: dashboardHeatmapResponseSchema,
+        },
+      ),
   })
 }
 

@@ -230,7 +230,7 @@ func (model HabitModel) ListHabits(ctx context.Context, userID string) ([]Habit,
 		FROM habits h
 		INNER JOIN habit_categories c ON c.id = h.category_id AND c.user_id = h.user_id
 		WHERE h.user_id = $1 AND h.deleted_at IS NULL
-		ORDER BY c.name, h.sort_order, h.name
+		ORDER BY h.sort_order, h.name
 	`, userID)
 	if err != nil {
 		return nil, err
@@ -338,6 +338,68 @@ func (model HabitModel) DeleteHabit(ctx context.Context, userID string, id strin
 		return ErrNotFound
 	}
 	return nil
+}
+
+// ReorderHabits atomically assigns sort_order 1..N to the user's active
+// habits following the given ID order. The ID list must exactly match the
+// user's current non-deleted habit IDs; otherwise ErrReorderMismatch is
+// returned and no rows are modified.
+func (model HabitModel) ReorderHabits(ctx context.Context, userID string, orderedIDs []string) error {
+	if len(orderedIDs) == 0 {
+		return ErrReorderMismatch
+	}
+
+	rows, err := model.pool.Query(ctx, `
+		SELECT id FROM habits
+		WHERE user_id = $1 AND deleted_at IS NULL
+	`, userID)
+	if err != nil {
+		return err
+	}
+	current := map[string]struct{}{}
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return err
+		}
+		current[id] = struct{}{}
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	rows.Close()
+
+	if len(current) != len(orderedIDs) {
+		return ErrReorderMismatch
+	}
+	seen := make(map[string]struct{}, len(orderedIDs))
+	for _, id := range orderedIDs {
+		if _, exists := current[id]; !exists {
+			return ErrReorderMismatch
+		}
+		if _, duplicate := seen[id]; duplicate {
+			return ErrReorderMismatch
+		}
+		seen[id] = struct{}{}
+	}
+
+	tx, err := model.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	for index, id := range orderedIDs {
+		if _, err := tx.Exec(ctx, `
+			UPDATE habits SET sort_order = $3, updated_at = now()
+			WHERE user_id = $1 AND id = $2 AND deleted_at IS NULL
+		`, userID, id, index+1); err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit(ctx)
 }
 
 func (model HabitModel) LogHabit(ctx context.Context, params LogHabitParams) (HabitLog, error) {
@@ -886,17 +948,19 @@ func bestWeek(days []HabitDayStatus) int {
 }
 
 type defaultHabit struct {
-	categoryID    string
-	name          string
-	icon          string
-	description   string
-	habitType     HabitType
-	targetValue   *float64
-	targetUnit    *string
-	frequencyType HabitFrequencyType
-	frequencyDays []int
-	weeklyGoal    int
-	sortOrder     int
+	categoryID         string
+	name               string
+	icon               string
+	description        string
+	habitType          HabitType
+	targetValue        *float64
+	targetValueMax     *float64
+	targetUnit         *string
+	frequencyType      HabitFrequencyType
+	frequencyDays      []int
+	weeklyGoal         int
+	comparisonOperator HabitComparisonOperator
+	sortOrder          int
 }
 
 func (habit defaultHabit) withUser(userID string) CreateHabitParams {
@@ -905,43 +969,114 @@ func (habit defaultHabit) withUser(userID string) CreateHabitParams {
 		icon = &habit.icon
 	}
 	return CreateHabitParams{
-		UserID:        userID,
-		CategoryID:    habit.categoryID,
-		Name:          habit.name,
-		Icon:          icon,
-		Description:   habit.description,
-		Type:          habit.habitType,
-		TargetValue:   habit.targetValue,
-		TargetUnit:    habit.targetUnit,
-		FrequencyType: habit.frequencyType,
-		FrequencyDays: habit.frequencyDays,
-		WeeklyGoal:    habit.weeklyGoal,
-		SortOrder:     habit.sortOrder,
+		UserID:             userID,
+		CategoryID:         habit.categoryID,
+		Name:               habit.name,
+		Icon:               icon,
+		Description:        habit.description,
+		Type:               habit.habitType,
+		TargetValue:        habit.targetValue,
+		TargetValueMax:     habit.targetValueMax,
+		ComparisonOperator: habit.comparisonOperator,
+		TargetUnit:         habit.targetUnit,
+		FrequencyType:      habit.frequencyType,
+		FrequencyDays:      habit.frequencyDays,
+		WeeklyGoal:         habit.weeklyGoal,
+		SortOrder:          habit.sortOrder,
 	}
 }
 
 func defaultHabits(categories map[string]string) []defaultHabit {
-	steps := 6000.0
-	glasses := 8.0
-	dwGoal := 3.0
-	screenTimeGoal := 2.0
+	steps := 5000.0
+	water := 4.0
+	deepWork := 3.0
+	screenTime := 3.0
+	caffeineMin := 1.0
+	caffeineMax := 3.0
+
 	stepsUnit := "steps/day"
-	glassesUnit := "glasses/day"
-	dwUnit := "sessions/day"
-	screenTimeUnit := "hours (max 3)"
+	waterUnit := "liters/day"
+	deepWorkUnit := "sessions/day"
+	screenTimeUnit := "hours/day"
+	caffeineUnit := "cups/day"
+
+	screenTimeOp := HabitComparisonLTE
+	caffeineOp := HabitComparisonBetween
+
 	return []defaultHabit{
-		{categoryID: categories["Exercise"], name: "Steps walked", icon: "👟", habitType: HabitTypeNumeric, targetValue: &steps, targetUnit: &stepsUnit, frequencyType: HabitFrequencyDaily, weeklyGoal: 7, sortOrder: 1},
-		{categoryID: categories["Health"], name: "Water intake", icon: "💧", habitType: HabitTypeNumeric, targetValue: &glasses, targetUnit: &glassesUnit, frequencyType: HabitFrequencyDaily, weeklyGoal: 7, sortOrder: 2},
-		{categoryID: categories["Deep Work"], name: "Deep Work Session", icon: "🎯", habitType: HabitTypeNumeric, targetValue: &dwGoal, targetUnit: &dwUnit, frequencyType: HabitFrequencyDaily, weeklyGoal: 7, sortOrder: 3},
-		{categoryID: categories["Communication"], name: "Formal Vocabulary", icon: "🗣️", habitType: HabitTypeBoolean, frequencyType: HabitFrequencyDaily, weeklyGoal: 7, sortOrder: 4},
-		{categoryID: categories["Communication"], name: "Interview & Intro Prep", icon: "🤝", habitType: HabitTypeBoolean, frequencyType: HabitFrequencyDaily, weeklyGoal: 7, sortOrder: 5},
-		{categoryID: categories["Technical"], name: "Commit to Side Project", icon: "💻", habitType: HabitTypeBoolean, frequencyType: HabitFrequencyDaily, weeklyGoal: 7, sortOrder: 6},
-		{categoryID: categories["Digital Health"], name: "Posture & Ergonomics", icon: "🧍", habitType: HabitTypeBoolean, frequencyType: HabitFrequencyDaily, weeklyGoal: 7, sortOrder: 7},
-		{categoryID: categories["Digital Health"], name: "Eye Rest (20-20-20)", icon: "👀", habitType: HabitTypeBoolean, frequencyType: HabitFrequencyDaily, weeklyGoal: 7, sortOrder: 8},
-		{categoryID: categories["Digital Health"], name: "Less Instagram / Screen Time", icon: "📵", habitType: HabitTypeNumeric, targetValue: &screenTimeGoal, targetUnit: &screenTimeUnit, frequencyType: HabitFrequencyDaily, weeklyGoal: 7, sortOrder: 9},
-		{categoryID: categories["Technical"], name: "Read Tech Blog/Paper", icon: "📰", habitType: HabitTypeBoolean, frequencyType: HabitFrequencyDaily, weeklyGoal: 7, sortOrder: 10},
-		{categoryID: categories["Exercise"], name: "Gym", icon: "💪", habitType: HabitTypeBoolean, frequencyType: HabitFrequencyWeekly, frequencyDays: []int{1, 2, 3, 4, 5, 6, 7}, weeklyGoal: 4, sortOrder: 11},
-		{categoryID: categories["Learning"], name: "Read", icon: "📚", habitType: HabitTypeBoolean, frequencyType: HabitFrequencyDaily, weeklyGoal: 7, sortOrder: 12},
-		{categoryID: categories["Health"], name: "Sleep by midnight", icon: "😴", habitType: HabitTypeBoolean, frequencyType: HabitFrequencyDaily, weeklyGoal: 7, sortOrder: 13},
+		{
+			categoryID: categories["Exercise"], name: "Steps walked", icon: "🏃‍➡️",
+			description: "Hit at least 5,000 steps today.",
+			habitType: HabitTypeNumeric, targetValue: &steps, targetUnit: &stepsUnit,
+			frequencyType: HabitFrequencyDaily, weeklyGoal: 7, sortOrder: 1,
+		},
+		{
+			categoryID: categories["Health"], name: "Water intake", icon: "🥤💧",
+			description: "Drink at least 4 liters of water.",
+			habitType: HabitTypeNumeric, targetValue: &water, targetUnit: &waterUnit,
+			frequencyType: HabitFrequencyDaily, weeklyGoal: 7, sortOrder: 2,
+		},
+		{
+			categoryID: categories["Deep Work"], name: "Deep Work Session", icon: "💻",
+			description: "Complete at least 3 focused deep work sessions.",
+			habitType: HabitTypeNumeric, targetValue: &deepWork, targetUnit: &deepWorkUnit,
+			frequencyType: HabitFrequencyDaily, weeklyGoal: 6, sortOrder: 3,
+		},
+		{
+			categoryID: categories["Communication"], name: "Interview & Intro Prep", icon: "🗣️",
+			description: "Practice interview answers or self-introduction.",
+			habitType: HabitTypeBoolean,
+			frequencyType: HabitFrequencyDaily, weeklyGoal: 4, sortOrder: 4,
+		},
+		{
+			categoryID: categories["Technical"], name: "Commit to Side Project", icon: "🚀🔥",
+			description: "Make progress on your side project.",
+			habitType: HabitTypeBoolean,
+			frequencyType: HabitFrequencyDaily, weeklyGoal: 4, sortOrder: 5,
+		},
+		{
+			categoryID: categories["Digital Health"], name: "Posture & Ergonomics", icon: "🧘",
+			description: "Check your posture and desk ergonomics.",
+			habitType: HabitTypeBoolean,
+			frequencyType: HabitFrequencyDaily, weeklyGoal: 7, sortOrder: 6,
+		},
+		{
+			categoryID: categories["Digital Health"], name: "Eye Rest (20-20-20)", icon: "👀",
+			description: "Every 20 minutes, look at something 20 feet away for 20 seconds.",
+			habitType: HabitTypeBoolean,
+			frequencyType: HabitFrequencyDaily, weeklyGoal: 7, sortOrder: 7,
+		},
+		{
+			categoryID: categories["Digital Health"], name: "Less Instagram / Screen Time", icon: "📵",
+			description: "Keep screen time at 3 hours or less.",
+			habitType: HabitTypeNumeric, comparisonOperator: screenTimeOp,
+			targetValue: &screenTime, targetUnit: &screenTimeUnit,
+			frequencyType: HabitFrequencyDaily, weeklyGoal: 6, sortOrder: 8,
+		},
+		{
+			categoryID: categories["Exercise"], name: "Gym/Boxing", icon: "🥊👊",
+			description: "Gym or boxing session.",
+			habitType: HabitTypeBoolean,
+			frequencyType: HabitFrequencyWeekly, frequencyDays: []int{1, 2, 3, 4, 5, 7}, weeklyGoal: 4, sortOrder: 9,
+		},
+		{
+			categoryID: categories["Learning"], name: "Read", icon: "📖📚",
+			description: "Read for at least 20-30 minutes.",
+			habitType: HabitTypeBoolean,
+			frequencyType: HabitFrequencyDaily, weeklyGoal: 5, sortOrder: 10,
+		},
+		{
+			categoryID: categories["Health"], name: "Sleep by midnight", icon: "😴🕛🛌",
+			description: "Be asleep by midnight.",
+			habitType: HabitTypeBoolean,
+			frequencyType: HabitFrequencyDaily, weeklyGoal: 7, sortOrder: 11,
+		},
+		{
+			categoryID: categories["Health"], name: "Caffeine intake", icon: "☕",
+			description: "Keep caffeine between 1-3 cups.",
+			habitType: HabitTypeNumeric, comparisonOperator: caffeineOp,
+			targetValue: &caffeineMin, targetValueMax: &caffeineMax, targetUnit: &caffeineUnit,
+			frequencyType: HabitFrequencyDaily, weeklyGoal: 7, sortOrder: 12,
+		},
 	}
 }

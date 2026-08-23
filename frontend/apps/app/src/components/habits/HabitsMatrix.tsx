@@ -24,6 +24,7 @@ import {
   isHabitMet,
   isScheduledOn,
   listDateKeys,
+  valueThatFailsHabit,
   type DateRange,
 } from "./habitMatrixUtils"
 
@@ -47,24 +48,37 @@ export function HabitsMatrix({
     [range.start, range.end]
   )
 
-  const logsByKey = useMemo(() => {
-    const map = new Map<string, number>()
+  const logIndex = useMemo(() => {
+    const values = new Map<string, number>()
+    const loggedKeys = new Set<string>()
     for (const log of logs) {
-      map.set(`${log.habit_id}|${log.logged_date}`, log.value)
+      const key = `${log.habit_id}|${log.logged_date}`
+      values.set(key, log.value)
+      loggedKeys.add(key)
     }
-    return map
+    return { values, loggedKeys }
   }, [logs])
 
   const valueFor = useCallback(
     (habitID: string, dateKey: string): number => {
-      return logsByKey.get(`${habitID}|${dateKey}`) ?? 0
+      return logIndex.values.get(`${habitID}|${dateKey}`) ?? 0
     },
-    [logsByKey]
+    [logIndex]
   )
 
-  function toggleHabit(habit: Habit, dateKey: string, currentValue: number) {
-    const nextValue = isHabitMet(habit, currentValue)
-      ? 0
+  const hasLogFor = useCallback(
+    (habitID: string, dateKey: string): boolean => {
+      return logIndex.loggedKeys.has(`${habitID}|${dateKey}`)
+    },
+    [logIndex]
+  )
+
+  function toggleHabit(habit: Habit, dateKey: string) {
+    const currentlyMet =
+      hasLogFor(habit.id, dateKey) &&
+      isHabitMet(habit, valueFor(habit.id, dateKey))
+    const nextValue = currentlyMet
+      ? valueThatFailsHabit(habit)
       : defaultLogValueForHabit(habit)
     void logHabit.mutateAsync({
       habitId: habit.id,
@@ -84,8 +98,10 @@ export function HabitsMatrix({
       const scheduled = habits.filter(
         (habit) => isScheduledOn(habit, dateKey) && dateKey <= today
       )
-      const completed = scheduled.filter((habit) =>
-        isHabitMet(habit, valueFor(habit.id, dateKey))
+      const completed = scheduled.filter(
+        (habit) =>
+          hasLogFor(habit.id, dateKey) &&
+          isHabitMet(habit, valueFor(habit.id, dateKey))
       ).length
       return {
         dateKey,
@@ -98,7 +114,7 @@ export function HabitsMatrix({
             : null,
       }
     })
-  }, [dates, habits, today, valueFor])
+  }, [dates, habits, today, valueFor, hasLogFor])
 
   const habitAverages = useMemo(() => {
     return habits.map((habit) => {
@@ -108,7 +124,12 @@ export function HabitsMatrix({
         if (dateKey > today) continue
         if (!isScheduledOn(habit, dateKey)) continue
         scheduledDays++
-        if (isHabitMet(habit, valueFor(habit.id, dateKey))) completedDays++
+        if (
+          hasLogFor(habit.id, dateKey) &&
+          isHabitMet(habit, valueFor(habit.id, dateKey))
+        ) {
+          completedDays++
+        }
       }
       return {
         habit,
@@ -120,7 +141,7 @@ export function HabitsMatrix({
         scheduledDays,
       }
     })
-  }, [habits, dates, today, valueFor])
+  }, [habits, dates, today, valueFor, hasLogFor])
 
   return (
     <TooltipProvider delayDuration={200}>
@@ -193,14 +214,9 @@ export function HabitsMatrix({
                             habit={habit}
                             dateKey={dateKey}
                             value={valueFor(habit.id, dateKey)}
+                            hasLog={hasLogFor(habit.id, dateKey)}
                             disabled={disabled}
-                            onToggle={() =>
-                              toggleHabit(
-                                habit,
-                                dateKey,
-                                valueFor(habit.id, dateKey)
-                              )
-                            }
+                            onToggle={() => toggleHabit(habit, dateKey)}
                             onLog={(value) => logNumeric(habit, dateKey, value)}
                           />
                         </TableCell>

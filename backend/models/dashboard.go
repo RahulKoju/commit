@@ -92,6 +92,11 @@ func dashboardNow() time.Time {
 	return time.Now().In(dashboardLocation)
 }
 
+// DashboardYear returns the current calendar year in the dashboard timezone.
+func DashboardYear() int {
+	return dashboardNow().Year()
+}
+
 func NewDashboardModel(pool *pgxpool.Pool) DashboardModel {
 	return DashboardModel{pool: pool}
 }
@@ -318,6 +323,7 @@ type HabitHeatmapItem struct {
 	Date      string `json:"date"`
 	Total     int    `json:"total"`
 	Completed int    `json:"completed"`
+	Level     int    `json:"level"`
 }
 
 type ActivityHeatmapItem struct {
@@ -327,7 +333,9 @@ type ActivityHeatmapItem struct {
 }
 
 type DashboardHeatmap struct {
-	HabitHeatmap    []HabitHeatmapItem    `json:"habit_heatmap"`
+	Year         int                   `json:"year"`
+	EarliestYear int                   `json:"earliest_year"`
+	HabitHeatmap []HabitHeatmapItem    `json:"habit_heatmap"`
 	ActivityHeatmap []ActivityHeatmapItem `json:"activity_heatmap"`
 }
 
@@ -436,27 +444,49 @@ func (model DashboardModel) weeklyProductivity(ctx context.Context, userID strin
 	return items, rows.Err()
 }
 
-func (model DashboardModel) ActivityHeatmap(ctx context.Context, userID string, days int) (DashboardHeatmap, error) {
-	if days <= 0 {
-		days = 365
-	}
-	now := dashboardNow()
-	end := now.Format("2006-01-02")
-	start := now.AddDate(0, 0, -(days - 1)).Format("2006-01-02")
+// ActivityHeatmap renders a full calendar year (Jan 1 – Dec 31 in the
+// dashboard timezone) for the given year. Days after today within the current
+// year are included with zero counts so the grid covers the whole year.
+func (model DashboardModel) ActivityHeatmap(ctx context.Context, userID string, year int) (DashboardHeatmap, error) {
+	start := time.Date(year, time.January, 1, 0, 0, 0, 0, dashboardLocation)
+	end := time.Date(year, time.December, 31, 0, 0, 0, 0, dashboardLocation)
+	startDate := start.Format("2006-01-02")
+	endDate := end.Format("2006-01-02")
 
-	counts, err := model.habitDailyCounts(ctx, userID, start, end)
+	createdAt, err := model.accountCreatedAt(ctx, userID)
 	if err != nil {
 		return DashboardHeatmap{}, err
 	}
 
-	habitItems := make([]HabitHeatmapItem, 0, days)
-	for day := now.AddDate(0, 0, -(days - 1)); !day.After(now); day = day.AddDate(0, 0, 1) {
+	counts, err := model.habitDailyCounts(ctx, userID, startDate, endDate)
+	if err != nil {
+		return DashboardHeatmap{}, err
+	}
+
+	habitItems := make([]HabitHeatmapItem, 0, 366)
+	for day := start; !day.After(end); day = day.AddDate(0, 0, 1) {
 		date := day.Format("2006-01-02")
-		habitItems = append(habitItems, HabitHeatmapItem{
-			Date:      date,
-			Total:     counts[date].total,
-			Completed: counts[date].checked,
-		})
+		item := HabitHeatmapItem{Date: date}
+		// Days before the account existed have no scheduled habits.
+		if !day.Before(time.Date(createdAt.Year(), createdAt.Month(), createdAt.Day(), 0, 0, 0, 0, dashboardLocation)) {
+			item.Total = counts[date].total
+			item.Completed = counts[date].checked
+		}
+		habitItems = append(habitItems, item)
+	}
+
+	// Quantile-bucket completed counts over the user's own non-zero days so
+	// low-but-real activity never rounds down to an empty cell.
+	var completedSorted []int
+	for _, item := range habitItems {
+		if item.Completed > 0 {
+			completedSorted = append(completedSorted, item.Completed)
+		}
+	}
+	sort.Ints(completedSorted)
+	habitBoundaries := quantileBoundaries(completedSorted, []float64{20, 40, 60, 80})
+	for i := range habitItems {
+		habitItems[i].Level = activityLevel(habitItems[i].Completed, habitBoundaries)
 	}
 
 	rows, err := model.pool.Query(ctx, `
@@ -494,13 +524,13 @@ func (model DashboardModel) ActivityHeatmap(ctx context.Context, userID string, 
 			GROUP BY (created_at AT TIME ZONE $4)::date
 		) r ON r.day = d.day
 		ORDER BY d.day
-	`, userID, start, end, dashboardTimezone)
+	`, userID, startDate, endDate, dashboardTimezone)
 	if err != nil {
 		return DashboardHeatmap{}, err
 	}
 	defer rows.Close()
 
-	activityItems := make([]ActivityHeatmapItem, 0, days)
+	activityItems := make([]ActivityHeatmapItem, 0, 366)
 	var pointsByDate []int
 	for rows.Next() {
 		var item ActivityHeatmapItem
@@ -526,9 +556,24 @@ func (model DashboardModel) ActivityHeatmap(ctx context.Context, userID string, 
 	}
 
 	return DashboardHeatmap{
+		Year:            year,
+		EarliestYear:    createdAt.Year(),
 		HabitHeatmap:    habitItems,
 		ActivityHeatmap: activityItems,
 	}, nil
+}
+
+// accountCreatedAt returns when the user's account was created, converted to
+// the dashboard timezone.
+func (model DashboardModel) accountCreatedAt(ctx context.Context, userID string) (time.Time, error) {
+	var createdAt time.Time
+	err := model.pool.QueryRow(ctx, `
+		SELECT created_at AT TIME ZONE $2 FROM users WHERE id = $1
+	`, userID, dashboardTimezone).Scan(&createdAt)
+	if err != nil {
+		return time.Time{}, err
+	}
+	return createdAt, nil
 }
 
 func (model DashboardModel) weekComparison(ctx context.Context, userID string) (DashboardWeekComparison, error) {

@@ -1,4 +1,21 @@
-import { useState, type FormEvent } from "react"
+import { useMemo, useState, type FormEvent } from "react"
+import {
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core"
+import {
+  SortableContext,
+  arrayMove,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable"
+import { CSS } from "@dnd-kit/utilities"
 import { Button } from "@workspace/ui/components/button"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
@@ -16,7 +33,7 @@ import {
   TabsList,
   TabsTrigger,
 } from "@workspace/ui/components/tabs"
-import { Check, Download, Pencil, Plus, Trash2, X } from "lucide-react"
+import { Check, Download, GripVertical, Pencil, Plus, Trash2, X } from "lucide-react"
 
 import {
   useCreateHabit,
@@ -25,6 +42,7 @@ import {
   useDeleteHabitCategory,
   useHabitCategories,
   useHabits,
+  useReorderHabits,
   useUpdateHabit,
   useUpdateHabitCategory,
 } from "@/hooks/useHabits"
@@ -55,10 +73,59 @@ export function ManageHabitsDialog({
   onOpenChange: (open: boolean) => void
 }) {
   const habitsQuery = useHabits()
+  const reorderHabits = useReorderHabits()
   const [tab, setTab] = useState("habits")
   const [creating, setCreating] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [optimisticOrder, setOptimisticOrder] = useState<string[] | null>(null)
+
+  const habits = useMemo(() => habitsQuery.data?.habits ?? [], [habitsQuery.data])
+
+  const orderedHabits = useMemo(() => {
+    if (!optimisticOrder) return habits
+    const byId = new Map(habits.map((habit) => [habit.id, habit]))
+    const result: Habit[] = []
+    for (const id of optimisticOrder) {
+      const habit = byId.get(id)
+      if (habit) {
+        result.push(habit)
+        byId.delete(id)
+      }
+    }
+    result.push(...byId.values())
+    return result
+  }, [habits, optimisticOrder])
+
+  // Rows currently swapped for the inline edit / delete-confirm forms are not
+  // draggable, so they are excluded from sortable registration.
+  const sortableIds = orderedHabits
+    .filter((habit) => habit.id !== editingId && habit.id !== deletingId)
+    .map((habit) => habit.id)
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  )
+
+  async function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event
+    if (!over || active.id === over.id || reorderHabits.isPending) return
+    const current = sortableIds
+    const from = current.indexOf(String(active.id))
+    const to = current.indexOf(String(over.id))
+    if (from === -1 || to === -1) return
+
+    const next = arrayMove(current, from, to)
+    setOptimisticOrder(next)
+    try {
+      await reorderHabits.mutateAsync({ habit_ids: next })
+    } catch (err) {
+      setOptimisticOrder(null)
+      const { toast } = await import("sonner")
+      toast.error(err instanceof Error ? err.message : "Reorder failed")
+    }
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -94,80 +161,68 @@ export function ManageHabitsDialog({
             {creating ? <HabitForm onDone={() => setCreating(false)} /> : null}
 
             <div className="max-h-80 space-y-2 overflow-y-auto">
-              {(habitsQuery.data?.habits ?? []).map((habit) => {
-                if (editingId === habit.id) {
-                  return (
-                    <EditHabitRow
-                      key={habit.id}
-                      habit={habit}
-                      onDone={() => setEditingId(null)}
-                    />
-                  )
-                }
-                if (deletingId === habit.id) {
-                  return (
-                    <div
-                      key={habit.id}
-                      className="flex items-center justify-between rounded-lg border p-3 text-sm"
-                    >
-                      <span>
-                        Delete <strong>{habit.name}</strong> and all its logs?
-                      </span>
-                      <div className="flex gap-2">
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          onClick={() => setDeletingId(null)}
-                        >
-                          Cancel
-                        </Button>
-                        <DeleteHabitButton
-                          habitId={habit.id}
-                          onDone={() => setDeletingId(null)}
+              <p className="text-xs text-muted-foreground">
+                Drag the handle to reorder habits. Order applies to the habits
+                table.
+              </p>
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleDragEnd}
+              >
+                <SortableContext
+                  items={sortableIds}
+                  strategy={verticalListSortingStrategy}
+                >
+                  {orderedHabits.map((habit) => {
+                    if (editingId === habit.id) {
+                      return (
+                        <EditHabitRow
+                          key={habit.id}
+                          habit={habit}
+                          onDone={() => setEditingId(null)}
                         />
-                      </div>
-                    </div>
-                  )
-                }
-                return (
-                  <div
-                    key={habit.id}
-                    className="flex items-center justify-between gap-3 rounded-lg border p-3 text-sm"
-                  >
-                    <div className="flex min-w-0 items-center gap-3">
-                      <HabitIcon habit={habit} />
-                      <div className="min-w-0">
-                        <p className="truncate font-medium">{habit.name}</p>
-                        <p className="truncate text-xs text-muted-foreground">
-                          {habit.category_name} · {habit.type}
-                          {habit.frequency_type === "weekly"
-                            ? ` · ${habit.frequency_days.length} day(s)/week`
-                            : ""}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex shrink-0 gap-1">
-                      <button
-                        type="button"
-                        onClick={() => setEditingId(habit.id)}
-                        className="rounded p-1 text-muted-foreground hover:text-foreground"
-                        title="Edit"
-                      >
-                        <Pencil />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setDeletingId(habit.id)}
-                        className="rounded p-1 text-muted-foreground hover:text-destructive"
-                        title="Delete"
-                      >
-                        <Trash2 />
-                      </button>
-                    </div>
-                  </div>
-                )
-              })}
+                      )
+                    }
+                    if (deletingId === habit.id) {
+                      return (
+                        <div
+                          key={habit.id}
+                          className="flex items-center justify-between rounded-lg border p-3 text-sm"
+                        >
+                          <span>
+                            Delete <strong>{habit.name}</strong> and all its
+                            logs?
+                          </span>
+                          <div className="flex gap-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setDeletingId(null)}
+                            >
+                              Cancel
+                            </Button>
+                            <DeleteHabitButton
+                              habitId={habit.id}
+                              onDone={() => setDeletingId(null)}
+                            />
+                          </div>
+                        </div>
+                      )
+                    }
+                    return (
+                      <SortableHabitRow
+                        key={habit.id}
+                        habit={habit}
+                        dragDisabled={reorderHabits.isPending}
+                        onEdit={() => setEditingId(habit.id)}
+                        onAskDelete={() => setDeletingId(habit.id)}
+                      />
+                    )
+                  })}
+                </SortableContext>
+              </DndContext>
             </div>
           </TabsContent>
 
@@ -181,6 +236,72 @@ export function ManageHabitsDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  )
+}
+
+function SortableHabitRow({
+  habit,
+  dragDisabled,
+  onEdit,
+  onAskDelete,
+}: {
+  habit: Habit
+  dragDisabled: boolean
+  onEdit: () => void
+  onAskDelete: () => void
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id: habit.id, disabled: dragDisabled })
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      className={`flex items-center justify-between gap-3 rounded-lg border p-3 text-sm ${
+        isDragging ? "relative z-10 bg-muted/50 shadow-sm" : ""
+      }`}
+    >
+      <div className="flex min-w-0 items-center gap-2">
+        <button
+          type="button"
+          aria-label={`Reorder ${habit.name}`}
+          {...attributes}
+          {...listeners}
+          disabled={dragDisabled}
+          className="shrink-0 cursor-grab touch-none rounded p-1 text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring active:cursor-grabbing disabled:pointer-events-none disabled:opacity-50"
+        >
+          <GripVertical />
+        </button>
+        <HabitIcon habit={habit} />
+        <div className="min-w-0">
+          <p className="truncate font-medium">{habit.name}</p>
+          <p className="truncate text-xs text-muted-foreground">
+            {habit.category_name} · {habit.type}
+            {habit.frequency_type === "weekly"
+              ? ` · ${habit.frequency_days.length} day(s)/week`
+              : ""}
+          </p>
+        </div>
+      </div>
+      <div className="flex shrink-0 gap-1">
+        <button
+          type="button"
+          onClick={onEdit}
+          className="rounded p-1 text-muted-foreground hover:text-foreground"
+          title="Edit"
+        >
+          <Pencil />
+        </button>
+        <button
+          type="button"
+          onClick={onAskDelete}
+          className="rounded p-1 text-muted-foreground hover:text-destructive"
+          title="Delete"
+        >
+          <Trash2 />
+        </button>
+      </div>
+    </div>
   )
 }
 

@@ -19,6 +19,7 @@ import {
   type HabitResponse,
   type HabitsResponse,
   type LogHabitInput,
+  type ReorderHabitsInput,
   type UpdateHabitCategoryInput,
   type UpdateHabitInput,
 } from "@/types/habit.types"
@@ -145,6 +146,22 @@ export function useLogHabit() {
       queryClient.invalidateQueries({ queryKey: ["habits", "matrix"] })
       queryClient.invalidateQueries({ queryKey: ["dashboard", "summary"] })
       queryClient.invalidateQueries({ queryKey: ["dashboard", "activity-heatmap"] })
+    },
+  })
+}
+
+export function useReorderHabits() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (input: ReorderHabitsInput) =>
+      apiFetch<HabitsResponse>("/api/v1/habits/reorder", {
+        method: "PATCH",
+        body: input,
+        schema: habitsResponseSchema,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: habitQueryKeys.all })
+      queryClient.invalidateQueries({ queryKey: ["habits", "matrix"] })
     },
   })
 }

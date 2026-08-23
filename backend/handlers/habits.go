@@ -260,6 +260,34 @@ func (handler HabitHandler) DeleteHabit(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
+type reorderHabitsRequest struct {
+	HabitIDs []string `json:"habit_ids" binding:"required"`
+}
+
+func (handler HabitHandler) ReorderHabits(c *gin.Context) {
+	userID, ok := currentUserID(c)
+	if !ok {
+		return
+	}
+
+	var request reorderHabitsRequest
+	if err := c.ShouldBindJSON(&request); err != nil || len(request.HabitIDs) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid reorder request"})
+		return
+	}
+
+	if err := handler.habits.ReorderHabits(c.Request.Context(), userID, request.HabitIDs); err != nil {
+		writeHabitError(c, err)
+		return
+	}
+	habits, err := handler.habits.ListHabits(c.Request.Context(), userID)
+	if err != nil {
+		writeServerError(c, "failed to list habits", err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"habits": habits})
+}
+
 func (handler HabitHandler) LogHabit(c *gin.Context) {
 	userID, ok := currentUserID(c)
 	if !ok {
