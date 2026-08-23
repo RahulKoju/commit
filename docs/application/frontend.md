@@ -49,9 +49,6 @@ frontend/
 | `/tasks` | `TasksPage` | Tasks |
 | `/habits` | `HabitsPage` | Habits |
 | `/notes` | `NotesPage` | Notes |
-| `/learn` | `LearnPage` | Learn |
-| `/learn/flashcards` | `FlashcardsPage` | Flashcards |
-| `/reviews` | `ReviewsPage` | Reviews |
 | `/admin/users` | `AdminUsersPage` | Admin (admin role only) |
 
 All routes are wrapped in `AppShell` (sidebar + topbar + main area). The admin route is conditionally rendered and guarded by role check.
@@ -70,13 +67,13 @@ useUpdateTask()          // PATCH /tasks/:id
 useDeleteTask()          // DELETE /tasks/:id
 ```
 
-Mutations invalidate their resource's top-level query key on success, triggering automatic refetches (e.g., `["tasks"]`, `["habits"]`, `["learn"]`).
+Mutations invalidate their resource's top-level query key on success, triggering automatic refetches (e.g., `["tasks"]`, `["habits"]`, `["notes"]`); mutations that affect dashboard metrics also invalidate the `["dashboard"]` keys.
 
 ### Client State: Zustand
 
 | Store | File | State |
 |-------|------|-------|
-| `useFocusStore` | `store/useFocusStore.ts` | Timer mode (pomodoro/stopwatch), running state, elapsed/remaining, breaks, fullscreen, preselected task |
+| `useFocusStore` | `store/useFocusStore.ts` | Timer mode (pomodoro/stopwatch), running/paused state, elapsed/remaining, active session sync (server-authoritative, resumable), fullscreen, preselected task |
 | `useUIStore` | `store/useUIStore.ts` | Sidebar open/closed |
 | `useAuthStore` | `store/useAuthStore.ts` | Current user (mostly superseded by TanStack Query) |
 

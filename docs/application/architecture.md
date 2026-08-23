@@ -17,6 +17,12 @@ main.go
   │     └── Business logic layer, receives models + optional dependencies
   ├── Initialize Email Sender (services/email.go)
   │     └── ResendSender if RESEND_API_KEY set, else LogSender (stdout)
+  ├── Start Background Schedulers (main.go)
+  │     ├── Reminder scheduler (services/reminders.go): ticks every 60s,
+  │     │   claims due reminders with FOR UPDATE SKIP LOCKED, sends emails
+  │     └── Focus heartbeat scheduler (services/focus.go): ticks every 30s,
+  │         auto-pauses running sessions stale >3min, auto-discards paused
+  │         sessions stale >24h
   ├── Initialize Auth Service
   │     └── Receives userModel, refreshTokenModel, passwordResetTokenModel,
   │         emailSender, appURL, habitService, JWT config
@@ -60,7 +66,7 @@ Request
 POST /api/v1/auth/register
   → bcrypt hash password
   → Insert user
-  → Seed 8 default habits across 3 categories
+  → Seed 12 default habits across 7 categories
   → Generate access_token (24h) + refresh_token (7 days)
   → Set commit_token cookie (access_token)
   → Set refresh_token cookie
@@ -162,4 +168,12 @@ When a task with a recurrence rule is updated to `status: "done"`, the server au
 
 ### Auto-Habit Logging
 
-Creating a focus session can auto-log a "Focused study" habit if the user's total daily focus minutes meets or exceeds `FOCUS_DAILY_MINIMUM_MINUTES` (default: 120). This is checked server-side when a session is created.
+Completing a focus session (work type) auto-logs a "Focused study" habit if the user's total daily focus minutes meets or exceeds `FOCUS_DAILY_MINIMUM_MINUTES` (default: 120). The check runs inside the completion transaction, so only completed work time counts.
+
+### Active Focus Sessions
+
+Focus sessions are tracked server-side in `active_focus_sessions` while in progress. A partial unique index enforces one active (running/paused) session per user; concurrent starts surface the conflict as `409` with the existing session. Elapsed time is an accumulator plus segment anchor — the server is the source of truth and the client reconciles against it. Sessions are resumable across refreshes and devices via `GET /focus/active`.
+
+### Reminders
+
+Reminders attach to notes and are either `one_time` (fires at `next_fire_at`) or `recurring` (5-field cron expression, evaluated in Asia/Kathmandu timezone). A background scheduler claims due reminders atomically (`FOR UPDATE SKIP LOCKED`) so multiple instances never double-fire, sends email via Resend, and re-schedules recurring reminders forward. The browser polls `GET /reminders/due?since=` for notification fan-out; the `since` watermark prevents duplicate notifications across reconnects.

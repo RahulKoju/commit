@@ -1,24 +1,18 @@
 # Database Schema
 
-All tables use UUID primary keys (generated via `gen_random_uuid()` from the `pgcrypto` extension) and `TIMESTAMPTZ` timestamps. The database runs 021 SQL migration files tracked in the `schema_migrations` table.
+All tables use UUID primary keys (generated via `gen_random_uuid()` from the `pgcrypto` extension) and `TIMESTAMPTZ` timestamps. The database runs 027 SQL migration files tracked in the `schema_migrations` table.
 
 ## Entity Relationship Overview
 
 ```
 users (1) ──< habit_categories (1) ──< habits (1) ──< habit_logs
   │
-  ├──< topics (1) ──< learn_entries
-  │            └──< flashcards
+  ├──< tasks (1) ──< focus_sessions
+  │    │             └──< focus_session_tags
+  │    └──< active_focus_sessions (0..1 active per user)
   │
-  ├──< tasks (1) ──< focus_sessions (1) ──< focus_session_tags
-  │    │
-  │    └──< topics (optional, ON DELETE SET NULL)
-  │
-  ├──< notes ──> note_topics ──> topics  (many-to-many)
-  │    └──< note_tags
+  ├──< notes ──< reminders
   │    └──< note_links (bidirectional wiki-link graph)
-  │
-  ├──< reviews
   │
   ├──< refresh_tokens
   │
@@ -63,43 +57,6 @@ Index: `idx_habit_categories_user_id(user_id)`
 
 ---
 
-### `topics`
-
-User-defined subjects for learning, task association, note categorization, and flashcards.
-
-| Column | Type | Constraints |
-|--------|------|-------------|
-| `id` | `UUID` | `PRIMARY KEY DEFAULT gen_random_uuid()` |
-| `user_id` | `UUID` | `NOT NULL REFERENCES users(id) ON DELETE CASCADE` |
-| `name` | `TEXT` | `NOT NULL` |
-| `created_at` | `TIMESTAMPTZ` | `NOT NULL DEFAULT now()` |
-| `updated_at` | `TIMESTAMPTZ` | `NOT NULL DEFAULT now()` |
-
-Constraints: `UNIQUE(user_id, name)`
-Index: `idx_topics_user_id(user_id)`
-
----
-
-### `learn_entries`
-
-Records of study sessions tied to a topic.
-
-| Column | Type | Constraints |
-|--------|------|-------------|
-| `id` | `UUID` | `PRIMARY KEY DEFAULT gen_random_uuid()` |
-| `user_id` | `UUID` | `NOT NULL REFERENCES users(id) ON DELETE CASCADE` |
-| `topic_id` | `UUID` | `NOT NULL REFERENCES topics(id) ON DELETE CASCADE` |
-| `duration_minutes` | `INTEGER` | `NOT NULL CHECK (> 0)` |
-| `confidence` | `INTEGER` | `NOT NULL CHECK (BETWEEN 1 AND 5)` |
-| `note` | `TEXT` | `NOT NULL DEFAULT ''` |
-| `studied_at` | `TIMESTAMPTZ` | `NOT NULL DEFAULT now()` |
-| `created_at` | `TIMESTAMPTZ` | `NOT NULL DEFAULT now()` |
-| `updated_at` | `TIMESTAMPTZ` | `NOT NULL DEFAULT now()` |
-
-Indexes: `idx_learn_entries_user_studied(user_id, studied_at DESC)`, `idx_learn_entries_topic_id(topic_id)`
-
----
-
 ### `tasks`
 
 Todo-style tasks with priority, scheduling, recurrence, and status tracking.
@@ -108,7 +65,6 @@ Todo-style tasks with priority, scheduling, recurrence, and status tracking.
 |--------|------|-------------|
 | `id` | `UUID` | `PRIMARY KEY DEFAULT gen_random_uuid()` |
 | `user_id` | `UUID` | `NOT NULL REFERENCES users(id) ON DELETE CASCADE` |
-| `topic_id` | `UUID` | `REFERENCES topics(id) ON DELETE SET NULL` |
 | `title` | `TEXT` | `NOT NULL` |
 | `description` | `TEXT` | `NOT NULL DEFAULT ''` |
 | `priority` | `TEXT` | `NOT NULL DEFAULT 'medium' CHECK (IN ('low','medium','high'))` |
@@ -120,25 +76,24 @@ Todo-style tasks with priority, scheduling, recurrence, and status tracking.
 | `created_at` | `TIMESTAMPTZ` | `NOT NULL DEFAULT now()` |
 | `updated_at` | `TIMESTAMPTZ` | `NOT NULL DEFAULT now()` |
 
-Indexes: `idx_tasks_user_status(user_id, status)`, `idx_tasks_scheduled_date(user_id, scheduled_date)`, `idx_tasks_topic_id(topic_id)`
+Indexes: `idx_tasks_user_status(user_id, status)`, `idx_tasks_scheduled_date(user_id, scheduled_date)`
 
 ---
 
 ### `focus_sessions`
 
-Pomodoro-style focus tracking linked to a task.
+Completed Pomodoro-style focus tracking linked to a task.
 
 | Column | Type | Constraints |
 |--------|------|-------------|
 | `id` | `UUID` | `PRIMARY KEY DEFAULT gen_random_uuid()` |
 | `user_id` | `UUID` | `NOT NULL REFERENCES users(id) ON DELETE CASCADE` |
 | `task_id` | `UUID` | `NOT NULL REFERENCES tasks(id) ON DELETE CASCADE` |
-| `topic_id` | `UUID` | `REFERENCES topics(id) ON DELETE SET NULL` |
 | `start_time` | `TIMESTAMPTZ` | `NOT NULL` |
 | `duration_minutes` | `INTEGER` | `NOT NULL CHECK (> 0)` |
 | `created_at` | `TIMESTAMPTZ` | `NOT NULL DEFAULT now()` |
 
-Indexes: `idx_focus_sessions_user_start(user_id, start_time)`, `idx_focus_sessions_topic_id(topic_id)`
+Indexes: `idx_focus_sessions_user_start(user_id, start_time)`
 
 #### `focus_session_tags`
 
@@ -149,6 +104,33 @@ Tags associated with a focus session.
 | `session_id` | `UUID` | `NOT NULL REFERENCES focus_sessions(id) ON DELETE CASCADE` |
 | `tag` | `TEXT` | `NOT NULL` |
 | | | `PRIMARY KEY (session_id, tag)` |
+
+---
+
+### `active_focus_sessions`
+
+Server-side in-progress focus sessions, making timers persistent and resumable across refreshes/devices. On completion (or discard) the session's final state is recorded in history; work sessions are inserted into `focus_sessions`.
+
+| Column | Type | Constraints |
+|--------|------|-------------|
+| `id` | `UUID` | `PRIMARY KEY DEFAULT gen_random_uuid()` |
+| `user_id` | `UUID` | `NOT NULL REFERENCES users(id) ON DELETE CASCADE` |
+| `task_id` | `UUID` | `REFERENCES tasks(id) ON DELETE SET NULL` |
+| `session_type` | `TEXT` | `NOT NULL CHECK (IN ('work','short_break','long_break'))` |
+| `status` | `TEXT` | `NOT NULL DEFAULT 'running' CHECK (IN ('running','paused','completed','discarded'))` |
+| `elapsed_seconds` | `INTEGER` | `NOT NULL DEFAULT 0 CHECK (>= 0)` |
+| `planned_duration_seconds` | `INTEGER` | nullable — null means stopwatch mode |
+| `segment_started_at` | `TIMESTAMPTZ` | nullable |
+| `heartbeat_at` | `TIMESTAMPTZ` | `NOT NULL DEFAULT now()` |
+| `started_at` | `TIMESTAMPTZ` | `NOT NULL DEFAULT now()` |
+| `message` | `TEXT` | `NOT NULL DEFAULT ''` |
+| `tags` | `TEXT[]` | `NOT NULL DEFAULT '{}'` |
+| `completed_at` | `TIMESTAMPTZ` | nullable |
+| `created_at` | `TIMESTAMPTZ` | `NOT NULL DEFAULT now()` |
+| `updated_at` | `TIMESTAMPTZ` | `NOT NULL DEFAULT now()` |
+
+Constraints: partial unique index `uq_active_focus_one_per_user(user_id) WHERE status IN ('running','paused')` — one active session per user
+Index: `idx_active_focus_heartbeat(status, heartbeat_at)`
 
 ---
 
@@ -168,26 +150,6 @@ Rich-text notes with full-text search via generated `tsvector`.
 
 Indexes: `idx_notes_user_updated(user_id, updated_at DESC)`, `idx_notes_search_vector` (GIN on `search_vector`)
 
-#### `note_topics` (junction table)
-
-| Column | Type | Constraints |
-|--------|------|-------------|
-| `note_id` | `UUID` | `NOT NULL REFERENCES notes(id) ON DELETE CASCADE` |
-| `topic_id` | `UUID` | `NOT NULL REFERENCES topics(id) ON DELETE CASCADE` |
-| | | `PRIMARY KEY (note_id, topic_id)` |
-
-Index: `idx_note_topics_topic_id(topic_id)`
-
-#### `note_tags`
-
-Tags attached to a note.
-
-| Column | Type | Constraints |
-|--------|------|-------------|
-| `note_id` | `UUID` | `NOT NULL REFERENCES notes(id) ON DELETE CASCADE` |
-| `tag` | `TEXT` | `NOT NULL` |
-| | | `PRIMARY KEY (note_id, tag)` |
-
 #### `note_links`
 
 Bidirectional wiki-link relationships between notes. Created automatically when note body contains `[[Note Title]]` syntax.
@@ -205,7 +167,7 @@ Constraints: `UNIQUE(source_note_id, target_note_id)`
 
 ### `habits`
 
-Trackable habits of type `boolean` (done/not done) or `numeric` (quantifiable). Supports soft delete.
+Trackable habits of type `boolean` (done/not done) or `numeric` (quantifiable). Numeric habits use a comparison operator so targets can be minimums (`gte`), maximums (`lte`, inverse habits), exact values (`eq`), or ranges (`between`). Supports soft delete.
 
 | Column | Type | Constraints |
 |--------|------|-------------|
@@ -213,9 +175,12 @@ Trackable habits of type `boolean` (done/not done) or `numeric` (quantifiable). 
 | `user_id` | `UUID` | `NOT NULL REFERENCES users(id) ON DELETE CASCADE` |
 | `category_id` | `UUID` | `NOT NULL REFERENCES habit_categories(id) ON DELETE RESTRICT` |
 | `name` | `TEXT` | `NOT NULL` |
+| `icon` | `TEXT` | nullable |
 | `description` | `TEXT` | `NOT NULL DEFAULT ''` |
 | `type` | `TEXT` | `NOT NULL CHECK (IN ('boolean','numeric'))` |
+| `comparison_operator` | `TEXT` | `NOT NULL DEFAULT 'gte' CHECK (IN ('gte','lte','eq','between'))` |
 | `target_value` | `NUMERIC` | nullable |
+| `target_value_max` | `NUMERIC` | nullable — required for `between`, must be > `target_value` |
 | `target_unit` | `TEXT` | nullable |
 | `frequency_type` | `TEXT` | `NOT NULL DEFAULT 'daily' CHECK (IN ('daily','weekly'))` |
 | `frequency_days` | `INTEGER[]` | `NOT NULL DEFAULT '{}'` |
@@ -225,7 +190,7 @@ Trackable habits of type `boolean` (done/not done) or `numeric` (quantifiable). 
 | `created_at` | `TIMESTAMPTZ` | `NOT NULL DEFAULT now()` |
 | `updated_at` | `TIMESTAMPTZ` | `NOT NULL DEFAULT now()` |
 
-Constraints: `UNIQUE(user_id, name)`
+Constraints: `UNIQUE(user_id, name)`; `habits_between_target_values_check` requires `target_value IS NOT NULL AND target_value_max IS NOT NULL AND target_value_max > target_value` when `comparison_operator = 'between'`
 Indexes: `idx_habits_user_sort(user_id, sort_order)`, `idx_habits_category_id(category_id)`
 
 ---
@@ -250,46 +215,26 @@ Indexes: `idx_habit_logs_user_date(user_id, logged_date)`, `idx_habit_logs_habit
 
 ---
 
-### `reviews`
+### `reminders`
 
-Periodic (weekly/monthly) self-reflection entries with aggregated data stored as JSONB.
-
-| Column | Type | Constraints |
-|--------|------|-------------|
-| `id` | `UUID` | `PRIMARY KEY DEFAULT gen_random_uuid()` |
-| `user_id` | `UUID` | `NOT NULL REFERENCES users(id) ON DELETE CASCADE` |
-| `type` | `TEXT` | `NOT NULL CHECK (IN ('weekly','monthly'))` |
-| `period_start` | `DATE` | `NOT NULL` |
-| `period_end` | `DATE` | `NOT NULL` |
-| `reflection_text` | `TEXT` | `NOT NULL DEFAULT ''` |
-| `data` | `JSONB` | `NOT NULL DEFAULT '{}'::jsonb` |
-| `created_at` | `TIMESTAMPTZ` | `NOT NULL DEFAULT now()` |
-| `updated_at` | `TIMESTAMPTZ` | `NOT NULL DEFAULT now()` |
-
-Constraints: `UNIQUE(user_id, type, period_start, period_end)`
-Index: `idx_reviews_user_period(user_id, period_start DESC, period_end DESC)`
-
----
-
-### `flashcards`
-
-Spaced repetition flashcards using the SM-2 algorithm.
+One-time and cron-recurring reminders attached to notes.
 
 | Column | Type | Constraints |
 |--------|------|-------------|
 | `id` | `UUID` | `PRIMARY KEY DEFAULT gen_random_uuid()` |
 | `user_id` | `UUID` | `NOT NULL REFERENCES users(id) ON DELETE CASCADE` |
-| `topic_id` | `UUID` | `REFERENCES topics(id) ON DELETE SET NULL` |
-| `front` | `TEXT` | `NOT NULL` |
-| `back` | `TEXT` | `NOT NULL` |
-| `ease_factor` | `REAL` | `NOT NULL DEFAULT 2.5` |
-| `interval_days` | `INTEGER` | `NOT NULL DEFAULT 0` |
-| `repetitions` | `INTEGER` | `NOT NULL DEFAULT 0` |
-| `next_review_at` | `TIMESTAMPTZ` | `NOT NULL DEFAULT now()` |
+| `note_id` | `UUID` | `NOT NULL REFERENCES notes(id) ON DELETE CASCADE` |
+| `type` | `TEXT` | `NOT NULL CHECK (IN ('one_time','recurring'))` |
+| `next_fire_at` | `TIMESTAMPTZ` | `NOT NULL` |
+| `cron` | `TEXT` | nullable — required non-empty for recurring (CHECK) |
+| `message` | `TEXT` | `NOT NULL DEFAULT ''` |
+| `is_active` | `BOOLEAN` | `NOT NULL DEFAULT TRUE` |
+| `last_fired_at` | `TIMESTAMPTZ` | nullable — watermark for the due-poll endpoint |
+| `done_at` | `TIMESTAMPTZ` | nullable — set when a one-time reminder fires |
 | `created_at` | `TIMESTAMPTZ` | `NOT NULL DEFAULT now()` |
 | `updated_at` | `TIMESTAMPTZ` | `NOT NULL DEFAULT now()` |
 
-Index: `idx_flashcards_next_review(user_id, next_review_at)`
+Indexes: `idx_reminders_next_fire(is_active, next_fire_at)`, `idx_reminders_note(note_id)`
 
 ---
 
@@ -334,13 +279,10 @@ Internal tracking table created by the migration runner.
 ## Relationships Summary
 
 - `users` owns all data — every content table has a `user_id` FK to `users(id)` with `ON DELETE CASCADE`
-- `topics` is a central entity referenced by `tasks`, `learn_entries`, `focus_sessions`, `flashcards`, and (via `note_topics`) `notes`
 - `habit_categories` groups `habits`; deleting a category is restricted (`ON DELETE RESTRICT`) if habits reference it
 - `habits` has daily logs in `habit_logs` (one row per habit per date, upsert semantics)
-- Habits support soft delete via `deleted_at` timestamp
-- `notes` has many-to-many with `topics` via `note_topics` junction table
-- `notes` has tags via `note_tags` and wiki-link backlinks via `note_links`
-- `focus_sessions` has tags via `focus_session_tags`
-- `flashcards` uses the SM-2 algorithm with `ease_factor`, `interval_days`, `repetitions`, `next_review_at`
-- `reviews` stores periodic reflection data with aggregated JSONB payloads
+- Habits support soft delete via `deleted_at` timestamp; numeric habits compare logged values against targets via `comparison_operator` (`gte`/`lte`/`eq`/`between`)
+- `tasks` group completed work in `focus_sessions`; in-progress sessions live in `active_focus_sessions` with at most one running/paused session per user
+- `notes` have wiki-link backlinks via `note_links` and can carry any number of `reminders`
+- `reminders` reference both their owner and their note; deleting either cascades
 - `refresh_tokens` and `password_reset_tokens` support the auth flow

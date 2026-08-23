@@ -121,8 +121,10 @@ Environment variables are read from the root `.env` file. See [Environment Varia
 
 1. Open `http://localhost:5173` — you should see the landing page
 2. Click **Sign Up** and create an account
-3. You'll be redirected to `http://localhost:5174/dashboard` with seeded default habits
-4. Start creating tasks, logging habits, taking notes, and tracking your learning
+3. You'll be redirected to `http://localhost:5174/dashboard` with 12 seeded default habits across 7 categories (Exercise, Health, Deep Work, Communication, Technical, Digital Health, Learning) — including inverse habits like screen-time limits (`lte`) and caffeine range targets (`between`)
+4. Start creating tasks, logging habits, taking notes, and setting reminders
+
+The default habit list is defined in `backend/models/habit.go` (`defaultHabits()`).
 
 ## Troubleshooting
 

@@ -1,21 +1,19 @@
 # Commit — Overview
 
-Commit is a personal productivity and learning tracker for managing tasks, building habits, taking notes, tracking learning, running focus sessions, reviewing with flashcards, and reflecting with periodic retrospectives — all in one integrated application.
+Commit is a personal productivity tracker for managing tasks, building habits, taking notes with attached reminders, and running persistent focus sessions — all in one integrated application.
 
 ## Features
 
 | # | Feature | Description |
 |---|---------|-------------|
-| 1 | **Task Management** | Full CRUD with priority (low/medium/high), status (todo/in-progress/done), scheduling, recurrence (daily/weekdays/weekly/monthly), topic association, and views (today/backlog/completed/all) |
-| 2 | **Habit Tracking** | Boolean and numeric habits, daily/weekly frequency, categories, progress rings, streaks, 30/90-day analytics, and CSV export |
-| 3 | **Notes** | Rich-text notes with full-text search (PostgreSQL tsvector), topic tagging, tag system, and wiki-link backlinks (`[[Note Title]]`) |
-| 4 | **Learning Tracker** | Topic-based study logging with duration, confidence rating (1-5), study streaks, weak spot detection, and a per-topic breakdown |
-| 5 | **Flashcards** | Spaced repetition via SM-2 algorithm with ease factor, interval tracking, and quality-based reviews (0-5) |
-| 6 | **Focus Sessions** | Pomodoro/stopwatch timer linked to tasks, session history with filtering, stats, and auto-habit logging when daily focus exceeds a threshold |
-| 7 | **Periodic Reviews** | Weekly/monthly self-retrospectives with auto-generated data snapshots (habit hits/misses, tasks done, study hours, focus stats) |
-| 8 | **Dashboard** | Customizable widget layout with metric cards, habit/producivity charts, activity heatmap (365-day), recent notes, and week-over-week trend comparisons |
-| 9 | **Authentication** | Cookie-based JWT with access/refresh token rotation, bcrypt password hashing, forgot/reset password flow via Resend email, rate-limited endpoints |
-| 10 | **Admin** | User listing and deletion for admin-role users |
+| 1 | **Task Management** | Full CRUD with priority (low/medium/high), status (todo/in-progress/done), scheduling, recurrence (daily/weekdays/weekly/monthly), and views (today/backlog/completed/all) |
+| 2 | **Habit Tracking** | Boolean and numeric habits with comparison operators (`gte`/`lte`/`eq`/`between`) for at-least, at-most, exactly, and range targets, daily/weekly frequency, categories, a date×habit matrix view with drag-and-drop reordering, schedule-aware streaks, 30/90-day analytics, and CSV export |
+| 3 | **Notes** | Rich-text notes with full-text search (PostgreSQL tsvector) and wiki-link backlinks (`[[Note Title]]`) |
+| 4 | **Reminders** | One-time and cron-recurring reminders attached to notes, delivered via email (Resend) and browser notifications, with preset and raw-cron schedules |
+| 5 | **Focus Sessions** | Persistent, resumable Pomodoro/stopwatch sessions linked to tasks — timer state survives refreshes and device switches; session history with filtering, stats, and auto-habit logging on completion when daily focus exceeds a threshold |
+| 6 | **Dashboard** | Customizable widget layout with metric cards, habit/productivity charts, dual GitHub-style activity heatmaps (habit completions + overall activity, per calendar year with year switching), recent notes, and week-over-week trend comparisons |
+| 7 | **Authentication** | Cookie-based JWT with access/refresh token rotation, bcrypt password hashing, forgot/reset password flow via Resend email, rate-limited endpoints |
+| 8 | **Admin** | User listing and deletion for admin-role users |
 
 ## Tech Stack
 
@@ -43,10 +41,10 @@ commit/
 │   ├── migrations.go           # Embedded SQL migrations (embed.FS)
 │   ├── config/config.go        # Environment variable loading
 │   ├── db/                     # Database connection (pgxpool) + migration runner
-│   ├── migrations/             # 021 SQL migration files
-│   ├── handlers/               # HTTP handlers (12 files)
-│   ├── services/               # Business logic layer (11 files)
-│   ├── models/                 # Data access layer — raw SQL via pgx (13 files)
+│   ├── migrations/             # 027 SQL migration files
+│   ├── handlers/               # HTTP handlers (10 files)
+│   ├── services/               # Business logic layer (9 files)
+│   ├── models/                 # Data access layer — raw SQL via pgx (12 files)
 │   ├── middleware/             # Auth, RBAC, CORS, Logger, RateLimiter
 │   └── routes/routes.go        # All route definitions
 ├── frontend/
