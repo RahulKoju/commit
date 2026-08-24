@@ -201,16 +201,3 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 `pull` is essential on updates — without it `up -d` silently keeps the stale local `:latest`. Environment changes in `.env` also require `up -d`; `docker compose restart` does **not** reload `.env`.
 
 Note: frontend env vars (`VITE_API_URL` etc.) are baked into images at **build time** by CI with production URLs. Never deploy locally-built frontend images to this box.
-
-## 8. Troubleshooting
-
-Symptoms encountered while setting this up, kept here as reference:
-
-| Symptom | Cause | Fix |
-|---|---|---|
-| Frontend shows "Unable to connect" but curl reaches the API | Stale image built without `VITE_*` args falls back to `http://localhost:8080` (`apps/app/src/lib/api.ts`) | Rebuild via CI (has correct `build-args`), then `pull && up -d`. Verify: `docker exec commit-app grep -rl 'localhost:8080' /usr/share/nginx/html/assets/` should print nothing |
-| Login returns 200 but `/auth/me` returns 404 `user not found` | Ghost cookie from a previous deployment on the same domain shadows fresh ones — Go reads the first matching cookie | Clear all cookies for the domain tree in DevTools, log in again. Rotate `JWT_SECRET` so old-environment tokens stop validating |
-| Cookies never stored by browser | `COOKIE_DOMAIN` misconfigured (e.g. `localhost`) | Set `COOKIE_DOMAIN=.rahulkoju.com.np`, recreate backend with `up -d backend` |
-| `/dashboard/layout` and `/activity-heatmap` return 500 on first login | Fresh user has no layout row yet — `GetWidgetLayout` maps missing row to error instead of a default (`backend/models/user.go`) | Known rough edge; save a layout once or make the handler fall back to defaults |
-| `commit.service` fails with `status=200/CHDIR` | `WorkingDirectory` path doesn't match clone location | Point the unit at the real repo path, `daemon-reload`, retry |
-| 404s from unknown IPs in backend logs (`/api/graphql`, `/api/gql`) | Internet scanners probing — noise | Ignore; consider fail2ban if noisy |
