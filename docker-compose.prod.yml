@@ -1,0 +1,19 @@
+# Production override: pull prebuilt images from Docker Hub instead of
+# building on the host (CI pushes :latest and :${sha} tags).
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml pull
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+services:
+  backend:
+    build: !reset null
+    image: rahulkoju/commit-backend:latest
+
+  web:
+    build: !reset null
+    image: rahulkoju/commit-web:latest
+
+  app:
+    build: !reset null
+    image: rahulkoju/commit-app:latest
