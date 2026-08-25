@@ -309,6 +309,7 @@ function TaskCard({ task }: { task: Task }) {
     "title" | "description" | null
   >(null)
   const [editValue, setEditValue] = useState("")
+  const [editDescriptionHtml, setEditDescriptionHtml] = useState("")
   const titleInputRef = useRef<HTMLInputElement>(null)
   const today = new Date().toISOString().slice(0, 10)
   const isNotToday = task.scheduled_date !== today
@@ -329,39 +330,44 @@ function TaskCard({ task }: { task: Task }) {
   }
 
   function startEdit(field: "title" | "description") {
-    setEditValue(
-      field === "title"
-        ? task.title
-        : DOMPurify.sanitize(task.description, { ALLOWED_TAGS: [] })
-    )
+    if (field === "title") {
+      setEditValue(task.title)
+    } else {
+      setEditDescriptionHtml(
+        DOMPurify.sanitize(task.description, {
+          ALLOWED_TAGS: [
+            "p", "strong", "em", "u", "s", "a", "ul", "ol", "li", "br",
+          ],
+          ALLOWED_ATTR: ["href", "target", "rel"],
+        })
+      )
+    }
     setEditingField(field)
   }
 
   async function saveEdit() {
     const field = editingField
     setEditingField(null)
-    const trimmed = editValue.trim()
-    if (!trimmed) return
     if (field === "title") {
+      const trimmed = editValue.trim()
+      if (!trimmed) return
       await updateTask.mutateAsync({ id: task.id, input: { title: trimmed } })
     } else {
+      const sanitized = DOMPurify.sanitize(editDescriptionHtml, {
+        ALLOWED_TAGS: [
+          "p", "strong", "em", "u", "s", "a", "ul", "ol", "li", "br",
+        ],
+        ALLOWED_ATTR: ["href", "target", "rel"],
+      })
       await updateTask.mutateAsync({
         id: task.id,
-        input: { description: trimmed },
+        input: { description: sanitized },
       })
     }
   }
 
   function handleKeyDown(event: React.KeyboardEvent) {
     if (event.key === "Enter" && editingField === "title") {
-      event.preventDefault()
-      saveEdit()
-    }
-    if (
-      event.key === "Enter" &&
-      (event.ctrlKey || event.metaKey) &&
-      editingField === "description"
-    ) {
       event.preventDefault()
       saveEdit()
     }
@@ -515,13 +521,13 @@ function TaskCard({ task }: { task: Task }) {
       </div>
       {editingField === "description" ? (
         <div className="mt-3 space-y-2">
-          <textarea
-            className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-            rows={3}
-            value={editValue}
-            onChange={(e) => setEditValue(e.target.value)}
-            onKeyDown={handleKeyDown}
-            autoFocus
+          <RichTextEditor
+            id={`task-desc-${task.id}`}
+            name={`description-${task.id}`}
+            placeholder="Add task context, links, and notes."
+            maxLength={2000}
+            initialValue={editDescriptionHtml}
+            onChange={setEditDescriptionHtml}
           />
           <div className="flex justify-end gap-2">
             <Button
@@ -542,7 +548,12 @@ function TaskCard({ task }: { task: Task }) {
           <div
             className="prose prose-sm mt-3 max-w-none text-sm text-muted-foreground"
             dangerouslySetInnerHTML={{
-              __html: DOMPurify.sanitize(task.description),
+              __html: DOMPurify.sanitize(task.description, {
+                ALLOWED_TAGS: [
+                  "p", "strong", "em", "u", "s", "a", "ul", "ol", "li", "br",
+                ],
+                ALLOWED_ATTR: ["href", "target", "rel"],
+              }),
             }}
           />
           <button

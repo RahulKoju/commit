@@ -15,6 +15,7 @@ type RichTextEditorProps = {
   maxLength: number
   initialValue?: string
   resetToken?: string
+  onChange?: (html: string) => void
 }
 
 type ToolbarButtonProps = {
@@ -55,6 +56,7 @@ export function RichTextEditor({
   maxLength,
   initialValue = "",
   resetToken,
+  onChange,
 }: RichTextEditorProps) {
   const lastResetTokenRef = useRef<string | undefined>(undefined)
   const editor = useEditor(
@@ -71,6 +73,9 @@ export function RichTextEditor({
         Link.configure({ openOnClick: false, defaultProtocol: "https" }),
       ],
       content: initialValue,
+      onUpdate: ({ editor: e }) => {
+        onChange?.(e.getHTML())
+      },
       editorProps: {
         attributes: {
           class:
