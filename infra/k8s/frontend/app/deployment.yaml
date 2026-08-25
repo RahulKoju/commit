@@ -26,7 +26,7 @@ spec:
 
       containers:
         - name: frontend-app
-          image: rahulkoju/commit-app:26ad233a04644a10554f693af720dbb4fd94b980
+          image: rahulkoju/commit-app:e52affa73a932b70a6576095d709610e6f77a554
 
           securityContext:
             readOnlyRootFilesystem: true
