@@ -20,6 +20,7 @@ import type { Habit, HabitMatrixLog } from "@/types/habit.types"
 import { HabitCell } from "./HabitCell"
 import { HabitIcon } from "./HabitIcon"
 import {
+  computeCompletionStatus,
   defaultLogValueForHabit,
   isHabitMet,
   isScheduledOn,
@@ -103,6 +104,11 @@ export function HabitsMatrix({
           hasLogFor(habit.id, dateKey) &&
           isHabitMet(habit, valueFor(habit.id, dateKey))
       ).length
+      const totalCompletion = scheduled.reduce((sum, habit) => {
+        if (!hasLogFor(habit.id, dateKey)) return sum
+        const { percent } = computeCompletionStatus(habit, valueFor(habit.id, dateKey))
+        return sum + Math.max(0, Math.min(150, percent))
+      }, 0)
       return {
         dateKey,
         isFuture: dateKey > today,
@@ -110,7 +116,7 @@ export function HabitsMatrix({
         completed,
         percent:
           scheduled.length > 0
-            ? Math.round((completed / scheduled.length) * 100)
+            ? Math.round(totalCompletion / scheduled.length)
             : null,
       }
     })
@@ -120,6 +126,7 @@ export function HabitsMatrix({
     return habits.map((habit) => {
       let scheduledDays = 0
       let completedDays = 0
+      let totalCompletion = 0
       for (const dateKey of dates) {
         if (dateKey > today) continue
         if (!isScheduledOn(habit, dateKey)) continue
@@ -130,12 +137,16 @@ export function HabitsMatrix({
         ) {
           completedDays++
         }
+        if (hasLogFor(habit.id, dateKey)) {
+          const { percent } = computeCompletionStatus(habit, valueFor(habit.id, dateKey))
+          totalCompletion += Math.max(0, Math.min(150, percent))
+        }
       }
       return {
         habit,
         percent:
           scheduledDays > 0
-            ? Math.round((completedDays / scheduledDays) * 100)
+            ? Math.round(totalCompletion / scheduledDays)
             : null,
         completedDays,
         scheduledDays,
