@@ -63,6 +63,55 @@ export function isHabitMet(habit: Habit, value: number): boolean {
   return value >= habit.target_value
 }
 
+// Client-side mirror of habitCompletionState() in backend/models/habit.go.
+// Keep this in sync with the Go version at all times.
+export function computeCompletionStatus(
+  habit: Habit,
+  value: number
+): { status: "none" | "partial" | "complete" | "over"; percent: number } {
+  if (habit.type === "boolean") {
+    if (value < 1) return { status: "none", percent: 0 }
+    return { status: "complete", percent: 100 }
+  }
+
+  switch (habit.comparison_operator) {
+    case "between": {
+      if (habit.target_value === null || habit.target_value_max === null) {
+        return { status: "none", percent: 0 }
+      }
+      if (value <= 0) return { status: "none", percent: 0 }
+      if (value < habit.target_value) {
+        return {
+          status: "partial",
+          percent: (value / habit.target_value) * 100,
+        }
+      }
+      if (value <= habit.target_value_max) {
+        return { status: "complete", percent: 100 }
+      }
+      return { status: "over", percent: (value / habit.target_value_max) * 100 }
+    }
+    case "lte":
+    case "eq": {
+      if (isHabitMet(habit, value)) return { status: "complete", percent: 100 }
+      if (value <= 0) return { status: "none", percent: 0 }
+      return { status: "partial", percent: 100 }
+    }
+    default: {
+      const target = habit.target_value
+      if (target === null || target <= 0) {
+        if (value > 0) return { status: "complete", percent: 100 }
+        return { status: "none", percent: 0 }
+      }
+      if (value <= 0) return { status: "none", percent: 0 }
+      const percent = (value / target) * 100
+      if (value < target) return { status: "partial", percent }
+      if (value === target) return { status: "complete", percent }
+      return { status: "over", percent }
+    }
+  }
+}
+
 export function defaultLogValueForHabit(habit: Habit): number {
   if (habit.type === "boolean") return 1
   if (habit.target_value === null || habit.target_value === undefined) return 1

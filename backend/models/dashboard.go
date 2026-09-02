@@ -158,8 +158,33 @@ func (model DashboardModel) taskSummary(ctx context.Context, userID string) (Das
 }
 
 type habitDayCounts struct {
-	total   int
-	checked int
+	total         int
+	checked       int
+	completionSum float64
+}
+
+// habitDayCompletionPercent returns a scheduled habit's percentage contribution
+// to the day's average completion. Boolean and numeric lte/eq habits stay binary
+// (0 or 100 via habitCompleted). Numeric gte/between habits contribute their real
+// completion percent from habitCompletionState, capped at 150 so one wildly
+// over-completed habit cannot visually dominate the day's average.
+func habitDayCompletionPercent(habit Habit, value float64) float64 {
+	granular := habit.Type != HabitTypeBoolean &&
+		(habit.ComparisonOperator == HabitComparisonGTE || habit.ComparisonOperator == HabitComparisonBetween)
+	if !granular {
+		if habitCompleted(habit, value) {
+			return 100
+		}
+		return 0
+	}
+	percent := habitCompletionState(habit, value).Percent
+	if percent < 0 {
+		return 0
+	}
+	if percent > 150 {
+		return 150
+	}
+	return percent
 }
 
 // habitDailyCounts returns per-day {total, checked} counts for the user's habits
@@ -255,8 +280,12 @@ func (model DashboardModel) habitDailyCounts(ctx context.Context, userID string,
 				continue
 			}
 			counts.total++
-			if value, ok := logs[meta.habit.ID][date]; ok && habitCompleted(meta.habit, value) {
+			value, ok := logs[meta.habit.ID][date]
+			if ok && habitCompleted(meta.habit, value) {
 				counts.checked++
+			}
+			if ok {
+				counts.completionSum += habitDayCompletionPercent(meta.habit, value)
 			}
 		}
 		result[date] = counts
@@ -320,10 +349,11 @@ func (model DashboardModel) weeklyHabitChart(ctx context.Context, userID string)
 }
 
 type HabitHeatmapItem struct {
-	Date      string `json:"date"`
-	Total     int    `json:"total"`
-	Completed int    `json:"completed"`
-	Level     int    `json:"level"`
+	Date                 string   `json:"date"`
+	Total                int      `json:"total"`
+	Completed            int      `json:"completed"`
+	Level                int      `json:"level"`
+	AvgCompletionPercent *float64 `json:"avg_completion_percent"`
 }
 
 type ActivityHeatmapItem struct {
@@ -471,6 +501,10 @@ func (model DashboardModel) ActivityHeatmap(ctx context.Context, userID string, 
 		if !day.Before(time.Date(createdAt.Year(), createdAt.Month(), createdAt.Day(), 0, 0, 0, 0, dashboardLocation)) {
 			item.Total = counts[date].total
 			item.Completed = counts[date].checked
+			if counts[date].total > 0 {
+				avg := counts[date].completionSum / float64(counts[date].total)
+				item.AvgCompletionPercent = &avg
+			}
 		}
 		habitItems = append(habitItems, item)
 	}

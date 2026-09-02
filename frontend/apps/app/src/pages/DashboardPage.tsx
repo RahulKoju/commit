@@ -483,11 +483,14 @@ function ActivityHeatmapWidget({
   )
   const items = useMemo(
     () =>
-      (heatmapQuery.data?.habit_heatmap ?? []).map((item) => ({
-        date: item.date,
-        level: item.level,
-        title: `${item.date}: ${item.completed}/${item.total} habits`,
-      })),
+      (heatmapQuery.data?.habit_heatmap ?? []).map((item) => {
+        const base = `${item.date}: ${item.completed}/${item.total} habits`
+        const title =
+          item.avg_completion_percent !== null && item.avg_completion_percent !== undefined
+            ? `${base} · ${Math.round(item.avg_completion_percent)}% avg`
+            : base
+        return { date: item.date, level: item.level, title }
+      }),
     [heatmapQuery.data]
   )
   return (

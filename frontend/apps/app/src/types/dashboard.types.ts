@@ -67,6 +67,7 @@ export const habitHeatmapItemSchema = z.object({
   total: z.number().int(),
   completed: z.number().int(),
   level: z.number().int(),
+  avg_completion_percent: z.number().nullable(),
 })
 
 export const activityHeatmapItemSchema = z.object({
