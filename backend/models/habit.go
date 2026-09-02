@@ -85,10 +85,11 @@ type HabitAnalytics struct {
 }
 
 type HabitDayStatus struct {
-	Date      string  `json:"date"`
-	Value     float64 `json:"value"`
-	Completed bool    `json:"completed"`
-	Scheduled bool    `json:"scheduled"`
+	Date             string                `json:"date"`
+	Value            float64               `json:"value"`
+	Completed        bool                  `json:"completed"`
+	Scheduled        bool                  `json:"scheduled"`
+	CompletionStatus HabitCompletionStatus `json:"completion_status"`
 }
 
 type CreateHabitCategoryParams struct {
@@ -699,10 +700,11 @@ func (model HabitModel) attachStreaks(ctx context.Context, habits []Habit, index
 				entryIndex++
 			}
 			days = append(days, HabitDayStatus{
-				Date:      date,
-				Value:     value,
-				Completed: habitCompleted(h, value),
-				Scheduled: habitScheduledOn(h, date),
+				Date:             date,
+				Value:            value,
+				Completed:        habitCompleted(h, value),
+				Scheduled:        habitScheduledOn(h, date),
+				CompletionStatus: habitCompletionState(h, value),
 			})
 		}
 		h.CurrentStreak = currentStreak(days)
@@ -747,10 +749,11 @@ func (model HabitModel) habitDayStatuses(ctx context.Context, habit Habit, days 
 		date := start.AddDate(0, 0, index).Format("2006-01-02")
 		value := values[date]
 		result = append(result, HabitDayStatus{
-			Date:      date,
-			Value:     value,
-			Completed: habitCompleted(habit, value),
-			Scheduled: habitScheduledOn(habit, date),
+			Date:             date,
+			Value:            value,
+			Completed:        habitCompleted(habit, value),
+			Scheduled:        habitScheduledOn(habit, date),
+			CompletionStatus: habitCompletionState(habit, value),
 		})
 	}
 
@@ -864,6 +867,69 @@ func habitCompleted(habit Habit, value float64) bool {
 		return value >= *habit.TargetValue && value <= *habit.TargetValueMax
 	default:
 		return value >= *habit.TargetValue
+	}
+}
+
+type HabitCompletionStatus struct {
+	Status  string  `json:"status"`  // "none" | "partial" | "complete" | "over"
+	Percent float64 `json:"percent"` // 0+, uncapped above 100 for "over"
+}
+
+// habitCompletionState derives a per-day completion status from a habit's
+// logged value. It is computed (never stored) and complements habitCompleted
+// with a partial/over breakdown for numeric habits. Keep the frontend mirror
+// computeCompletionStatus in habitMatrixUtils.ts in sync with this function.
+func habitCompletionState(habit Habit, value float64) HabitCompletionStatus {
+	if habit.Type == HabitTypeBoolean {
+		if value < 1 {
+			return HabitCompletionStatus{Status: "none", Percent: 0}
+		}
+		return HabitCompletionStatus{Status: "complete", Percent: 100}
+	}
+
+	switch habit.ComparisonOperator {
+	case HabitComparisonBetween:
+		if habit.TargetValue == nil || habit.TargetValueMax == nil {
+			return HabitCompletionStatus{Status: "none", Percent: 0}
+		}
+		targetValue := *habit.TargetValue
+		targetValueMax := *habit.TargetValueMax
+		switch {
+		case value <= 0:
+			return HabitCompletionStatus{Status: "none", Percent: 0}
+		case value < targetValue:
+			return HabitCompletionStatus{Status: "partial", Percent: (value / targetValue) * 100}
+		case value <= targetValueMax:
+			return HabitCompletionStatus{Status: "complete", Percent: 100}
+		default:
+			return HabitCompletionStatus{Status: "over", Percent: (value / targetValueMax) * 100}
+		}
+	case HabitComparisonLTE, HabitComparisonEQ:
+		if habitCompleted(habit, value) {
+			return HabitCompletionStatus{Status: "complete", Percent: 100}
+		}
+		if value <= 0 {
+			return HabitCompletionStatus{Status: "none", Percent: 0}
+		}
+		return HabitCompletionStatus{Status: "partial", Percent: 100}
+	default: // HabitComparisonGTE
+		if habit.TargetValue == nil || *habit.TargetValue <= 0 {
+			if value > 0 {
+				return HabitCompletionStatus{Status: "complete", Percent: 100}
+			}
+			return HabitCompletionStatus{Status: "none", Percent: 0}
+		}
+		targetValue := *habit.TargetValue
+		switch {
+		case value <= 0:
+			return HabitCompletionStatus{Status: "none", Percent: 0}
+		case value < targetValue:
+			return HabitCompletionStatus{Status: "partial", Percent: (value / targetValue) * 100}
+		case value == targetValue:
+			return HabitCompletionStatus{Status: "complete", Percent: 100}
+		default:
+			return HabitCompletionStatus{Status: "over", Percent: (value / targetValue) * 100}
+		}
 	}
 }
 

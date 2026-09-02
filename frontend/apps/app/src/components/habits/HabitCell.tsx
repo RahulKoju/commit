@@ -7,7 +7,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@workspace/ui/component
 import { ChevronDown } from "lucide-react"
 
 import type { Habit } from "@/types/habit.types"
-import { isHabitMet } from "./habitMatrixUtils"
+import { computeCompletionStatus, isHabitMet } from "./habitMatrixUtils"
 
 export function HabitCell({
   habit,
@@ -44,12 +44,129 @@ export function HabitCell({
     )
   }
 
+  if (
+    habit.type === "numeric" &&
+    (habit.comparison_operator === "gte" || habit.comparison_operator === "between")
+  ) {
+    const { status, percent } = computeCompletionStatus(habit, value)
+    return (
+      <div className="flex items-center justify-center gap-1">
+        <ProgressRing
+          habit={habit}
+          dateKey={dateKey}
+          value={value}
+          status={status}
+          percent={percent}
+          onToggle={onToggle}
+        />
+        <NumericValuePopover habit={habit} dateKey={dateKey} value={value} onLog={onLog} />
+      </div>
+    )
+  }
+
   return (
     <div className="flex items-center justify-center gap-1">
       <Checkbox checked={met} onCheckedChange={onToggle} aria-label={`${habit.name} on ${dateKey}`} />
       <NumericValuePopover habit={habit} dateKey={dateKey} value={value} onLog={onLog} />
     </div>
   )
+}
+
+type CompletionStatus = "none" | "partial" | "complete" | "over"
+
+function ProgressRing({
+  habit,
+  dateKey,
+  value,
+  status,
+  percent,
+  onToggle,
+}: {
+  habit: Habit
+  dateKey: string
+  value: number
+  status: CompletionStatus
+  percent: number
+  onToggle: () => void
+}) {
+  const radius = 6.5
+  const circumference = 2 * Math.PI * radius
+  const displayPercent = Math.min(100, Math.max(0, percent))
+  const dashOffset =
+    status === "none" ? circumference : circumference * (1 - displayPercent / 100)
+  const label = completionLabel(habit, value, status)
+
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-label={`${habit.name} on ${dateKey}: ${label}`}
+      aria-pressed={status === "complete" || status === "over"}
+      title={label}
+      className="flex size-[24px] items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+    >
+      <svg viewBox="0 0 24 24" className="size-[24px]">
+        <circle
+          cx="12"
+          cy="12"
+          r={radius}
+          fill="none"
+          strokeWidth="2"
+          stroke="currentColor"
+          className="text-border"
+        />
+        <circle
+          cx="12"
+          cy="12"
+          r={radius}
+          fill="none"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeDasharray={circumference}
+          strokeDashoffset={dashOffset}
+          transform="rotate(-90 12 12)"
+          stroke="currentColor"
+          className={
+            status === "over" || status === "complete"
+              ? "text-primary"
+              : status === "partial"
+                ? "text-yellow-400"
+                : "text-border"
+          }
+        />
+        {status === "over" ? (
+          <circle
+            cx="12"
+            cy="12"
+            r={radius + 3.5}
+            fill="none"
+            strokeWidth="2"
+            stroke="currentColor"
+            className="text-destructive"
+          />
+        ) : null}
+      </svg>
+    </button>
+  )
+}
+
+function completionLabel(habit: Habit, value: number, status: CompletionStatus): string {
+  const unit = habit.target_unit ? ` ${habit.target_unit}` : ""
+  const valueText = formatCellNumber(value)
+  const target =
+    habit.comparison_operator === "between" &&
+    habit.target_value_max !== null &&
+    habit.target_value_max !== undefined
+      ? `${formatCellNumber(habit.target_value ?? 0)}–${formatCellNumber(habit.target_value_max)}`
+      : habit.target_value !== null && habit.target_value !== undefined
+        ? formatCellNumber(habit.target_value)
+        : "—"
+  const base = `${valueText} / ${target}${unit}`
+  return status === "over" ? `${base} — exceeded` : base
+}
+
+function formatCellNumber(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(1)
 }
 
 function NumericValuePopover({
