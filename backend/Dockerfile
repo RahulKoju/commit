@@ -16,6 +16,8 @@ FROM alpine:latest
 
 WORKDIR /app
 
+RUN apk update && apk upgrade --no-cache
+
 # copy only binary
 COPY --from=builder /app/app .
 
