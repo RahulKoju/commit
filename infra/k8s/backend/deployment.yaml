@@ -26,7 +26,7 @@ spec:
 
       containers:
         - name: backend
-          image: rahulkoju/commit-backend:e52affa73a932b70a6576095d709610e6f77a554
+          image: rahulkoju/commit-backend:1bbb24839dc43a628dd091733fa0e32347e8f2cb
 
           securityContext:
             readOnlyRootFilesystem: true
