@@ -77,6 +77,8 @@ Production `.env` values that must differ from defaults:
 | `APP_ENV` | `production` | |
 | `ALLOWED_ORIGINS` | `https://commit.rahulkoju.com.np,https://app.commit.rahulkoju.com.np` | browser origins |
 | `COOKIE_DOMAIN` | `.rahulkoju.com.np` | leading dot so cookies work on both subdomains |
+| `VITE_WEB_URL` | `https://commit.rahulkoju.com.np` | base URL used in email links (password reset, reminders); the backend fails to start if this is missing/not `https://` in production. Changing it requires `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d` — a plain `restart` does **not** reload `.env` |
+| `EMAIL_FROM` | a no-reply address on a domain whose SPF/DKIM you control (e.g. `contact@rahulkoju.com.np`) | Resend "from" address; `.env.example` defaults to `noreply@example.com`, which Resend will reject |
 | `JWT_SECRET` / `DB_PASSWORD` | strong random values | |
 
 ```bash
