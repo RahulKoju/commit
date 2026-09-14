@@ -72,6 +72,15 @@ func Load() (Config, error) {
 		return Config{}, fmt.Errorf("missing required environment variables: %v", missing)
 	}
 
+	if cfg.AppEnv == "production" {
+		if cfg.AppURL == "" {
+			return Config{}, fmt.Errorf("VITE_WEB_URL is required in production (must start with https://)")
+		}
+		if !strings.HasPrefix(cfg.AppURL, "https://") {
+			return Config{}, fmt.Errorf("VITE_WEB_URL must start with https:// in production, got %q", cfg.AppURL)
+		}
+	}
+
 	if _, err := strconv.Atoi(cfg.DBPort); err != nil {
 		return Config{}, fmt.Errorf("DB_PORT must be numeric: %w", err)
 	}
